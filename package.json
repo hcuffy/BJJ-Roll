@@ -1,0 +1,9 @@
+{
+  "name": "bjj-roll",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "pnpm": ">=11.21"
+  }
+}
