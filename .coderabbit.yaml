@@ -1,0 +1,21 @@
+language: en-US
+
+reviews:
+  high_level_summary: true
+  poem: false
+
+  path_filters:
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!pnpm-lock.yaml"
+    - "!coverage/**"
+    - "!.expo/**"
+
+  path_instructions:
+    - path: "packages/**/src/**/*.{ts,tsx}"
+      instructions: |
+        Follow the development guidelines in .github/coderabbit.md
+
+    - path: "**/__tests__/**"
+      instructions: |
+        Follow the testing guidelines in .github/coderabbit.md
