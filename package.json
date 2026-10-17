@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "fix": "eslint . --fix",
     "test": "pnpm -r run test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

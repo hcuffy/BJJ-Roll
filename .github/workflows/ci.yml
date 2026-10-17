@@ -16,6 +16,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check .
+      - run: pnpm format:check
       - run: pnpm lint
+      - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm --filter @bjj-roll/mobile typecheck
+      - run: pnpm --filter @bjj-roll/mobile bundle
