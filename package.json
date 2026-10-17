@@ -2,8 +2,22 @@
   "name": "bjj-roll",
   "private": true,
   "license": "Apache-2.0",
+  "type": "module",
   "packageManager": "pnpm@11.21.0",
   "engines": {
+    "node": ">=24",
     "pnpm": ">=11.21"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "fix": "eslint . --fix",
+    "test": "pnpm -r run test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0"
   }
 }
