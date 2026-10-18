@@ -2,7 +2,9 @@
 # Self-test for .githooks/pre-commit. Uses a temporary git repo and a dummy canary pattern only.
 set -eu
 
-hookSource="$(cd "$(dirname "$0")/.." && pwd)/.githooks/pre-commit"
+sourceRoot="$(cd "$(dirname "$0")/.." && pwd)"
+hookSource="$sourceRoot/.githooks/pre-commit"
+starterSource="$sourceRoot/scripts/createStarterLeakcheck.sh"
 workDirectory=$(mktemp -d)
 trap 'rm -rf "$workDirectory"' EXIT
 
@@ -13,6 +15,8 @@ git config user.email "leakcheck-test@example.invalid"
 git config commit.gpgsign false
 mkdir .githooks
 cp "$hookSource" .githooks/pre-commit
+mkdir scripts
+cp "$starterSource" scripts/createStarterLeakcheck.sh
 chmod +x .githooks/pre-commit
 git config core.hooksPath .githooks
 
@@ -93,8 +97,62 @@ else
   fail "CRLF .leakcheck blocked with an unexpected message"
 fi
 
+# 7. A missing .leakcheck gets a starter (mode 600, notice only, no pattern text), and a clean commit then passes.
+rm -f .leakcheck
+sh scripts/createStarterLeakcheck.sh > output.log 2>&1
+starterMode=$(ls -l .leakcheck 2>/dev/null | cut -c1-10)
+printf 'clean change with the starter\n' >> clean.txt
+git add clean.txt
+if [ "$starterMode" != "-rw-------" ]; then
+  fail "starter .leakcheck missing or not mode 600 (got $starterMode)"
+elif [ "$(cat output.log)" != "prepare: created starter .leakcheck; add your personal patterns" ]; then
+  fail "starter creation printed unexpected output"
+elif git commit -q -m "Clean change with starter leakcheck" > output.log 2>&1; then
+  pass "missing .leakcheck: starter created (mode 600) and a clean commit passes"
+else
+  fail "clean commit blocked with the starter .leakcheck"
+fi
+
+# 8. An existing .leakcheck is left untouched: same checksum and mtime, no output.
+printf 'DUMMY_CANARY_[0-9]{6}\n' > .leakcheck
+touch -t 200102030405.06 .leakcheck
+touch -r .leakcheck mtimeReference
+checksumBefore=$(cksum < .leakcheck)
+sh scripts/createStarterLeakcheck.sh > output.log 2>&1
+if [ "$(cksum < .leakcheck)" = "$checksumBefore" ] && [ ! .leakcheck -nt mtimeReference ] && [ ! mtimeReference -nt .leakcheck ] && [ ! -s output.log ]; then
+  pass "existing .leakcheck untouched (checksum and mtime equal, no output)"
+else
+  fail "existing .leakcheck was changed or output was printed"
+fi
+
+# 9. The starter blocks a staged dummy GitHub token (ghp_ plus 36 x), without printing it.
+rm -f .leakcheck
+sh scripts/createStarterLeakcheck.sh > /dev/null 2>&1
+dummyGithubToken="ghp""_$(printf 'x%.0s' $(seq 1 36))"
+printf 'token = %s\n' "$dummyGithubToken" > leakedGithubToken.txt
+git add leakedGithubToken.txt
+if git commit -q -m "Add dummy GitHub token" > output.log 2>&1; then
+  fail "starter .leakcheck let a dummy GitHub token through"
+elif grep -q "leakedGithubToken.txt matches pattern on line" output.log && ! grep -q "$dummyGithubToken" output.log; then
+  pass "starter .leakcheck blocks a dummy GitHub token"
+else
+  fail "dummy GitHub token blocked with an unexpected message"
+fi
+git reset -q leakedGithubToken.txt
+rm -f leakedGithubToken.txt
+
+# 10. Outside a git repository the starter script skips silently and creates nothing.
+outsideDirectory="$workDirectory/outside"
+mkdir -p "$outsideDirectory/scripts"
+cp "$starterSource" "$outsideDirectory/scripts/createStarterLeakcheck.sh"
+if GIT_CEILING_DIRECTORIES="$outsideDirectory" sh "$outsideDirectory/scripts/createStarterLeakcheck.sh" > output.log 2>&1 && [ ! -e "$outsideDirectory/.leakcheck" ] && [ ! -s output.log ]; then
+  pass "outside a git repository: skipped silently, nothing created"
+else
+  fail "starter script misbehaved outside a git repository"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "leakcheck self-test: $failures failed"
   exit 1
 fi
-echo "leakcheck self-test: all 6 cases passed"
+echo "leakcheck self-test: all 10 cases passed"
