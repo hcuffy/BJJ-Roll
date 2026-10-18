@@ -1,7 +1,7 @@
 #!/bin/sh
 # Leakcheck: block staged additions that match a pattern in the local, untracked `.leakcheck` file.
-# One extended regex per line; blank lines and lines starting with `#` are skipped.
-# Fails closed: a missing `.leakcheck`, or one without usable patterns, blocks the commit.
+# One extended regex per line (case-sensitive); blank lines and lines starting with `#` are skipped. CRLF files work.
+# Fails closed: a missing `.leakcheck`, one without usable patterns, or an invalid pattern blocks the commit.
 # On a match it prints the file name and the pattern's line number, never the matched text or the pattern.
 
 repositoryRoot=$(git rev-parse --show-toplevel) || exit 1
@@ -13,7 +13,9 @@ if [ ! -f "$patternFile" ]; then
   exit 1
 fi
 
-usablePatternCount=$(grep -cv -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$patternFile")
+patternLines=$(tr -d '\r' < "$patternFile")
+
+usablePatternCount=$(printf '%s\n' "$patternLines" | grep -cv -e '^[[:space:]]*$' -e '^[[:space:]]*#')
 if [ "$usablePatternCount" -eq 0 ]; then
   echo "leakcheck: .leakcheck has no usable patterns; commit blocked." >&2
   echo "leakcheck: add at least one extended regex per line (see AGENTS.md, \"Leakcheck hook\")." >&2
@@ -25,19 +27,26 @@ stagedFiles=$(git -c core.quotePath=false diff --cached --name-only --diff-filte
 
 while IFS= read -r stagedFile <&3; do
   [ -z "$stagedFile" ] && continue
-  addedLines=$(git diff --cached --no-color --unified=0 -- "$stagedFile" | awk '/^@@/ { inHunk = 1; next } inHunk && /^\+/ { print substr($0, 2) }')
+  addedLines=$(git diff --cached --text --no-color --unified=0 -- "$stagedFile" | awk '/^@@/ { inHunk = 1; next } inHunk && /^\+/ { print substr($0, 2) }')
   [ -z "$addedLines" ] && continue
   lineNumber=0
-  while IFS= read -r pattern || [ -n "$pattern" ]; do
+  while IFS= read -r pattern <&4 || [ -n "$pattern" ]; do
     lineNumber=$((lineNumber + 1))
     if printf '%s\n' "$pattern" | grep -q -e '^[[:space:]]*$' -e '^[[:space:]]*#'; then
       continue
     fi
-    if printf '%s\n' "$addedLines" | grep -Eq -e "$pattern"; then
+    printf '%s\n' "$addedLines" | grep -Eq -e "$pattern" 2>/dev/null
+    grepStatus=$?
+    if [ "$grepStatus" -eq 0 ]; then
       echo "leakcheck: $stagedFile matches pattern on line $lineNumber of .leakcheck" >&2
       matchFound=1
+    elif [ "$grepStatus" -ne 1 ]; then
+      echo "leakcheck: invalid pattern on line $lineNumber; commit blocked" >&2
+      exit 1
     fi
-  done < "$patternFile"
+  done 4<<PATTERNS
+$patternLines
+PATTERNS
 done 3<<STAGED
 $stagedFiles
 STAGED

@@ -19,7 +19,9 @@ Guide for AI agents and contributors working in this repo.
 
 - `pnpm install` runs `prepare`, which sets `git config core.hooksPath .githooks`.
 - `.githooks/pre-commit` checks the added lines of the staged diff against patterns in a local `.leakcheck` file at the repo root. On a match it prints the file name and the pattern's line number (never the matched text) and blocks the commit.
-- It fails closed: without `.leakcheck`, or with one that has no usable patterns, every commit is blocked.
+- It fails closed: without `.leakcheck`, with one that has no usable patterns, or with an invalid pattern, every commit is blocked.
+- Matching is case-sensitive. Binary files are scanned as text. CRLF line endings in `.leakcheck` are fine.
+- `git commit --no-verify` bypasses the hook. Do not use it to get past a leakcheck block.
 - Create `.leakcheck` yourself: one extended regex (`grep -E`) per line; blank lines and lines starting with `#` are skipped. It is in `.gitignore`. Never commit it or paste real patterns into issues, PRs or CI logs.
 - Self-test: `pnpm test:hooks` (temporary repo, dummy canary only).
 
