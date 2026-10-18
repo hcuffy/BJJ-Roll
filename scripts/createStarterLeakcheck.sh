@@ -1,7 +1,8 @@
 #!/bin/sh
 # Creates a starter `.leakcheck` at the repo root when it is missing, so a fresh clone gets a working pre-commit hook.
 # Never reads, prints or overwrites an existing `.leakcheck`. Not a git repository: skips silently.
-# Generic secret patterns only (this repo is public); add your own personal patterns locally.
+# Generic secret patterns only (this repo is public), plus a marker line that keeps the hook blocking until you delete it
+# and add your own personal patterns.
 
 # Only write when this checkout is itself the git root: a non-git copy nested inside another repo must not write to the outer root.
 expectedRoot=$(cd "$(dirname "$0")/.." && pwd -P) || exit 0
@@ -24,6 +25,8 @@ if (
 # Local only and gitignored: never commit this file or paste its patterns anywhere.
 # One extended regex (grep -E) per line; blank lines and lines starting with # are skipped.
 # Add your own personal patterns below the generic ones: emails, full name, home path.
+# leakcheck-starter: delete this line after adding personal patterns
+# Until that marker line is deleted, the pre-commit hook blocks every commit.
 
 # GitHub tokens
 ghp_[A-Za-z0-9]{36}

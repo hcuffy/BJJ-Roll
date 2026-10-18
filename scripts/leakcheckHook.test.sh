@@ -97,20 +97,26 @@ else
   fail "CRLF .leakcheck blocked with an unexpected message"
 fi
 
-# 7. A missing .leakcheck gets a starter (mode 600, notice only, no pattern text), and a clean commit then passes.
+# 7. A missing .leakcheck gets a starter (mode 600, notice only); the starter blocks even a clean commit, printing no patterns.
+starterMarker="# leakcheck-starter: delete this line after adding personal patterns"
 rm -f .leakcheck
 sh scripts/createStarterLeakcheck.sh > output.log 2>&1
 starterMode=$(ls -l .leakcheck 2>/dev/null | cut -c1-10)
+starterMarkerCount=$(grep -cxF -e "$starterMarker" .leakcheck 2>/dev/null || true)
 printf 'clean change with the starter\n' >> clean.txt
 git add clean.txt
 if [ "$starterMode" != "-rw-------" ]; then
   fail "starter .leakcheck missing or not mode 600 (got $starterMode)"
+elif [ "$starterMarkerCount" != "1" ]; then
+  fail "starter .leakcheck does not have exactly one marker line (got $starterMarkerCount)"
 elif [ "$(cat output.log)" != "prepare: created starter .leakcheck; add your personal patterns" ]; then
   fail "starter creation printed unexpected output"
 elif git commit -q -m "Clean change with starter leakcheck" > output.log 2>&1; then
-  pass "missing .leakcheck: starter created (mode 600) and a clean commit passes"
+  fail "clean commit passed with the starter .leakcheck (marker ignored)"
+elif grep -q "still the starter file" output.log && grep -qF "delete the line \"$starterMarker\"" output.log && ! grep -q -e "ghp_" -e "AKIA" -e "PRIVATE KEY" output.log; then
+  pass "missing .leakcheck: starter created (mode 600, one marker) and it blocks a clean commit without printing patterns"
 else
-  fail "clean commit blocked with the starter .leakcheck"
+  fail "starter .leakcheck blocked with an unexpected message"
 fi
 
 # 8. An existing .leakcheck is left untouched: same checksum and mtime, no output.
@@ -125,23 +131,50 @@ else
   fail "existing .leakcheck was changed or output was printed"
 fi
 
-# 9. The starter blocks a staged dummy GitHub token (ghp_ plus 36 x), without printing it.
+# 9. Starter with the marker deleted and a dummy personal pattern added: a clean commit passes.
 rm -f .leakcheck
 sh scripts/createStarterLeakcheck.sh > /dev/null 2>&1
+grep -vxF -e "$starterMarker" .leakcheck > editedLeakcheck.tmp || true
+printf 'jane\\.dummy@example\\.invalid\n' >> editedLeakcheck.tmp
+cat editedLeakcheck.tmp > .leakcheck
+rm -f editedLeakcheck.tmp
+printf 'clean change after editing the starter\n' >> clean.txt
+git add clean.txt
+if git commit -q -m "Clean change with edited starter" > output.log 2>&1; then
+  pass "marker deleted and personal pattern added: clean commit passes"
+else
+  fail "clean commit blocked after deleting the marker"
+fi
+
+# 10. The same edited starter blocks a staged dummy personal match, without printing it.
+dummyEmail="jane.dummy""@example.invalid"
+printf 'contact = %s\n' "$dummyEmail" > leakedEmail.txt
+git add leakedEmail.txt
+if git commit -q -m "Add dummy email" > output.log 2>&1; then
+  fail "edited starter let a dummy personal match through"
+elif grep -q "leakedEmail.txt matches pattern on line" output.log && ! grep -qF "$dummyEmail" output.log; then
+  pass "edited starter blocks a staged dummy personal match"
+else
+  fail "dummy personal match blocked with an unexpected message"
+fi
+git reset -q leakedEmail.txt
+rm -f leakedEmail.txt
+
+# 11. The edited starter's generic patterns block a staged dummy GitHub token (ghp_ plus 36 x), without printing it.
 dummyGithubToken="ghp""_$(printf 'x%.0s' $(seq 1 36))"
 printf 'token = %s\n' "$dummyGithubToken" > leakedGithubToken.txt
 git add leakedGithubToken.txt
 if git commit -q -m "Add dummy GitHub token" > output.log 2>&1; then
-  fail "starter .leakcheck let a dummy GitHub token through"
+  fail "edited starter let a dummy GitHub token through"
 elif grep -q "leakedGithubToken.txt matches pattern on line" output.log && ! grep -q "$dummyGithubToken" output.log; then
-  pass "starter .leakcheck blocks a dummy GitHub token"
+  pass "edited starter blocks a dummy GitHub token"
 else
   fail "dummy GitHub token blocked with an unexpected message"
 fi
 git reset -q leakedGithubToken.txt
 rm -f leakedGithubToken.txt
 
-# 10. Outside a git repository the starter script skips silently and creates nothing.
+# 12. Outside a git repository the starter script skips silently and creates nothing.
 outsideDirectory="$workDirectory/outside"
 mkdir -p "$outsideDirectory/scripts"
 cp "$starterSource" "$outsideDirectory/scripts/createStarterLeakcheck.sh"
@@ -152,7 +185,7 @@ else
   fail "starter script misbehaved outside a git repository"
 fi
 
-# 11. A non-git copy nested inside another repo skips silently and never writes .leakcheck to the outer repo root.
+# 13. A non-git copy nested inside another repo skips silently and never writes .leakcheck to the outer repo root.
 rm -f .leakcheck
 nestedDirectory="$workDirectory/nestedCopy"
 mkdir -p "$nestedDirectory/scripts"
@@ -164,8 +197,18 @@ else
   fail "nested non-git copy wrote a .leakcheck or printed output"
 fi
 
+# 14. Marker text that is not the exact full line (a longer comment, or part of a pattern) does not trip the starter block.
+printf '%s (already done)\n %s\nDUMMY_CANARY_[0-9]{6}|%s\n' "$starterMarker" "$starterMarker" "$starterMarker" > .leakcheck
+printf 'clean change with marker-like lines\n' >> clean.txt
+git add clean.txt
+if git commit -q -m "Clean change with marker-like lines" > output.log 2>&1; then
+  pass "marker text inside a longer line does not block a clean commit"
+else
+  fail "marker text inside a longer line tripped the starter block"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "leakcheck self-test: $failures failed"
   exit 1
 fi
-echo "leakcheck self-test: all 11 cases passed"
+echo "leakcheck self-test: all 14 cases passed"

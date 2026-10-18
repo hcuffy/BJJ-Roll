@@ -2,6 +2,7 @@
 # Leakcheck: block staged additions that match a pattern in the local, untracked `.leakcheck` file.
 # One extended regex per line (case-sensitive); blank lines and lines starting with `#` are skipped. CRLF files work.
 # Fails closed: a missing `.leakcheck`, one without usable patterns, or an invalid pattern blocks the commit.
+# A starter `.leakcheck` (exact marker line present) also blocks every commit until the marker is deleted.
 # On a match it prints the file name and the pattern's line number, never the matched text or the pattern.
 
 repositoryRoot=$(git rev-parse --show-toplevel) || exit 1
@@ -14,6 +15,13 @@ if [ ! -f "$patternFile" ]; then
 fi
 
 patternLines=$(tr -d '\r' < "$patternFile")
+
+starterMarker="# leakcheck-starter: delete this line after adding personal patterns"
+if printf '%s\n' "$patternLines" | grep -qxF -e "$starterMarker"; then
+  echo "leakcheck: .leakcheck is still the starter file (its marker line is present); commit blocked." >&2
+  echo "leakcheck: add your personal patterns (emails, full name, home path) to .leakcheck, then delete the line \"$starterMarker\"." >&2
+  exit 1
+fi
 
 usablePatternCount=$(printf '%s\n' "$patternLines" | grep -cv -e '^[[:space:]]*$' -e '^[[:space:]]*#')
 if [ "$usablePatternCount" -eq 0 ]; then
