@@ -26,6 +26,18 @@ pnpm --filter @bjj-roll/mobile start   # dev server; open in Expo Go or an Andro
 pnpm --filter @bjj-roll/mobile bundle  # headless Android bundle into packages/mobile/dist
 ```
 
+## Workers
+
+Python workers in `packages/workers` (Python 3.15.0, uv 0.13.1, Ruff, pytest).
+
+```sh
+cd packages/workers
+uv sync --locked
+uv run ruff check
+uv run ruff format --check
+uv run pytest
+```
+
 ## License
 
 Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.

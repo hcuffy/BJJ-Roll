@@ -26,6 +26,13 @@ Guide for AI agents and contributors working in this repo.
 - Create `.leakcheck` yourself: one extended regex (`grep -E`) per line; blank lines and lines starting with `#` are skipped. It is in `.gitignore`. Never commit it or paste real patterns into issues, PRs or CI logs.
 - Self-test: `pnpm test:hooks` (temporary repo, dummy canary only).
 
+## Python workers
+
+- `packages/workers` is Python, not a pnpm package. Python is pinned to `3.15.0` (`packages/workers/.python-version`); install uv 0.13.1 directly (no other Python setup needed, uv fetches 3.15.0).
+- Setup: `cd packages/workers && uv sync --locked` (`uv.lock` is committed).
+- Lint: `uv run ruff check` and `uv run ruff format --check` (line length 150, double quotes, 4-space indent). Test: `uv run pytest`.
+- Tests live in `packages/workers/tests/`, named `test_<module>_<scenario>.py`. Full variable names apply here too.
+
 ## Workspace
 
 - Packages live in `packages/*`, scoped `@bjj-roll/<name>`, linked with `workspace:*`.
