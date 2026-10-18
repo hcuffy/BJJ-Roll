@@ -2,4 +2,3 @@ pnpm-lock.yaml
 dist/
 coverage/
 .expo/
-packages/shared/src/violationSamples.ts
