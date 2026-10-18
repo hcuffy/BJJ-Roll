@@ -14,7 +14,7 @@ curl http://localhost:3000/health
 # {"status":"ok"}
 ```
 
-Run the tests with `pnpm test`.
+Run the tests with `pnpm test`. The backend database tests start a Postgres container (Testcontainers, `postgres:18.6`), so they need Docker; without Docker they are skipped locally.
 
 ## Mobile
 

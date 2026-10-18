@@ -12,6 +12,7 @@ Guide for AI agents and contributors working in this repo.
 - Install: `pnpm install`
 - Lint: `pnpm lint` (fix: `pnpm fix`)
 - Test: `pnpm test` (runs `test` in every workspace package)
+- Database tests (`packages/backend`, Testcontainers with `postgres:18.6`) need Docker. Without Docker they are skipped locally; in CI (`CI=true`) they always run.
 - Typecheck / build: `pnpm typecheck` / `pnpm build` (`tsc -b`)
 - Format: `pnpm format`
 

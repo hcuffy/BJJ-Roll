@@ -1,2 +1,7 @@
 packages:
   - "packages/*"
+# Build scripts stay disabled (pnpm default). These come in via testcontainers (ssh2) and are optional or check-only.
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
