@@ -145,14 +145,27 @@ rm -f leakedGithubToken.txt
 outsideDirectory="$workDirectory/outside"
 mkdir -p "$outsideDirectory/scripts"
 cp "$starterSource" "$outsideDirectory/scripts/createStarterLeakcheck.sh"
-if GIT_CEILING_DIRECTORIES="$outsideDirectory" sh "$outsideDirectory/scripts/createStarterLeakcheck.sh" > output.log 2>&1 && [ ! -e "$outsideDirectory/.leakcheck" ] && [ ! -s output.log ]; then
+if (cd "$outsideDirectory" && GIT_CEILING_DIRECTORIES="$workDirectory" sh scripts/createStarterLeakcheck.sh > "$workDirectory/output.log" 2>&1) \
+  && [ ! -e "$outsideDirectory/.leakcheck" ] && [ ! -s output.log ]; then
   pass "outside a git repository: skipped silently, nothing created"
 else
   fail "starter script misbehaved outside a git repository"
+fi
+
+# 11. A non-git copy nested inside another repo skips silently and never writes .leakcheck to the outer repo root.
+rm -f .leakcheck
+nestedDirectory="$workDirectory/nestedCopy"
+mkdir -p "$nestedDirectory/scripts"
+cp "$starterSource" "$nestedDirectory/scripts/createStarterLeakcheck.sh"
+if (cd "$nestedDirectory" && sh scripts/createStarterLeakcheck.sh > "$workDirectory/output.log" 2>&1) \
+  && [ ! -e "$workDirectory/.leakcheck" ] && [ ! -e "$nestedDirectory/.leakcheck" ] && [ ! -s output.log ]; then
+  pass "non-git copy nested in another repo: skipped silently, outer root untouched"
+else
+  fail "nested non-git copy wrote a .leakcheck or printed output"
 fi
 
 if [ "$failures" -ne 0 ]; then
   echo "leakcheck self-test: $failures failed"
   exit 1
 fi
-echo "leakcheck self-test: all 10 cases passed"
+echo "leakcheck self-test: all 11 cases passed"

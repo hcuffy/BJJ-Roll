@@ -5,7 +5,7 @@ Tools for analyzing Brazilian Jiu-Jitsu rolls.
 ## Local setup
 
 1. Install Node 24 (`.nvmrc`) and pnpm 11.21.0 directly (`npm i -g pnpm@11.21.0`). Do not use corepack.
-2. Run `pnpm install`. It turns on the commit hook (`.githooks`) and creates a starter `.leakcheck` with generic secret patterns if you do not have one yet.
+2. Run `pnpm install`. It turns on the commit hook (`.githooks`) and creates a starter `.leakcheck` with generic secret patterns if you do not have one yet. `pnpm install` needs a POSIX `sh` for this step: fine on Linux and macOS; on Windows use Git Bash or WSL (plain `cmd` is not supported).
 3. Add your personal patterns to `.leakcheck`, one extended regex per line, for example (made up):
 
    ```text

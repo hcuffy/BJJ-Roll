@@ -3,8 +3,13 @@
 # Never reads, prints or overwrites an existing `.leakcheck`. Not a git repository: skips silently.
 # Generic secret patterns only (this repo is public); add your own personal patterns locally.
 
-scriptDirectory=$(cd "$(dirname "$0")" && pwd) || exit 0
-repositoryRoot=$(git -C "$scriptDirectory" rev-parse --show-toplevel 2>/dev/null) || exit 0
+# Only write when this checkout is itself the git root: a non-git copy nested inside another repo must not write to the outer root.
+expectedRoot=$(cd "$(dirname "$0")/.." && pwd -P) || exit 0
+repositoryRoot=$(git -C "$expectedRoot" rev-parse --show-toplevel 2>/dev/null) || exit 0
+repositoryRoot=$(cd "$repositoryRoot" && pwd -P) || exit 0
+if [ "$repositoryRoot" != "$expectedRoot" ]; then
+  exit 0
+fi
 patternFile="$repositoryRoot/.leakcheck"
 
 if [ -e "$patternFile" ] || [ -L "$patternFile" ]; then
