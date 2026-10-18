@@ -4,3 +4,4 @@ coverage/
 .expo/
 .env
 *.tsbuildinfo
+.leakcheck
