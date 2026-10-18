@@ -11,6 +11,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/.expo/**",
       "**/vitest.config.ts",
+      "**/vite.config.ts",
       "**/scripts/**",
       "**/babel.config.js",
       "**/metro.config.js",
@@ -57,9 +58,18 @@ export default tseslint.config(
       "no-console": ["error", { allow: ["warn", "error"] }],
     },
   },
-  eslintConfigPrettier,
   {
     files: ["**/*.config.{js,ts}", "packages/mobile/app/**/_layout.tsx"],
     rules: { "@typescript-eslint/naming-convention": "off" },
+  },
+  eslintConfigPrettier,
+  // eslint-config-prettier turns off `curly` and `max-len`; CONVENTIONS.v2 wants both as errors.
+  // Both are safe with Prettier here (`curly: all`, and `max-len` matches `printWidth: 150`).
+  {
+    files: ["**/*.ts", "**/*.tsx"],
+    rules: {
+      curly: ["error", "all"],
+      "max-len": ["error", { code: 150 }],
+    },
   },
 );

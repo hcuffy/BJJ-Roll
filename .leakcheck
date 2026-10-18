@@ -1,0 +1,2 @@
+# Local leakcheck patterns (untracked). Placeholder only: replace with real patterns locally.
+LOCAL_PLACEHOLDER_PATTERN_[0-9]{8}
