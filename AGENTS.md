@@ -22,6 +22,7 @@ Guide for AI agents and contributors working in this repo.
 ## Conventions
 
 - Follow CONVENTIONS.v2 (summarised in `.github/coderabbit.md`): strict TypeScript, ESM, double quotes, 2-space indent, trailing commas, full names instead of abbreviations, Vitest tests in `__tests__/` named `<module>.<scenario>.test.ts`.
+- Architecture and tooling decisions are recorded in [`DECISIONS.md`](DECISIONS.md).
 
 ## Commits
 
