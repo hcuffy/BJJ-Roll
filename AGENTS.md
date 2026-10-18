@@ -15,6 +15,14 @@ Guide for AI agents and contributors working in this repo.
 - Typecheck / build: `pnpm typecheck` / `pnpm build` (`tsc -b`)
 - Format: `pnpm format`
 
+## Leakcheck hook
+
+- `pnpm install` runs `prepare`, which sets `git config core.hooksPath .githooks`.
+- `.githooks/pre-commit` checks the added lines of the staged diff against patterns in a local `.leakcheck` file at the repo root. On a match it prints the file name and the pattern's line number (never the matched text) and blocks the commit.
+- It fails closed: without `.leakcheck`, or with one that has no usable patterns, every commit is blocked.
+- Create `.leakcheck` yourself: one extended regex (`grep -E`) per line; blank lines and lines starting with `#` are skipped. It is in `.gitignore`. Never commit it or paste real patterns into issues, PRs or CI logs.
+- Self-test: `pnpm test:hooks` (temporary repo, dummy canary only).
+
 ## Workspace
 
 - Packages live in `packages/*`, scoped `@bjj-roll/<name>`, linked with `workspace:*`.
