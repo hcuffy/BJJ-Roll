@@ -18,12 +18,12 @@ Guide for AI agents and contributors working in this repo.
 
 ## Leakcheck hook
 
-- `pnpm install` runs `prepare`, which sets `git config core.hooksPath .githooks`.
+- `pnpm install` runs `prepare`, which sets `git config core.hooksPath .githooks` and creates a starter `.leakcheck` if it is missing (`scripts/createStarterLeakcheck.sh`; generic secret patterns only, mode 600; an existing file is never read, printed or overwritten). The starter contains the marker line `# leakcheck-starter: delete this line after adding personal patterns`; while that exact line is in `.leakcheck`, the hook blocks every commit.
 - `.githooks/pre-commit` checks the added lines of the staged diff against patterns in a local `.leakcheck` file at the repo root. On a match it prints the file name and the pattern's line number (never the matched text) and blocks the commit.
 - It fails closed: without `.leakcheck`, with one that has no usable patterns, or with an invalid pattern, every commit is blocked.
 - Matching is case-sensitive. Binary files are scanned as text. CRLF line endings in `.leakcheck` are fine.
 - `git commit --no-verify` bypasses the hook. Do not use it to get past a leakcheck block.
-- Create `.leakcheck` yourself: one extended regex (`grep -E`) per line; blank lines and lines starting with `#` are skipped. It is in `.gitignore`. Never commit it or paste real patterns into issues, PRs or CI logs.
+- Add your personal patterns (emails, full name, home path) to the starter `.leakcheck`, then delete the marker line (or create the file yourself): one extended regex (`grep -E`) per line; blank lines and lines starting with `#` are skipped. It is in `.gitignore`. Never commit it or paste real patterns into issues, PRs or CI logs.
 - Self-test: `pnpm test:hooks` (temporary repo, dummy canary only).
 
 ## Python workers
