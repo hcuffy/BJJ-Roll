@@ -8,7 +8,7 @@ kit recommendation for HEN-46.
 
 ## 0. How to read this doc
 
-- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A3 and repo D22 in
+- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A3 and repo D24 in
   [`DECISIONS.md`](../DECISIONS.md), D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear issue.
 - **[Proposal]** means a technical choice made in this doc. Sara approves or changes it in review. Once approved, durable choices go into `DECISIONS.md`.
 - **OPEN (owner)** means not decided anywhere. The owner decides: Henry (product, money), Sara (tech) or the lawyer (legal). This doc does not pick an
@@ -33,7 +33,7 @@ kit recommendation for HEN-46.
 | D15                      | No face or body re-identification across videos                                                                                                    |
 | D17, D18, D19            | Better Auth with email OTP; email encrypted at field level (AES-256-GCM + HMAC lookup); the account holds only an email and a handle               |
 | Planning D22             | Every person other than the tapped user is masked in all rendered or shared output and in clips sent to the LLM                                    |
-| Repo D22                 | The owner can see their own footage unmasked (Henry, 2026-10-17). See the numbering note below                                                     |
+| Repo D24                 | The owner can see their own footage unmasked (Henry, 2026-10-17). See the numbering note below                                                     |
 | A2, A3                   | Testcontainers with `postgres:18.6`; Ruff + pytest for `packages/workers`                                                                          |
 | H5                       | 17+ minimum age                                                                                                                                    |
 | H9                       | Gi and no-gi at equal weight, so every video carries `style: "gi" \| "no-gi"`                                                                      |
@@ -41,9 +41,9 @@ kit recommendation for HEN-46.
 | M6-14 baseline (HEN-197) | Sara's baseline is no E2E in v1: server-side per-object encryption, no operator read path, audit log. Henry decides in HEN-201                     |
 | Plan change 2026-10-18   | Both stores; one-time Pro purchase; paid human review with public ratings; free gym-mate review with text and voice notes; no card data held       |
 
-**Numbering note:** the repo's `DECISIONS.md` D22 ("owner can see their own footage unmasked") collides with planning D22 (masking). Sara's call on
-2026-10-18 was to move the repo entry to the next free D number and keep planning D22 as masking. This PR leaves `DECISIONS.md` unchanged; the renumber
-moves to HEN-70 (docs).
+**Numbering note:** the repo's `DECISIONS.md` entry "owner can see their own footage unmasked" was D22, which collided with planning D22 (masking).
+Sara's call on 2026-10-18 was to move the repo entry to the next free D number and keep planning D22 as masking. Done in HEN-70 (2026-10-22): the repo
+entry is now D24.
 
 ## 1. Module layout
 
@@ -444,7 +444,7 @@ CREATE POLICY videos_owner_all ON videos
 ```
 
 The same owner policy applies to every table with an `owner_id` or `user_id` (timeline segments, corrections, consent records, notes on own videos, push
-tokens). The owner may get a URL to their unmasked source video (repo D22). Everyone else only ever gets the masked render (planning D22).
+tokens). The owner may get a URL to their unmasked source video (repo D24). Everyone else only ever gets the masked render (planning D22).
 
 ### 4.3 Later visibility levels
 
@@ -639,7 +639,7 @@ audit log; only E2E removes it.
 5. Signed-URL TTLs: 300 s for playback, 15 min for worker URLs: decided (§4.4, §3.6).
 6. A4 video object encryption, Postgres volume encryption and D18 KMS stay OPEN, owned by HEN-191. Backup encryption and the backup window stay OPEN,
    owned by HEN-50 (§6).
-7. Renumbering repo D22 in `DECISIONS.md` moves to HEN-70 (docs) (§0).
+7. Renumbering the repo's owner-unmasked decision in `DECISIONS.md` moves to HEN-70 (docs) (§0). Done: it is now repo D24.
 8. UI kit: `@expo/ui` signed off for HEN-46 (§8).
 
 ### For the lawyer (through HEN-189 / HEN-209)
