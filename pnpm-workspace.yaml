@@ -6,3 +6,7 @@ allowBuilds:
   cpu-features: false
   protobufjs: false
   ssh2: false
+# Security fixes found by OSV-Scanner (HEN-222). Drop each when upstream ships the fix.
+overrides:
+  vite@<8.3.3: 8.3.3
+  xcode>uuid: 11.1.1

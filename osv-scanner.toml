@@ -1,0 +1,21 @@
+# OSV-Scanner exceptions (HEN-222). Each one needs a reason and an ignoreUntil at most 30 days out.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-20T00:00:00Z
+reason = "braces 3.0.3 comes in via Expo (micromatch). No fixed version exists yet. Recheck by the date."
+
+[[IgnoredVulns]]
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2026-11-20T00:00:00Z
+reason = "node-forge 1.4.0 comes in via @expo/cli (dev tooling). No fixed version exists yet. Recheck by the date."
+
+[[IgnoredVulns]]
+id = "GHSA-qxg6-89mg-rqv8"
+ignoreUntil = 2026-11-01T00:00:00Z
+reason = "@vitest/mocker 4.1.11 (test only). Fix 4.1.12 passes the 14-day minimumReleaseAge on 29 Oct. Bump vitest then and remove this."
+
+[[IgnoredVulns]]
+id = "GHSA-xp26-3454-mjgp"
+ignoreUntil = 2026-11-01T00:00:00Z
+reason = "@vitest/mocker 4.1.11 (test only). Fix 4.1.12 passes the 14-day minimumReleaseAge on 29 Oct. Bump vitest then and remove this."
