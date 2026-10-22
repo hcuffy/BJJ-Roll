@@ -1,0 +1,40 @@
+name: OSV-Scanner
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+# Read-only token; no secrets are used.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Scans both lockfiles with the Apache-2.0 osv-scanner binary (pinned version + sha256), no third-party action.
+# Fails on any known vulnerability. Exceptions only in osv-scanner.toml, each with a reason and an ignoreUntil of 30 days or less.
+jobs:
+  osv-scanner:
+    name: osv-scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download osv-scanner and verify its sha256
+        env:
+          OSV_SCANNER_VERSION: 2.6.0
+          OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+        run: |
+          binaryPath="$RUNNER_TEMP/osv-scanner"
+          curl -fsSL -o "$binaryPath" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  ${binaryPath}" | sha256sum --check --strict
+          chmod +x "$binaryPath"
+          "$binaryPath" --version
+      - name: Scan pnpm-lock.yaml and packages/workers/uv.lock
+        run: |
+          "$RUNNER_TEMP/osv-scanner" scan source --config=osv-scanner.toml --lockfile=pnpm-lock.yaml --lockfile=packages/workers/uv.lock
