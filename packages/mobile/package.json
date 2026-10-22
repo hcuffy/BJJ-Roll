@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo/ui": "~57.0.22",
     "expo": "~57.0.26",
     "react": "19.2.3",
     "react-native": "0.86.3"

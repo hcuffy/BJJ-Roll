@@ -41,8 +41,11 @@ jobs:
         run: pnpm typecheck
       - name: Typecheck mobile
         run: pnpm --filter @bjj-roll/mobile typecheck
-      - name: Frontend build (mobile Android bundle)
-        run: pnpm --filter @bjj-roll/mobile bundle
+      - name: Frontend build (mobile Android bundle, web frontend typecheck and build)
+        run: |
+          pnpm --filter @bjj-roll/mobile bundle
+          pnpm --filter @bjj-roll/frontend typecheck
+          pnpm --filter @bjj-roll/frontend build
       - name: Lint
         run: pnpm lint
       - name: Format check

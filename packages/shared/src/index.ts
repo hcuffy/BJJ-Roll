@@ -1,3 +1,1 @@
-export function formatGreeting(name: string): string {
-  return `Hello, ${name}!`;
-}
+export * from "./schemas/index.js";
