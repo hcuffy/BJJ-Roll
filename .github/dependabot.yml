@@ -24,6 +24,9 @@ updates:
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@types/react-dom"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # The project runs Node 24 (`.nvmrc`); `@types/node` majors track newer Node lines.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
