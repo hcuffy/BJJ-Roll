@@ -51,3 +51,10 @@ Guide for AI agents and contributors working in this repo.
 - Branch from `main`; the branch name contains the Linear issue ID (e.g. `hen-32-...`).
 - Open a PR to `main` with `Fixes HEN-<n>` in the body.
 - Never push directly to `main`. Never merge your own PR; a human merges after review.
+
+## Security update younger than 14 days
+
+- pnpm `minimumReleaseAge` stays 14 days, with no standing excludes. Dependabot (`.github/dependabot.yml`) uses `cooldown.default-days: 14`.
+- Urgent-fix path: a `minimumReleaseAge` exclude for that one package only, added only after Henry's written OK (link or quote in the handoff file).
+- Remove the exclude in a follow-up PR once the version is 14 days old.
+- Never more than one package per OK. No blanket excludes.
