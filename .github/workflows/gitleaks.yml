@@ -23,6 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@v4
       - name: Download gitleaks and verify its sha256
         env:
           GITLEAKS_VERSION: 8.30.1
