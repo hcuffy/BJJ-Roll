@@ -6,6 +6,8 @@ kit recommendation for HEN-46.
 
 **Status:** approved by Sara (CTO), 2026-10-22. Her decisions are recorded in §7. The open questions for Henry and the lawyer stay open and do not block this doc.
 
+**Security checklist:** [`docs/security/checklist.md`](security/checklist.md) tracks the MASVS/ASVS, RLS/IDOR and grant checks for this design (HEN-226).
+
 ## 0. How to read this doc
 
 - **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A3 and repo D24 in
