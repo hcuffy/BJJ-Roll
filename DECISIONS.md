@@ -29,7 +29,9 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Decided by:** Henry
 - **Consequences:** Used by HEN-56 (Python worker lint and test).
 
-## D22: Owner can see their own footage unmasked
+## D24: Owner can see their own footage unmasked
+
+Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 
 - **Decision:** Owner can see their own footage unmasked.
 - **Date:** 2026-10-17
