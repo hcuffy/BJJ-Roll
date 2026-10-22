@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { correctionSchema, handleMaximumLength, timelineSegmentSchema, userSchema, videoProcessingStatusSchema, videoSchema } from "../index.js";
 import { invalidIdentifier, offsetLessTimestamp, otherId, timestamp, userId, videoId } from "./sampleValues.js";
 
-const user = { id: userId, handle: "henry", createdAt: timestamp };
+const user = { id: userId, handle: "test_handle", createdAt: timestamp };
 const video = {
   id: videoId,
   ownerId: userId,

@@ -46,7 +46,7 @@ describe("job contract schemas (ARCHITECTURE.md §3.5)", () => {
   });
 
   it("rejects a job payload that carries an email or a URL (HEN-227: ids only)", () => {
-    expect(jobPayloadSchema.safeParse({ ...jobPayload, email: "henry@example.com" }).success).toBe(false);
+    expect(jobPayloadSchema.safeParse({ ...jobPayload, email: "redacted" }).success).toBe(false);
     expect(jobPayloadSchema.safeParse({ ...jobPayload, sourceUrl: "https://storage.example.com/video.mp4" }).success).toBe(false);
   });
 });
