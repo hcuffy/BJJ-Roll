@@ -1,0 +1,24 @@
+# Dependabot version updates (HEN-221). `cooldown.default-days: 14` matches pnpm `minimumReleaseAge` and `.ncurc.json`.
+# Cooldown delays version updates only; security updates are not delayed.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: "uv"
+    directory: "/packages/workers"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
