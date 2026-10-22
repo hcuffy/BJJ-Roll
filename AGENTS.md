@@ -62,6 +62,14 @@ Run from the repo root.
 - Open a PR to `main` with `Fixes HEN-<n>` in the body.
 - Never push directly to `main`. Never merge your own PR; a human merges after review.
 
+## GitHub Actions pins
+
+- Every third-party action (`uses:`) in `.github/workflows/` is pinned to a full 40-character commit SHA with the version tag in a trailing comment: `uses: actions/checkout@<40-char sha> # v4.4.0`. Local actions (`./...`) are exempt; Docker actions use an `@sha256:` digest.
+- Every workflow has a top-level `permissions:` block (normally `contents: read`); a job raises only what it needs. No `pull_request_target`, no new secrets.
+- Find the SHA for a tag: `git ls-remote --tags https://github.com/<owner>/<repo> 'refs/tags/<tag>' 'refs/tags/<tag>^{}'`. Use the `^{}` line if there is one (annotated tag), else the plain line. Pick a release that is at least 14 days old.
+- The `pin-check` workflow (`scripts/checkWorkflowPins.sh`) enforces both rules on every PR. Run it locally with `pnpm test:pins`.
+- Dependabot (`github-actions`, 14-day cooldown) updates the SHA and keeps the version comment.
+
 ## Security update younger than 14 days
 
 - pnpm `minimumReleaseAge` stays 14 days, with no standing excludes. Dependabot (`.github/dependabot.yml`) uses `cooldown.default-days: 14`.

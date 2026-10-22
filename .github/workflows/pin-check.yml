@@ -1,0 +1,29 @@
+name: pin-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token; no secrets are used.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Fails on any third-party `uses:` that is not pinned to a full commit SHA with a version comment,
+# and on any workflow without a top-level `permissions:` block (HEN-225). Plain POSIX sh, no extra tools.
+jobs:
+  pin-check:
+    name: pin-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Self-test the pin check
+        run: sh scripts/checkWorkflowPins.test.sh
+      - name: Check workflow pins and permissions
+        run: sh scripts/checkWorkflowPins.sh .github/workflows
