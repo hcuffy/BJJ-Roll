@@ -8,5 +8,7 @@ allowBuilds:
   ssh2: false
 # Security fixes found by OSV-Scanner (HEN-222). Drop each when upstream ships the fix.
 overrides:
-  vite@<8.3.3: 8.3.3
+  vite@<8.3.3: ^8.3.3
   xcode>uuid: 11.1.1
+  # @expo/ui pulls vaul (web drawer); keep its react-dom peer on React 19.2.3 from Expo SDK 57 (HEN-46).
+  vaul>react-dom: 19.2.3

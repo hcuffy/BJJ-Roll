@@ -1,0 +1,25 @@
+{
+  "name": "@bjj-roll/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc -b",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bjj-roll/shared": "workspace:*",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.7",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.11"
+  }
+}
