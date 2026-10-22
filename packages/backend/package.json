@@ -14,9 +14,13 @@
     "hono": "^4.13.13"
   },
   "devDependencies": {
+    "@better-auth/expo": "1.7.7",
+    "@better-auth/kysely-adapter": "1.7.7",
     "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "^24.19.1",
     "@types/pg": "^8.23.1",
+    "better-auth": "1.7.7",
+    "kysely": "0.29.6",
     "pg": "^8.23.1",
     "vitest": "^5.0.3"
   }
