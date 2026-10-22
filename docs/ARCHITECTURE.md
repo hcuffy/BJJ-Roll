@@ -4,7 +4,7 @@ Design doc for BJJ-Roll before feature code (D21). It covers the module layout, 
 Postgres row-level security (RLS) model including reviewer access grants and gym-mate sharing, the cascade-delete map, the encryption inventory and a UI
 kit recommendation for HEN-46.
 
-**Status:** draft for Sara's review. Nothing here is approved until Sara signs off on HEN-41.
+**Status:** approved by Sara (CTO), 2026-10-22. Her decisions are recorded in §7. The open questions for Henry and the lawyer stay open and do not block this doc.
 
 ## 0. How to read this doc
 
@@ -42,8 +42,8 @@ kit recommendation for HEN-46.
 | Plan change 2026-10-18   | Both stores; one-time Pro purchase; paid human review with public ratings; free gym-mate review with text and voice notes; no card data held       |
 
 **Numbering note:** the repo's `DECISIONS.md` D22 ("owner can see their own footage unmasked") collides with planning D22 (masking). Sara's call on
-2026-10-18 was to move the repo entry to the next free D number and keep planning D22 as masking. This PR leaves `DECISIONS.md` unchanged; the renumber is
-still open (Sara).
+2026-10-18 was to move the repo entry to the next free D number and keep planning D22 as masking. This PR leaves `DECISIONS.md` unchanged; the renumber
+moves to HEN-70 (docs).
 
 ## 1. Module layout
 
@@ -310,30 +310,30 @@ export const ratingSchema = z.object({
 
 ## 3. Hono ↔ worker job contract (pg-boss)
 
-### 3.1 Who claims jobs [Proposal]
+### 3.1 Who claims jobs (decided: option A, Sara, 2026-10-22)
 
 A1 records a known risk: Python workers claiming pg-boss jobs over SQL is untested. In pg-boss 12.38.0 (the current release, read for this doc) the fetch SQL is built per
 queue policy and partition, with group concurrency, heartbeats and dead-letter lineage. Copying that in Python would tie the workers to pg-boss internals.
 
-- **Option A (recommended):** only Node touches pg-boss. A `jobRunner` process in `packages/backend` claims jobs with `work()` and calls the Modal function
+- **Option A (decided):** only Node touches pg-boss. A `jobRunner` process in `packages/backend` claims jobs with `work()` and calls the Modal function
   synchronously with `.remote(jobId, objectKey)` through the Modal JavaScript SDK (`modal` on npm, 0.11.1, which lists "call a deployed Function" and
   "override its routing region" examples). This matches HEN-227: no `.spawn()`, async handling in pg-boss, payload only a job ID and an object key. Python
-  stays inside Modal functions. Not tested yet: the JS SDK call to an `eu` function with `routing_region="eu-west"`. Test it in HEN-48 before building on it.
-- **Option B:** a Python dispatcher claims jobs from `pgboss.job` with its own `FOR UPDATE SKIP LOCKED` query. This is the path A1 flags as risky, and it
+  stays inside Modal functions. **Required spike:** the JS SDK call to an `eu` function with `routing_region="eu-west"` is not tested yet. Test it in HEN-48 before building on it.
+- **Option B (rejected):** a Python dispatcher claims jobs from `pgboss.job` with its own `FOR UPDATE SKIP LOCKED` query. This is the path A1 flags as risky, and it
   breaks whenever pg-boss changes its schema.
 
-Sara picks. The rest of §3 assumes option A; with option B only §3.3 changes.
+Sara chose option A on 2026-10-22. The rest of §3 is written for option A.
 
 ### 3.2 Queues [Proposal]
 
-| Queue                   | Work                                                    | Runs on                              | Issue          |
-| ----------------------- | ------------------------------------------------------- | ------------------------------------ | -------------- |
-| `video_transcode`       | ffmpeg to 720p                                          | OPEN (Sara): Hetzner VM or Modal CPU | HEN-87         |
-| `video_timeline_gemini` | v0 timeline through Vertex EU                           | OPEN (Sara): backend or Modal        | HEN-66         |
-| `video_track`           | Tap → SAM 2.1 tracking of the user                      | Modal `eu`                           | HEN-67         |
-| `video_classify`        | Pose + two-person classifier (partner pose memory-only) | Modal `eu`                           | HEN-73, HEN-79 |
-| `video_render_masked`   | Whole-body masked share render (planning D22)           | Modal `eu`                           | HEN-81         |
-| `video_delete`          | Cascade delete orchestration (§5)                       | backend                              | HEN-95         |
+| Queue                   | Work                                                    | Runs on                                                                               | Issue          |
+| ----------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------- |
+| `video_transcode`       | ffmpeg to 720p                                          | OPEN: decided by the HEN-87 spike (measure cost and runtime, Hetzner VM vs Modal CPU) | HEN-87         |
+| `video_timeline_gemini` | v0 timeline through Vertex EU                           | backend (Node, Vertex EU), decided (Sara, 2026-10-22)                                 | HEN-66         |
+| `video_track`           | Tap → SAM 2.1 tracking of the user                      | Modal `eu`                                                                            | HEN-67         |
+| `video_classify`        | Pose + two-person classifier (partner pose memory-only) | Modal `eu`                                                                            | HEN-73, HEN-79 |
+| `video_render_masked`   | Whole-body masked share render (planning D22)           | Modal `eu`                                                                            | HEN-81         |
+| `video_delete`          | Cascade delete orchestration (§5)                       | backend                                                                               | HEN-95         |
 
 Each queue has a dead-letter queue named `<queue>_dead_letter`.
 
@@ -355,7 +355,7 @@ pg-boss job states (from the 12.38.0 schema): `created`, `retry`, `active`, `com
 - `singletonKey = "<videoId>:<queue>"`, so one video never has two live jobs of the same kind.
 - The app keeps its own `video_jobs (video_id, queue, job_id)` table, so the cascade can find and cancel jobs without reading `pgboss.job.data`.
 
-### 3.4 Retries, expiry and dead letter [Proposal]
+### 3.4 Retries, expiry and dead letter (accepted as starting values, Sara, 2026-10-22; tune in M3)
 
 - Retries: pg-boss default `retryLimit: 2`, with `retryBackoff: true` and `retryDelay: 30` seconds. Modal-side retries are off, so pg-boss is the only
   retry authority.
@@ -418,9 +418,10 @@ export const jobResultSchema = z.discriminatedUnion("outcome", [
 ### 3.6 Worker side
 
 - Internal routes (backend, not public): `GET /internal/jobs/{jobId}` (parameters) and `POST /internal/jobs/{jobId}/object-urls` (presigned GET for the
-  input, presigned PUT for declared outputs). Both answer only while the job is `active`. Worker URLs live 15 minutes [Proposal].
-- The worker authenticates with a service token that can only call these two routes. It lives in Modal Secrets, which Modal keeps in the US; it is not
-  user data and not a Hetzner key, but whether that is acceptable is **OPEN (Sara)**.
+  input, presigned PUT for declared outputs). Both answer only while the job is `active`. Worker URLs live 15 minutes (decided, Sara, 2026-10-22).
+- The worker authenticates with a service token that can only call these two routes. It lives in Modal Secrets, which Modal keeps in the US. Accepted
+  (Sara, 2026-10-22): the token's scope is limited to the two internal routes and it is not user data. It is rotated on every deploy, or at least every 90
+  days. Modal's US-held metadata is already on the lawyer list.
 - The Python side validates against JSON Schema generated from these Zod schemas (Zod 4 `z.toJSONSchema`) and committed to `packages/workers`. A test in
   `shared` fails if the committed JSON Schema is stale.
 - Logs: job id, queue, timings and error class only (HEN-227 log-scrub test). Partner pose, masks and metrics are never persisted (D6).
@@ -499,7 +500,7 @@ HEN-193 tests this together with the catalogue check from HEN-58.
 The video owner reads every note on their video through the owner policy. Whether grantees see each other's notes is **OPEN (Henry)**; the sketch shows
 only their own.
 
-**Signed URLs [Proposal]:** media is served only as presigned GET URLs to the masked render, issued by the API after the RLS check passes. The TTL is **300
+**Signed URLs (TTLs decided, Sara, 2026-10-22):** media is served only as presigned GET URLs to the masked render, issued by the API after the RLS check passes. The TTL is **300
 seconds**, or the time left on the grant if that is shorter. The app asks for a new URL when one expires. A single 720p MP4 with range requests means one
 URL per playback. Revocation cannot reach a URL that was already issued, so media access ends within the TTL; database access ends on the next request.
 
@@ -570,7 +571,7 @@ Deletion is one orchestrated `video_delete` job (HEN-95) built on the SillyRabbi
 | Audit log (ids only)                                                        | Postgres                      | OPEN FOR LAWYER                           | OPEN FOR LAWYER                           | **OPEN FOR LAWYER:** how long security audit entries may be kept after deletion                                                                                 |
 | Group and gym memberships (M6, M7)                                          | Postgres                      | –                                         | delete                                    | Gym-side copies are the gym's (Art. 26 / 28 arrangement, M7): OPEN FOR LAWYER                                                                                   |
 | Push tokens (HEN-196)                                                       | Postgres                      | –                                         | delete                                    | –                                                                                                                                                               |
-| Backups                                                                     | Backup store                  | ages out                                  | ages out                                  | **OPEN FOR LAWYER + Sara:** deleted data stays in backups until rotation. Backup window: OPEN (Sara, HEN-50)                                                    |
+| Backups                                                                     | Backup store                  | ages out                                  | ages out                                  | **OPEN FOR LAWYER + HEN-50:** deleted data stays in backups until rotation. Backup window: OPEN (owned by HEN-50)                                               |
 | Logs                                                                        | Hetzner, Modal                | ages out                                  | ages out                                  | No personal data in logs (A5, HEN-227)                                                                                                                          |
 
 Rules that are not open:
@@ -584,30 +585,30 @@ Rules that are not open:
 **No card data anywhere:** payments go through the App Store, Google Play or a payment provider. We store only their transaction, product and receipt
 references. Payouts: provider account references only; no bank or ID documents (HEN-214).
 
-| Data                                           | Where                           | At-rest protection                                                                         | Status                            | E2E (M6-14) changes it?                                                                             |
-| ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Email                                          | Postgres                        | AES-256-GCM field encryption + HMAC-SHA256 lookup hash, envelope keys, `key_version` (D18) | Decided (design); KMS OPEN (Sara) | No                                                                                                  |
-| Handle                                         | Postgres                        | Disk/volume encryption only (needs a unique index; shown to groups)                        | Proposal                          | No                                                                                                  |
-| Sessions, OTP codes                            | Postgres                        | Disk/volume encryption; OTP stored hashed if Better Auth supports it (HEN-47 spike)        | OPEN (Sara)                       | No                                                                                                  |
-| Source videos, transcodes, renders, thumbnails | Hetzner Object Storage          | Hetzner server-side encryption or client-side encryption: A4                               | OPEN (Sara, A4)                   | No: server-side analysis and masked renders need the plaintext                                      |
-| User's tracks, masks, keypoints                | Object storage / Postgres       | Same as videos                                                                             | OPEN (Sara, A4)                   | No                                                                                                  |
-| Timeline segments, corrections, priors         | Postgres                        | Disk/volume encryption                                                                     | Proposal                          | No                                                                                                  |
-| Text notes                                     | Postgres                        | Field encryption with the HEN-63 module; no operator read path (DB role test)              | Proposal (M6-14 baseline)         | **Yes**: E2E would encrypt on the device; moderation and disputes would see only what users forward |
-| Voice notes (audio)                            | Object storage                  | Per-object encryption; no operator read path                                               | Proposal (M6-14 baseline)         | **Yes**: as text notes, plus key handling for each grantee and on grant expiry                      |
-| Review breakdowns (summary text)               | Postgres                        | Field encryption with the HEN-63 module                                                    | Proposal                          | **Yes**, if Henry includes reviews in E2E scope (HEN-201)                                           |
-| Chat or messages                               | –                               | No chat is planned; only notes                                                             | OPEN (Henry, HEN-201)             | **Yes**, if chat is added                                                                           |
-| Consent and attestation records                | Postgres                        | Disk/volume encryption (ids and version ids only, no free text)                            | Proposal                          | No                                                                                                  |
-| Access grants, review requests, offers         | Postgres                        | Disk/volume encryption                                                                     | Proposal                          | E2E key distribution would hang off grants                                                          |
-| Ratings                                        | Postgres                        | Disk/volume encryption (public by design)                                                  | Proposal                          | No                                                                                                  |
-| Payment and payout references                  | Postgres                        | Disk/volume encryption; no card, bank or ID data (schema + log test, HEN-191)              | Decided (no card data)            | No                                                                                                  |
-| Reports and moderation records                 | Postgres                        | Field encryption for reporter text                                                         | Proposal                          | With E2E the reporter's client forwards content (HEN-198)                                           |
-| Job rows (pg-boss), audit log                  | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                          | No                                                                                                  |
-| Disk/volume encryption for Postgres            | Hetzner Cloud VM                | Method not checked (for example LUKS on the volume)                                        | OPEN (Sara, HEN-191)              | –                                                                                                   |
-| Backups                                        | Backup store                    | Encrypted before upload; method and key OPEN                                               | OPEN (Sara, HEN-50)               | –                                                                                                   |
-| Session token on the phone                     | iOS Keychain / Android Keystore | `@better-auth/expo` keeps tokens in SecureStore (D17 research)                             | Decided (D17)                     | E2E would add device keys here                                                                      |
-| Recordings on the phone before upload          | App sandbox                     | OS file encryption only                                                                    | OPEN (Sara)                       | No                                                                                                  |
-| Modal working copies                           | Modal ephemeral disk (EU)       | Modal platform controls; deleted when the container ends                                   | Per HEN-227                       | No                                                                                                  |
-| Logs                                           | Hetzner, Modal                  | No email, IP, URL or filename in logs (A5, HEN-227)                                        | Decided                           | No                                                                                                  |
+| Data                                           | Where                           | At-rest protection                                                                         | Status                               | E2E (M6-14) changes it?                                                                             |
+| ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Email                                          | Postgres                        | AES-256-GCM field encryption + HMAC-SHA256 lookup hash, envelope keys, `key_version` (D18) | Decided (design); KMS OPEN (HEN-191) | No                                                                                                  |
+| Handle                                         | Postgres                        | Disk/volume encryption only (needs a unique index; shown to groups)                        | Proposal                             | No                                                                                                  |
+| Sessions, OTP codes                            | Postgres                        | Disk/volume encryption; OTP stored hashed if Better Auth supports it (HEN-47 spike)        | OPEN (Sara)                          | No                                                                                                  |
+| Source videos, transcodes, renders, thumbnails | Hetzner Object Storage          | Hetzner server-side encryption or client-side encryption: A4                               | OPEN (A4, owned by HEN-191)          | No: server-side analysis and masked renders need the plaintext                                      |
+| User's tracks, masks, keypoints                | Object storage / Postgres       | Same as videos                                                                             | OPEN (A4, owned by HEN-191)          | No                                                                                                  |
+| Timeline segments, corrections, priors         | Postgres                        | Disk/volume encryption                                                                     | Proposal                             | No                                                                                                  |
+| Text notes                                     | Postgres                        | Field encryption with the HEN-63 module; no operator read path (DB role test)              | Proposal (M6-14 baseline)            | **Yes**: E2E would encrypt on the device; moderation and disputes would see only what users forward |
+| Voice notes (audio)                            | Object storage                  | Per-object encryption; no operator read path                                               | Proposal (M6-14 baseline)            | **Yes**: as text notes, plus key handling for each grantee and on grant expiry                      |
+| Review breakdowns (summary text)               | Postgres                        | Field encryption with the HEN-63 module                                                    | Proposal                             | **Yes**, if Henry includes reviews in E2E scope (HEN-201)                                           |
+| Chat or messages                               | –                               | No chat is planned; only notes                                                             | OPEN (Henry, HEN-201)                | **Yes**, if chat is added                                                                           |
+| Consent and attestation records                | Postgres                        | Disk/volume encryption (ids and version ids only, no free text)                            | Proposal                             | No                                                                                                  |
+| Access grants, review requests, offers         | Postgres                        | Disk/volume encryption                                                                     | Proposal                             | E2E key distribution would hang off grants                                                          |
+| Ratings                                        | Postgres                        | Disk/volume encryption (public by design)                                                  | Proposal                             | No                                                                                                  |
+| Payment and payout references                  | Postgres                        | Disk/volume encryption; no card, bank or ID data (schema + log test, HEN-191)              | Decided (no card data)               | No                                                                                                  |
+| Reports and moderation records                 | Postgres                        | Field encryption for reporter text                                                         | Proposal                             | With E2E the reporter's client forwards content (HEN-198)                                           |
+| Job rows (pg-boss), audit log                  | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                             | No                                                                                                  |
+| Disk/volume encryption for Postgres            | Hetzner Cloud VM                | Method not checked (for example LUKS on the volume)                                        | OPEN (owned by HEN-191)              | –                                                                                                   |
+| Backups                                        | Backup store                    | Encrypted before upload; method and key OPEN                                               | OPEN (owned by HEN-50)               | –                                                                                                   |
+| Session token on the phone                     | iOS Keychain / Android Keystore | `@better-auth/expo` keeps tokens in SecureStore (D17 research)                             | Decided (D17)                        | E2E would add device keys here                                                                      |
+| Recordings on the phone before upload          | App sandbox                     | OS file encryption only                                                                    | OPEN (Sara)                          | No                                                                                                  |
+| Modal working copies                           | Modal ephemeral disk (EU)       | Modal platform controls; deleted when the container ends                                   | Per HEN-227                          | No                                                                                                  |
+| Logs                                           | Hetzner, Modal                  | No email, IP, URL or filename in logs (A5, HEN-227)                                        | Decided                              | No                                                                                                  |
 
 The honest limit (M4-26): with server-side keys, an operator who has the keys can still decrypt. The control is the DB roles, no admin read path and the
 audit log; only E2E removes it.
@@ -627,23 +628,28 @@ audit log; only E2E removes it.
 7. Length limits: text notes, voice notes (M6-12), review summaries, handles; and how long review requests and offers stay open.
 8. Seller model (HEN-208): decides whose payment and payout records we hold, and so what the cascade must keep.
 
-### For Sara
+### Sara decisions (2026-10-22)
 
-1. Job runner option A or B (§3.1); queue settings (§3.4); where transcode and the Gemini call run (§3.2).
-2. Worker service token in Modal Secrets (§3.6).
-3. Signed-URL TTLs: 300 s for playback, 15 min for worker URLs (§4.4, §3.6).
-4. A4 video object encryption, Postgres volume encryption, backup encryption and window, D18 KMS.
-5. Renumber repo D22 in `DECISIONS.md` (numbering note in §0).
-6. UI kit sign-off (§8).
+1. Job runner: **option A** decided (§3.1). The JS SDK `eu` call is a required spike in HEN-48.
+2. `video_timeline_gemini` runs on the backend (Node, Vertex EU): decided. `video_transcode` stays OPEN; the HEN-87 spike decides it by measuring cost
+   and runtime on a Hetzner VM vs Modal CPU (§3.2).
+3. Queue settings (§3.4): accepted as starting values, tuned in M3.
+4. Worker service token in Modal Secrets: accepted. Scope limited to the two internal routes, not user data, rotated on every deploy or at least every 90
+   days; Modal's US-held metadata is already on the lawyer list (§3.6).
+5. Signed-URL TTLs: 300 s for playback, 15 min for worker URLs: decided (§4.4, §3.6).
+6. A4 video object encryption, Postgres volume encryption and D18 KMS stay OPEN, owned by HEN-191. Backup encryption and the backup window stay OPEN,
+   owned by HEN-50 (§6).
+7. Renumbering repo D22 in `DECISIONS.md` moves to HEN-70 (docs) (§0).
+8. UI kit: `@expo/ui` signed off for HEN-46 (§8).
 
 ### For the lawyer (through HEN-189 / HEN-209)
 
 Every **OPEN FOR LAWYER** row in §5; whether the `ai_vendor` consent text must name Modal (our models on a processor) as well as Gemini; Modal's US-held
 logs and metadata (already on the lawyer list).
 
-## 8. UI kit for HEN-46 (recommendation pending Sara's sign-off)
+## 8. UI kit for HEN-46 (signed off by Sara, 2026-10-22)
 
-**Recommendation: `@expo/ui`, with our own design tokens on plain `StyleSheet`.** Lydia's research leans the same way.
+**Decision: `@expo/ui`, with our own design tokens on plain `StyleSheet`** (Sara, 2026-10-22, for HEN-46). Lydia's research leaned the same way.
 
 | Option               | Fit with Expo SDK 57                                                                 | For                                                                                                                                                                                                                                                                                                                                                                     | Against                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
