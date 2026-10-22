@@ -4,9 +4,17 @@ Tools for analyzing Brazilian Jiu-Jitsu rolls.
 
 ## Local setup
 
-1. Install Node 24 (`.nvmrc`) and pnpm 11.21.0 directly (`npm i -g pnpm@11.21.0`). Do not use corepack.
-2. Run `pnpm install`. It turns on the commit hook (`.githooks`) and creates a starter `.leakcheck` with generic secret patterns if you do not have one yet. The starter blocks every commit until you add your personal patterns and delete its marker line. `pnpm install` needs a POSIX `sh` for this step: fine on Linux and macOS; on Windows use Git Bash or WSL (plain `cmd` is not supported).
-3. Add your personal patterns to `.leakcheck`, one extended regex per line, then delete the line `# leakcheck-starter: delete this line after adding personal patterns`. Example patterns (made up):
+Prerequisites (exact versions):
+
+- Node 24 (`.nvmrc` pins `24.13.1`; `nvm use` picks it up).
+- pnpm 11.21.0, installed directly (`npm i -g pnpm@11.21.0` or the standalone installer from pnpm.io). Do not use corepack.
+- Docker, for the backend database tests (Testcontainers starts `postgres:18.6`).
+- uv 0.13.1 for the Python workers. uv fetches Python 3.15.0 itself (`packages/workers/.python-version`).
+
+No running Postgres is needed yet: tests start their own `postgres:18.6` container with Testcontainers (Docker required). A compose file comes with the first DB-backed dev route.
+
+1. Run `pnpm install`. It turns on the commit hook (`.githooks`) and creates a starter `.leakcheck` with generic secret patterns if you do not have one yet. The starter blocks every commit until you add your personal patterns and delete its marker line. `pnpm install` needs a POSIX `sh` for this step: fine on Linux and macOS; on Windows use Git Bash or WSL (plain `cmd` is not supported).
+2. Add your personal patterns to `.leakcheck`, one extended regex per line, then delete the line `# leakcheck-starter: delete this line after adding personal patterns`. Example patterns (made up):
 
    ```text
    jane\.doe@example\.com
@@ -15,6 +23,16 @@ Tools for analyzing Brazilian Jiu-Jitsu rolls.
    ```
 
    `.leakcheck` is gitignored. Never commit it, and never use `git commit --no-verify` to get past a block. Details: [AGENTS.md, "Leakcheck hook"](AGENTS.md#leakcheck-hook).
+
+3. Run the checks. All of them should pass on a fresh clone:
+
+   ```sh
+   pnpm typecheck
+   pnpm lint
+   pnpm format:check
+   pnpm test
+   cd packages/workers && uv sync --locked && uv run ruff check && uv run pytest
+   ```
 
 4. Start the app: `pnpm --filter @bjj-roll/mobile start`, then press `a` to open it in the Android emulator.
 
@@ -36,7 +54,7 @@ Run the tests with `pnpm test`. The backend database tests start a Postgres cont
 
 ## Mobile
 
-Expo app in `packages/mobile` (`@bjj-roll/mobile`, Expo SDK 58). No Expo account or EAS is needed.
+Expo app in `packages/mobile` (`@bjj-roll/mobile`, Expo SDK 57). No Expo account or EAS is needed.
 
 ```sh
 pnpm install
