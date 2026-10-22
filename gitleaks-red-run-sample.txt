@@ -1,0 +1,2 @@
+HEN-223 gitleaks red-run test only: fake, non-provider value, not a real credential.
+sample_service_api_key = "sCpemj5yZhXu2MpNJPXaI4S438CVisGAThCxDdwQ"
