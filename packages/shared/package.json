@@ -5,6 +5,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./encryption": {
+      "types": "./dist/encryption/index.d.ts",
+      "default": "./dist/encryption/index.js"
+    }
+  },
   "scripts": {
     "test": "vitest run"
   },
@@ -12,6 +22,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/node": "^24.19.1",
     "vitest": "^5.0.3"
   }
 }
