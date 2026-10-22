@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:hooks": "sh scripts/leakcheckHook.test.sh",
+    "test:pins": "sh scripts/checkWorkflowPins.test.sh && sh scripts/checkWorkflowPins.sh",
     "prepare": "(git config core.hooksPath .githooks || echo \"prepare: not a git repository, skipped core.hooksPath\") && sh scripts/createStarterLeakcheck.sh"
   },
   "devDependencies": {
