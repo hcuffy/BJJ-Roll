@@ -10,20 +10,22 @@ updates:
       default-days: 14
     # React Native/Expo/React follow the Expo SDK; bump with the SDK.
     ignore:
+      # react and react-dom are pinned to the Expo SDK: ignore every update, patch included.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
       - dependency-name: "react-native"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "expo*"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@expo/*"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
-      - dependency-name: "react"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
-      - dependency-name: "react-dom"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@types/react"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@types/react-dom"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # The project runs Node 24 (`.nvmrc`); `@types/node` majors track newer Node lines.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
