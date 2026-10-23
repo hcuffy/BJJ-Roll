@@ -1,6 +1,7 @@
 export {
   accountDeletionCascadeMap,
   cascadeDeleteUserAccount,
+  verificationIdentifiersForEmailHash,
   type AccountDeletionCascadeStep,
   type CascadeDeleteAccountResult,
 } from "./cascadeDelete.js";

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { DBAdapter, Where } from "better-auth/adapters";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -21,7 +22,7 @@ const canRunPostgresTests = isPostgresTestEnvironmentAvailable();
 
 const sampleCodec: EmailPrivacyCodec = {
   keyVersion: 1,
-  computeEmailHmac: (email: string) => `hmac:${email.trim().toLowerCase()}`,
+  computeEmailHmac: (email: string) => createHmac("sha256", "test-hmac-key").update(email.trim().toLowerCase()).digest("hex"),
   encryptEmail: (email: string) => `v1:enc:${email.trim().toLowerCase()}`,
   decryptEmail: (ciphertext: string) => ciphertext.replace(/^v1:enc:/u, ""),
 };
@@ -51,7 +52,7 @@ describe.skipIf(!canRunPostgresTests)("database handles and pre-session email HM
     await seedFixtureUser(currentHarness, userBravo);
   });
 
-  it("AC 6: handle column defaults to null, allows multiple nulls, enforces unique set handles, and refuses mixed case", async () => {
+  it("AC 6: handle column defaults to null, allows multiple nulls, enforces unique set handles, and refuses mixed case or empty string", async () => {
     const { db } = requireHarness();
 
     await withUserContext(db, userAlpha.id, async (transaction) => {
@@ -84,6 +85,18 @@ describe.skipIf(!canRunPostgresTests)("database handles and pre-session email HM
         transaction.updateTable("users").set({ handle: "Mixed_Case" }).where("id", "=", userBravo.id).execute(),
       ),
     ).rejects.toThrow(/users_handle_lowercase_check|check constraint/iu);
+
+    await expect(
+      withUserContext(db, userBravo.id, (transaction) =>
+        transaction.updateTable("users").set({ handle: "" }).where("id", "=", userBravo.id).execute(),
+      ),
+    ).rejects.toThrow(/users_handle_lowercase_check|check constraint/iu);
+
+    await expect(
+      withUserContext(db, userBravo.id, (transaction) =>
+        transaction.updateTable("users").set({ handle: "   " }).where("id", "=", userBravo.id).execute(),
+      ),
+    ).rejects.toThrow(/users_handle_lowercase_check|check constraint/iu);
   });
 
   it("AC 7.4 & 7.6: app_user_id_by_email_hmac returns user_id only for known HMAC, null for unknown, while bjj_app sees 0 user rows", async () => {
@@ -97,7 +110,7 @@ describe.skipIf(!canRunPostgresTests)("database handles and pre-session email HM
     const foundBravoId = await lookupUserIdByEmailHmac(db, userBravo.emailHash);
     expect(foundBravoId).toBe(userBravo.id);
 
-    const unknownLookup = await lookupUserIdByEmailHmac(db, "hmac-does-not-exist");
+    const unknownLookup = await lookupUserIdByEmailHmac(db, "0".repeat(64));
     expect(unknownLookup).toBeNull();
 
     await withAppRoleUnscoped(db, async (transaction) => {
@@ -133,7 +146,7 @@ describe.skipIf(!canRunPostgresTests)("database handles and pre-session email HM
       pool,
       codec: {
         ...sampleCodec,
-        computeEmailHmac: (email: string) => (email === "alpha@example.com" ? userAlpha.emailHash : `hmac:${email}`),
+        computeEmailHmac: (email: string) => (email === "alpha@example.com" ? userAlpha.emailHash : sampleCodec.computeEmailHmac(email)),
       },
     });
 

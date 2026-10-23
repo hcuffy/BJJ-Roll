@@ -27,7 +27,7 @@ export interface SeededUserFixture {
 export const userAlpha: SeededUserFixture = {
   id: "user-alpha-001",
   emailCiphertext: "v1:alpha-ciphertext",
-  emailHash: "hmac-alpha-001",
+  emailHash: "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
   sessionId: "session-alpha-001",
   sessionToken: "token-alpha-001",
   accountId: "account-alpha-001",
@@ -38,7 +38,7 @@ export const userAlpha: SeededUserFixture = {
 export const userBravo: SeededUserFixture = {
   id: "user-bravo-002",
   emailCiphertext: "v1:bravo-ciphertext",
-  emailHash: "hmac-bravo-002",
+  emailHash: "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
   sessionId: "session-bravo-002",
   sessionToken: "token-bravo-002",
   accountId: "account-bravo-002",
@@ -155,7 +155,7 @@ export async function seedFixtureUser(harness: MigratedTestDatabase, fixture: Se
         {
           id: fixture.verificationByEmailHashId,
           userId: null,
-          identifier: `email-otp-${fixture.emailHash}`,
+          identifier: `sign-in-otp-${fixture.emailHash}`,
           value: "hashed-otp-2",
           expiresAt: futureExpiry,
         },

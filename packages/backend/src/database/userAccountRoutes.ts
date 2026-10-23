@@ -12,18 +12,24 @@ function parseHandleUpdatePayload(rawBody: unknown): { valid: true; handle: stri
   if (candidate === null) {
     return { valid: true, handle: null };
   }
-  if (typeof candidate === "string" && candidate.length > 0 && candidate.length <= 40) {
+  if (typeof candidate === "string" && candidate.trim().length > 0 && candidate.length <= 40) {
     return { valid: true, handle: candidate };
   }
   return { valid: false };
 }
 
 /**
- * Minimal user profile & account router executing every database query inside
- * `withUserContext(db, authenticatedUserId, ...)` so PostgreSQL owner RLS policies
- * (`app_current_user_id()`) are enforced at the database layer.
+ * @internal Test-only user profile & account router harness for HEN-58 AC 3 (before HEN-71
+ * session authentication middleware lands). Executes every database query inside
+ * `withUserContext(db, authenticatedUserId, ...)` using the `x-authenticated-user-id` test header
+ * so PostgreSQL owner RLS policies (`app_current_user_id()`) are verified through the HTTP layer.
+ * Throws if invoked when `NODE_ENV === "production"`; never mount in `app.ts`.
  */
 export function createUserAccountRoutes(db: Kysely<BjjRollDatabase>): Hono {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("createUserAccountRoutes is a test-only RLS harness and must not be mounted in production; use HEN-71 session auth middleware.");
+  }
+
   const router = new Hono();
 
   router.get("/users/:userId", async (context) => {

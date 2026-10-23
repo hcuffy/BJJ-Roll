@@ -45,15 +45,17 @@ GRANT EXECUTE ON FUNCTION public.app_current_user_id() TO bjj_app, bjj_owner, bj
 CREATE TABLE public.users (
   id text PRIMARY KEY,
   email_ciphertext text NOT NULL,
-  email_hash text NOT NULL UNIQUE,
+  email_hash text NOT NULL UNIQUE CONSTRAINT users_email_hash_sha256_hex_check CHECK (email_hash ~ '^[0-9a-f]{64}$'),
   key_version integer NOT NULL CHECK (key_version >= 1),
   email_verified boolean NOT NULL DEFAULT false,
-  handle text CONSTRAINT users_handle_lowercase_check CHECK (handle IS NULL OR handle = lower(handle)),
+  handle text CONSTRAINT users_handle_lowercase_check CHECK (
+    handle IS NULL OR (handle = lower(handle) AND length(btrim(handle)) > 0)
+  ),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX users_handle_unique_idx ON public.users (handle);
+CREATE UNIQUE INDEX users_handle_unique_idx ON public.users (handle) WHERE handle IS NOT NULL;
 
 CREATE TABLE public.sessions (
   id text PRIMARY KEY,
@@ -107,8 +109,13 @@ AS $$
 BEGIN
   DELETE FROM public.verifications
   WHERE user_id = OLD.id
-     OR identifier = OLD.email_hash
-     OR identifier LIKE ('%' || OLD.email_hash || '%');
+     OR identifier IN (
+       OLD.email_hash,
+       'email-otp-' || OLD.email_hash,
+       'sign-in-otp-' || OLD.email_hash,
+       'email-verification-otp-' || OLD.email_hash,
+       'forget-password-otp-' || OLD.email_hash
+     );
   RETURN OLD;
 END;
 $$;
@@ -142,9 +149,12 @@ ALTER TABLE public.verifications FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.users, public.sessions, public.accounts, public.verifications FROM PUBLIC;
 REVOKE ALL ON TABLE public.users, public.sessions, public.accounts, public.verifications FROM bjj_job_runner;
 REVOKE ALL ON TABLE public.users, public.sessions, public.accounts, public.verifications FROM bjj_auth_lookup;
+REVOKE ALL ON TABLE public.users, public.sessions, public.accounts, public.verifications FROM bjj_app;
 
 GRANT USAGE ON SCHEMA public TO bjj_owner, bjj_app, bjj_job_runner, bjj_auth_lookup;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users, public.sessions, public.accounts, public.verifications TO bjj_app;
+GRANT SELECT, INSERT, DELETE ON TABLE public.users TO bjj_app;
+GRANT UPDATE (email_ciphertext, key_version, email_verified, handle, updated_at) ON TABLE public.users TO bjj_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sessions, public.accounts, public.verifications TO bjj_app;
 GRANT SELECT ON TABLE public.users TO bjj_auth_lookup;
 
 CREATE POLICY users_owner_policy ON public.users
@@ -175,26 +185,38 @@ CREATE POLICY verifications_owner_policy ON public.verifications
   TO bjj_app, bjj_owner
   USING (
     user_id = public.app_current_user_id()
-    OR EXISTS (
-      SELECT 1
-      FROM public.users AS u
-      WHERE u.id = public.app_current_user_id()
-        AND (
-          public.verifications.identifier = u.email_hash
-          OR public.verifications.identifier LIKE ('%' || u.email_hash || '%')
-        )
+    OR (
+      user_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM public.users AS u
+        WHERE u.id = public.app_current_user_id()
+          AND public.verifications.identifier IN (
+            u.email_hash,
+            'email-otp-' || u.email_hash,
+            'sign-in-otp-' || u.email_hash,
+            'email-verification-otp-' || u.email_hash,
+            'forget-password-otp-' || u.email_hash
+          )
+      )
     )
   )
   WITH CHECK (
     user_id = public.app_current_user_id()
-    OR EXISTS (
-      SELECT 1
-      FROM public.users AS u
-      WHERE u.id = public.app_current_user_id()
-        AND (
-          public.verifications.identifier = u.email_hash
-          OR public.verifications.identifier LIKE ('%' || u.email_hash || '%')
-        )
+    OR (
+      user_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM public.users AS u
+        WHERE u.id = public.app_current_user_id()
+          AND public.verifications.identifier IN (
+            u.email_hash,
+            'email-otp-' || u.email_hash,
+            'sign-in-otp-' || u.email_hash,
+            'email-verification-otp-' || u.email_hash,
+            'forget-password-otp-' || u.email_hash
+          )
+      )
     )
   );
 

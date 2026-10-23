@@ -52,8 +52,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     const emailRelatedColumns = await pool.query<{ table_name: string; column_name: string }>(
       `SELECT table_name, column_name
        FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND column_name LIKE '%email%'
+       WHERE table_schema = 'public' AND column_name LIKE '%email%'
        ORDER BY table_name, column_name`,
     );
     expect(emailRelatedColumns.rows).toEqual([
@@ -63,14 +62,10 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     ]);
   });
 
-  it("AC 4: bjj_app does not own the tables, has no BYPASSRLS, and FORCE ROW LEVEL SECURITY is on for every user-data table", async () => {
+  it("AC 4: bjj_app does not own the tables, has no BYPASSRLS, cannot UPDATE email_hash/id, and FORCE RLS is on", async () => {
     const { pool } = requireHarness();
 
-    const roleResult = await pool.query<{
-      rolname: string;
-      rolsuper: boolean;
-      rolbypassrls: boolean;
-    }>(
+    const roleResult = await pool.query<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>(
       `SELECT rolname, rolsuper, rolbypassrls
        FROM pg_roles
        WHERE rolname IN ('bjj_owner', 'bjj_app', 'bjj_job_runner', 'bjj_auth_lookup')
@@ -89,15 +84,11 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       rls_enabled: boolean;
       rls_forced: boolean;
     }>(
-      `SELECT
-         c.relname AS table_name,
-         pg_get_userbyid(c.relowner) AS owner_name,
-         c.relrowsecurity AS rls_enabled,
-         c.relforcerowsecurity AS rls_forced
+      `SELECT c.relname AS table_name, pg_get_userbyid(c.relowner) AS owner_name,
+              c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced
        FROM pg_class AS c
        JOIN pg_namespace AS n ON n.oid = c.relnamespace
-       WHERE n.nspname = 'public'
-         AND c.relname = ANY($1::text[])
+       WHERE n.nspname = 'public' AND c.relname = ANY($1::text[])
        ORDER BY c.relname`,
       [[...userDataTables]],
     );
@@ -109,32 +100,38 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       { table_name: "verifications", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
     ]);
 
-    for (const row of tableSecurityResult.rows) {
-      expect(row.owner_name).not.toBe("bjj_app");
-    }
+    const columnUpdatePrivileges = await pool.query<{
+      can_update_id: boolean;
+      can_update_email_hash: boolean;
+      can_update_created_at: boolean;
+      can_update_handle: boolean;
+      can_update_email_ciphertext: boolean;
+    }>(
+      `SELECT
+         has_column_privilege('bjj_app', 'public.users', 'id', 'UPDATE') AS can_update_id,
+         has_column_privilege('bjj_app', 'public.users', 'email_hash', 'UPDATE') AS can_update_email_hash,
+         has_column_privilege('bjj_app', 'public.users', 'created_at', 'UPDATE') AS can_update_created_at,
+         has_column_privilege('bjj_app', 'public.users', 'handle', 'UPDATE') AS can_update_handle,
+         has_column_privilege('bjj_app', 'public.users', 'email_ciphertext', 'UPDATE') AS can_update_email_ciphertext`,
+    );
+    expect(columnUpdatePrivileges.rows).toEqual([
+      {
+        can_update_id: false,
+        can_update_email_hash: false,
+        can_update_created_at: false,
+        can_update_handle: true,
+        can_update_email_ciphertext: true,
+      },
+    ]);
   });
 
   it("AC 7.1 & 7.6: bjj_auth_lookup is NOLOGIN, NOBYPASSRLS, and not a member of any role with BYPASSRLS", async () => {
     const { pool } = requireHarness();
 
-    const lookupRole = await pool.query<{
-      rolname: string;
-      rolcanlogin: boolean;
-      rolbypassrls: boolean;
-      rolsuper: boolean;
-    }>(
-      `SELECT rolname, rolcanlogin, rolbypassrls, rolsuper
-       FROM pg_roles
-       WHERE rolname = 'bjj_auth_lookup'`,
+    const lookupRole = await pool.query<{ rolname: string; rolcanlogin: boolean; rolbypassrls: boolean; rolsuper: boolean }>(
+      "SELECT rolname, rolcanlogin, rolbypassrls, rolsuper FROM pg_roles WHERE rolname = 'bjj_auth_lookup'",
     );
-    expect(lookupRole.rows).toEqual([
-      {
-        rolname: "bjj_auth_lookup",
-        rolcanlogin: false,
-        rolbypassrls: false,
-        rolsuper: false,
-      },
-    ]);
+    expect(lookupRole.rows).toEqual([{ rolname: "bjj_auth_lookup", rolcanlogin: false, rolbypassrls: false, rolsuper: false }]);
 
     const memberships = await pool.query<{ parent_role: string; parent_bypassrls: boolean }>(
       `SELECT parent.rolname AS parent_role, parent.rolbypassrls AS parent_bypassrls
@@ -149,32 +146,18 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
   it("AC 7.2: users has only one FOR SELECT policy for bjj_auth_lookup and SELECT-only grants", async () => {
     const { pool } = requireHarness();
 
-    const lookupPolicies = await pool.query<{
-      tablename: string;
-      policyname: string;
-      cmd: string;
-      roles: string[];
-    }>(
+    const lookupPolicies = await pool.query<{ tablename: string; policyname: string; cmd: string; roles: string[] }>(
       `SELECT tablename, policyname, cmd, roles::text[] AS roles
        FROM pg_policies
-       WHERE schemaname = 'public'
-         AND ('bjj_auth_lookup' = ANY(roles) OR 'public' = ANY(roles))
+       WHERE schemaname = 'public' AND ('bjj_auth_lookup' = ANY(roles) OR 'public' = ANY(roles))
        ORDER BY tablename, policyname`,
     );
-    expect(lookupPolicies.rows).toEqual([
-      {
-        tablename: "users",
-        policyname: "users_auth_lookup_select",
-        cmd: "SELECT",
-        roles: ["bjj_auth_lookup"],
-      },
-    ]);
+    expect(lookupPolicies.rows).toEqual([{ tablename: "users", policyname: "users_auth_lookup_select", cmd: "SELECT", roles: ["bjj_auth_lookup"] }]);
 
     const tableGrants = await pool.query<{ table_name: string; privilege_type: string }>(
       `SELECT table_name, privilege_type
        FROM information_schema.role_table_grants
-       WHERE table_schema = 'public'
-         AND grantee = 'bjj_auth_lookup'
+       WHERE table_schema = 'public' AND grantee = 'bjj_auth_lookup'
        ORDER BY table_name, privilege_type`,
     );
     expect(tableGrants.rows).toEqual([{ table_name: "users", privilege_type: "SELECT" }]);
@@ -185,23 +168,17 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       can_update: boolean;
       can_delete: boolean;
     }>(
-      `SELECT
-         c.relname AS table_name,
-         has_table_privilege('bjj_auth_lookup', c.oid, 'INSERT') AS can_insert,
-         has_table_privilege('bjj_auth_lookup', c.oid, 'UPDATE') AS can_update,
-         has_table_privilege('bjj_auth_lookup', c.oid, 'DELETE') AS can_delete
+      `SELECT c.relname AS table_name,
+              has_table_privilege('bjj_auth_lookup', c.oid, 'INSERT') AS can_insert,
+              has_table_privilege('bjj_auth_lookup', c.oid, 'UPDATE') AS can_update,
+              has_table_privilege('bjj_auth_lookup', c.oid, 'DELETE') AS can_delete
        FROM pg_class AS c
        JOIN pg_namespace AS n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public' AND c.relkind = 'r'
        ORDER BY c.relname`,
     );
     for (const row of writePrivileges.rows) {
-      expect(row).toEqual({
-        table_name: row.table_name,
-        can_insert: false,
-        can_update: false,
-        can_delete: false,
-      });
+      expect(row).toEqual({ table_name: row.table_name, can_insert: false, can_update: false, can_delete: false });
     }
   });
 
@@ -220,22 +197,16 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       runner_can_execute: boolean;
       lookup_can_execute: boolean;
     }>(
-      `SELECT
-         p.proname,
-         r.rolname AS owner_name,
-         r.rolbypassrls AS owner_bypassrls,
-         p.prosecdef AS security_definer,
-         p.proargnames AS arg_names,
-         p.proconfig,
-         has_function_privilege('public', p.oid, 'EXECUTE') AS public_can_execute,
-         has_function_privilege('bjj_app', p.oid, 'EXECUTE') AS app_can_execute,
-         has_function_privilege('bjj_job_runner', p.oid, 'EXECUTE') AS runner_can_execute,
-         has_function_privilege('bjj_auth_lookup', p.oid, 'EXECUTE') AS lookup_can_execute
+      `SELECT p.proname, r.rolname AS owner_name, r.rolbypassrls AS owner_bypassrls,
+              p.prosecdef AS security_definer, p.proargnames AS arg_names, p.proconfig,
+              has_function_privilege('public', p.oid, 'EXECUTE') AS public_can_execute,
+              has_function_privilege('bjj_app', p.oid, 'EXECUTE') AS app_can_execute,
+              has_function_privilege('bjj_job_runner', p.oid, 'EXECUTE') AS runner_can_execute,
+              has_function_privilege('bjj_auth_lookup', p.oid, 'EXECUTE') AS lookup_can_execute
        FROM pg_proc AS p
        JOIN pg_namespace AS n ON n.oid = p.pronamespace
        JOIN pg_roles AS r ON r.oid = p.proowner
-       WHERE n.nspname = 'public'
-         AND p.proname = 'app_user_id_by_email_hmac'`,
+       WHERE n.nspname = 'public' AND p.proname = 'app_user_id_by_email_hmac'`,
     );
 
     expect(functionCatalogue.rows).toEqual([
@@ -256,8 +227,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     const routineGrants = await pool.query<{ grantee: string; privilege_type: string }>(
       `SELECT grantee, privilege_type
        FROM information_schema.routine_privileges
-       WHERE specific_schema = 'public'
-         AND routine_name = 'app_user_id_by_email_hmac'
+       WHERE specific_schema = 'public' AND routine_name = 'app_user_id_by_email_hmac'
        ORDER BY grantee`,
     );
     expect(routineGrants.rows).toEqual([{ grantee: "bjj_app", privilege_type: "EXECUTE" }]);

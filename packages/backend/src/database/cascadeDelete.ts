@@ -16,7 +16,7 @@ export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = 
   {
     table: "verifications",
     mechanism: "before_delete_trigger_and_fk_cascade",
-    description: "Deletes OTP and verification rows linked by user_id or email_hash identifier.",
+    description: "Deletes OTP and verification rows linked by user_id or exact email_hash identifier.",
   },
   {
     table: "sessions",
@@ -42,6 +42,10 @@ export interface CascadeDeleteAccountResult {
   deletedVerificationCount: number;
 }
 
+export function verificationIdentifiersForEmailHash(emailHash: string): readonly string[] {
+  return [emailHash, `email-otp-${emailHash}`, `sign-in-otp-${emailHash}`, `email-verification-otp-${emailHash}`, `forget-password-otp-${emailHash}`];
+}
+
 /**
  * Deletes the authenticated user's account inside their RLS context (`app.user_id = userId`)
  * and returns the count of rows removed across `users`, `sessions`, `accounts`, and `verifications`.
@@ -59,6 +63,8 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
       };
     }
 
+    const expectedIdentifiers = verificationIdentifiersForEmailHash(existingUser.emailHash);
+
     const sessionsBefore = await transaction
       .selectFrom("sessions")
       .select((expressionBuilder) => expressionBuilder.fn.countAll<string>().as("count"))
@@ -74,6 +80,12 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
     const verificationsBefore = await transaction
       .selectFrom("verifications")
       .select((expressionBuilder) => expressionBuilder.fn.countAll<string>().as("count"))
+      .where((expressionBuilder) =>
+        expressionBuilder.or([
+          expressionBuilder("userId", "=", userId),
+          expressionBuilder.and([expressionBuilder("userId", "is", null), expressionBuilder("identifier", "in", expectedIdentifiers)]),
+        ]),
+      )
       .executeTakeFirstOrThrow();
 
     const deleteResult = await transaction.deleteFrom("users").where("id", "=", userId).executeTakeFirst();

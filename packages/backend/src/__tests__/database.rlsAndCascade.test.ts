@@ -125,6 +125,14 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
       ).rejects.toThrow(/row-level security/iu);
     });
 
+    const previousNodeEnvironment = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      expect(() => createUserAccountRoutes(db)).toThrow(/test-only RLS harness/iu);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnvironment;
+    }
+
     const apiRouter = createUserAccountRoutes(db);
     const readAsBravo = await apiRouter.request(`/users/${userAlpha.id}`, {
       method: "GET",
@@ -155,6 +163,48 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
     expect(readAsAlpha.status).toBe(200);
     const alphaPayload = (await readAsAlpha.json()) as { id: string; handle: string | null };
     expect(alphaPayload).toMatchObject({ id: userAlpha.id, handle: null });
+  });
+
+  it("AC 3 regression: user B cannot tamper with email_hash ('', '%', substring) and sees 0 of A's verifications", async () => {
+    const { db, pool } = requireHarness();
+
+    const tamperedEmailHashes = ["", "%", "aaaa1111", "c".repeat(64), userAlpha.emailHash];
+    for (const candidateHash of tamperedEmailHashes) {
+      await expect(
+        withUserContext(db, userBravo.id, (transaction) =>
+          transaction.updateTable("users").set({ emailHash: candidateHash }).where("id", "=", userBravo.id).execute(),
+        ),
+      ).rejects.toThrow(/permission denied/iu);
+    }
+
+    await expect(
+      withUserContext(db, userBravo.id, (transaction) =>
+        transaction.updateTable("users").set({ id: userAlpha.id }).where("id", "=", userBravo.id).execute(),
+      ),
+    ).rejects.toThrow(/permission denied/iu);
+
+    for (const invalidFormatHash of ["", "%", "aaaa1111", `UPPERCASE${"a".repeat(55)}`]) {
+      await expect(pool.query("UPDATE public.users SET email_hash = $1 WHERE id = $2", [invalidFormatHash, userBravo.id])).rejects.toThrow(
+        /users_email_hash_sha256_hex_check|check constraint/iu,
+      );
+    }
+
+    await withUserContext(db, userBravo.id, async (transaction) => {
+      const visibleVerifications = await transaction.selectFrom("verifications").select(["id", "identifier", "value"]).orderBy("id").execute();
+      expect(visibleVerifications.map((row) => row.id)).toEqual([userBravo.verificationByEmailHashId, userBravo.verificationByUserId]);
+
+      const deleteAlphaVerifications = await transaction
+        .deleteFrom("verifications")
+        .where("id", "in", [userAlpha.verificationByUserId, userAlpha.verificationByEmailHashId])
+        .executeTakeFirst();
+      expect(Number(deleteAlphaVerifications.numDeletedRows ?? 0n)).toBe(0);
+    });
+
+    const alphaVerificationsStillIntact = await pool.query<{ id: string }>(
+      "SELECT id FROM public.verifications WHERE id = ANY($1::text[]) ORDER BY id",
+      [[userAlpha.verificationByUserId, userAlpha.verificationByEmailHashId]],
+    );
+    expect(alphaVerificationsStillIntact.rows).toEqual([{ id: userAlpha.verificationByEmailHashId }, { id: userAlpha.verificationByUserId }]);
   });
 
   it("AC 2: deleting a user cascades and removes their sessions, accounts, and OTP/verification rows", async () => {
