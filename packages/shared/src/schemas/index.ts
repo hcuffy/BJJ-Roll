@@ -1,5 +1,6 @@
 export * from "./limits.js";
 export * from "./common.js";
+export * from "./handle.js";
 export * from "./coreEntities.js";
 export * from "./accessGrant.js";
 export * from "./consentRecord.js";
