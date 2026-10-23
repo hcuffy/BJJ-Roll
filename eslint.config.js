@@ -62,6 +62,24 @@ export default tseslint.config(
     files: ["**/*.config.{js,ts}", "packages/mobile/app/**/_layout.tsx"],
     rules: { "@typescript-eslint/naming-convention": "off" },
   },
+  {
+    // HEN-63: the encryption module uses `node:crypto` and holds key handling; it must never reach a client bundle.
+    files: ["packages/mobile/**/*.{ts,tsx}", "packages/frontend/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "@bjj-roll/shared/encryption", message: "Server-only module (HEN-63). Do not import it in client code." }],
+          patterns: [
+            {
+              group: ["@bjj-roll/shared/encryption/*", "**/shared/src/encryption", "**/shared/src/encryption/*"],
+              message: "Server-only module (HEN-63).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   eslintConfigPrettier,
   // eslint-config-prettier turns off `curly` and `max-len`; CONVENTIONS.v2 wants both as errors.
   // Both are safe with Prettier here (`curly: all`, and `max-len` matches `printWidth: 150`).
