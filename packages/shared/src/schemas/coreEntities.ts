@@ -8,12 +8,12 @@ import {
   videoTimestampMillisecondsSchema,
   visibilitySchema,
 } from "./common.js";
-import { handleMaximumLength, handleMinimumLength } from "./limits.js";
+import { handleSchema } from "./handle.js";
 
 // ARCHITECTURE.md §2.2: core entities (user, video, timeline, correction).
 export const userSchema = z.object({
   id: identifierSchema,
-  handle: z.string().min(handleMinimumLength).max(handleMaximumLength), // D19. Length limits: OPEN (Henry), see limits.ts
+  handle: handleSchema.nullable(), // D19. Null until chosen (HEN-64); length limits: OPEN (Henry), see limits.ts
   createdAt: timestampSchema,
 }); // The email never leaves the backend: email_ciphertext and email_hash are DB columns only (D18).
 
