@@ -52,6 +52,7 @@ export function createSpikeAuth(pool: Pool): SpikeAuth {
     baseURL: spikeBaseUrl,
     secret: randomBytes(32).toString("hex"),
     trustedOrigins: ["bjjroll://"],
+    telemetry: { enabled: false },
     database: (options: BetterAuthOptions) =>
       protectAdapter(baseAdapter(options), {
         protection,
