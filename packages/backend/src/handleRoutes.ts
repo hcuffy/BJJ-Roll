@@ -1,14 +1,17 @@
-import { handleSchema, setHandleRequestSchema } from "../../shared/dist/index.js";
 import { Hono, type Context } from "hono";
 import { sql, type Kysely } from "kysely";
+import { handleSchema, setHandleRequestSchema } from "../../shared/dist/index.js";
 import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
 
 export type AuthenticatedUserIdResolver = (context: Context) => Promise<string | null> | string | null;
 
-export interface HandleRoutesOptions {
-  db: Kysely<BjjRollDatabase>;
+export interface HandleRouteConfig {
   resolveAuthenticatedUserId?: AuthenticatedUserIdResolver;
+}
+
+export interface HandleRoutesOptions extends HandleRouteConfig {
+  db: Kysely<BjjRollDatabase>;
 }
 
 interface PostgresErrorLike {
@@ -16,27 +19,36 @@ interface PostgresErrorLike {
   constraint?: unknown;
 }
 
-function isUniqueHandleConflict(error: unknown): boolean {
+export function isUniqueHandleConflict(error: unknown): boolean {
   if (typeof error !== "object" || error === null) {
     return false;
   }
   const postgresError = error as PostgresErrorLike;
-  return postgresError.code === "23505" || postgresError.constraint === "users_handle_unique_idx";
+  return postgresError.code === "23505" && postgresError.constraint === "users_handle_unique_idx";
 }
 
 function formatTimestamp(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
-function resolveOptions(dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions): HandleRoutesOptions {
+function resolveOptions(dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions, config?: HandleRouteConfig): HandleRoutesOptions {
   if ("db" in dbOrOptions) {
-    return dbOrOptions;
+    return {
+      ...dbOrOptions,
+      ...config,
+    };
   }
-  return { db: dbOrOptions };
+  return {
+    db: dbOrOptions,
+    ...config,
+  };
 }
 
 function defaultResolveAuthenticatedUserId(context: Context): string | null {
   const contextVariables = context.var as Record<string, unknown>;
+  if (typeof contextVariables.authenticatedUserId === "string" && contextVariables.authenticatedUserId.trim().length > 0) {
+    return contextVariables.authenticatedUserId.trim();
+  }
   if (typeof contextVariables.userId === "string" && contextVariables.userId.trim().length > 0) {
     return contextVariables.userId.trim();
   }
@@ -44,21 +56,26 @@ function defaultResolveAuthenticatedUserId(context: Context): string | null {
   if (contextUser && typeof contextUser.id === "string" && contextUser.id.trim().length > 0) {
     return contextUser.id.trim();
   }
-  if (process.env.NODE_ENV !== "production") {
-    const headerUserId = context.req.header("x-authenticated-user-id")?.trim();
-    if (headerUserId && headerUserId.length > 0) {
-      return headerUserId;
-    }
+  const contextSession = contextVariables.session as { userId?: unknown } | undefined;
+  if (contextSession && typeof contextSession.userId === "string" && contextSession.userId.trim().length > 0) {
+    return contextSession.userId.trim();
   }
   return null;
 }
 
 async function queryHandleAvailability(db: Kysely<BjjRollDatabase>, normalizedHandle: string): Promise<boolean> {
-  const existingRow = await db.transaction().execute(async (transaction) => {
+  const result = await db.transaction().execute(async (transaction) => {
     await sql`SET LOCAL ROLE bjj_auth_lookup`.execute(transaction);
-    return transaction.selectFrom("users").select(["id"]).where("handle", "=", normalizedHandle).executeTakeFirst();
+    return sql<{ taken: boolean }>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.users
+        WHERE handle = ${normalizedHandle}
+      ) AS taken
+    `.execute(transaction);
   });
-  return !existingRow;
+  const row = result.rows[0];
+  return !row?.taken;
 }
 
 async function handleAvailabilityRequest(context: Context, db: Kysely<BjjRollDatabase>, rawCandidate: string | undefined): Promise<Response> {
@@ -70,15 +87,14 @@ async function handleAvailabilityRequest(context: Context, db: Kysely<BjjRollDat
   return context.json({ available, handle: parsed.data }, 200);
 }
 
-async function handleGetUserHandle(context: Context, options: HandleRoutesOptions, targetUserIdOverride?: string): Promise<Response> {
+async function handleGetUserHandle(context: Context, options: HandleRoutesOptions): Promise<Response> {
   const resolveUserId = options.resolveAuthenticatedUserId ?? defaultResolveAuthenticatedUserId;
   const authenticatedUserId = await resolveUserId(context);
   if (!authenticatedUserId) {
     return context.json({ error: "Authentication required" }, 401);
   }
-  const targetUserId = targetUserIdOverride ?? authenticatedUserId;
   const row = await withUserContext(options.db, authenticatedUserId, (transaction) =>
-    transaction.selectFrom("users").select(["id", "handle", "createdAt"]).where("id", "=", targetUserId).executeTakeFirst(),
+    transaction.selectFrom("users").select(["id", "handle", "createdAt"]).where("id", "=", authenticatedUserId).executeTakeFirst(),
   );
   if (!row) {
     return context.json({ error: "User not found" }, 404);
@@ -103,7 +119,7 @@ async function parseSetHandleBody(context: Context): Promise<{ handle: string } 
   }
 }
 
-async function handleSetUserHandle(context: Context, options: HandleRoutesOptions, targetUserIdOverride?: string): Promise<Response> {
+async function handleSetUserHandle(context: Context, options: HandleRoutesOptions): Promise<Response> {
   const resolveUserId = options.resolveAuthenticatedUserId ?? defaultResolveAuthenticatedUserId;
   const authenticatedUserId = await resolveUserId(context);
   if (!authenticatedUserId) {
@@ -115,8 +131,6 @@ async function handleSetUserHandle(context: Context, options: HandleRoutesOption
     return context.json({ error: "Invalid or reserved handle" }, 400);
   }
 
-  const targetUserId = targetUserIdOverride ?? authenticatedUserId;
-
   try {
     const outcome = await withUserContext(options.db, authenticatedUserId, async (transaction) => {
       const updatedRow = await transaction
@@ -125,7 +139,7 @@ async function handleSetUserHandle(context: Context, options: HandleRoutesOption
           handle: parsedBody.handle,
           updatedAt: new Date(),
         })
-        .where("id", "=", targetUserId)
+        .where("id", "=", authenticatedUserId)
         .where("handle", "is", null)
         .returning(["id", "handle", "createdAt"])
         .executeTakeFirst();
@@ -134,7 +148,7 @@ async function handleSetUserHandle(context: Context, options: HandleRoutesOption
         return { kind: "updated" as const, row: updatedRow };
       }
 
-      const visibleRow = await transaction.selectFrom("users").select(["id", "handle"]).where("id", "=", targetUserId).executeTakeFirst();
+      const visibleRow = await transaction.selectFrom("users").select(["id", "handle"]).where("id", "=", authenticatedUserId).executeTakeFirst();
 
       if (!visibleRow) {
         return { kind: "not_found" as const };
@@ -164,26 +178,17 @@ async function handleSetUserHandle(context: Context, options: HandleRoutesOption
   }
 }
 
-export function createHandleRoutes(dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions): Hono {
-  const options = resolveOptions(dbOrOptions);
+export function createHandleRoutes(dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions, config?: HandleRouteConfig): Hono {
+  const options = resolveOptions(dbOrOptions, config);
   const routes = new Hono();
 
   routes.get("/handles/availability", (context) => handleAvailabilityRequest(context, options.db, context.req.query("handle")));
   routes.get("/handles/me", (context) => handleGetUserHandle(context, options));
-  routes.get("/handles/:handle/availability", (context) => handleAvailabilityRequest(context, options.db, context.req.param("handle")));
-
   routes.post("/handles", (context) => handleSetUserHandle(context, options));
-  routes.put("/handles", (context) => handleSetUserHandle(context, options));
-  routes.patch("/handles", (context) => handleSetUserHandle(context, options));
-
-  routes.get("/users/:userId/handle", (context) => handleGetUserHandle(context, options, context.req.param("userId")));
-  routes.post("/users/:userId/handle", (context) => handleSetUserHandle(context, options, context.req.param("userId")));
-  routes.put("/users/:userId/handle", (context) => handleSetUserHandle(context, options, context.req.param("userId")));
-  routes.patch("/users/:userId/handle", (context) => handleSetUserHandle(context, options, context.req.param("userId")));
 
   return routes;
 }
 
-export function mountHandleRoutes(targetApp: Hono, dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions): Hono {
-  return targetApp.route("/", createHandleRoutes(dbOrOptions));
+export function mountHandleRoutes(targetApp: Hono, dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions, config?: HandleRouteConfig): Hono {
+  return targetApp.route("/", createHandleRoutes(dbOrOptions, config));
 }

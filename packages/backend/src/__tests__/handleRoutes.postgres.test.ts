@@ -1,7 +1,8 @@
+import { Hono, type Context } from "hono";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { userSchema } from "../../../shared/dist/index.js";
 import { withUserContext } from "../database/connection.js";
-import { createHandleRoutes } from "../handleRoutes.js";
+import { createHandleRoutes, mountHandleRoutes } from "../handleRoutes.js";
 import {
   isPostgresTestEnvironmentAvailable,
   seedFixtureUser,
@@ -24,6 +25,11 @@ const uuidFixtureUser: SeededUserFixture = {
   verificationByUserId: "verif-uuid-user-003",
   verificationByEmailHashId: "verif-uuid-hmac-003",
 };
+
+function resolveTestHeaderUserId(context: Context): string | null {
+  const headerUserId = context.req.header("x-test-user-id")?.trim();
+  return headerUserId && headerUserId.length > 0 ? headerUserId : null;
+}
 
 describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64)", () => {
   let harness: MigratedTestDatabase | undefined;
@@ -54,10 +60,12 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
     const currentHarness = requireHarness();
     await seedFixtureUser(currentHarness, uuidFixtureUser);
 
-    const routes = createHandleRoutes(currentHarness.db);
+    const routes = createHandleRoutes(currentHarness.db, {
+      resolveAuthenticatedUserId: resolveTestHeaderUserId,
+    });
 
     const initialResponse = await routes.request("/handles/me", {
-      headers: { "x-authenticated-user-id": uuidFixtureUser.id },
+      headers: { "x-test-user-id": uuidFixtureUser.id },
     });
     expect(initialResponse.status).toBe(200);
     const initialBody: unknown = await initialResponse.json();
@@ -69,7 +77,7 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-authenticated-user-id": uuidFixtureUser.id,
+        "x-test-user-id": uuidFixtureUser.id,
       },
       body: JSON.stringify({ handle: "  ABC  " }),
     });
@@ -86,7 +94,9 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
 
   it("returns available: false and HTTP 409 when a handle is already taken in any case", async () => {
     const { db } = requireHarness();
-    const routes = createHandleRoutes(db);
+    const routes = createHandleRoutes(db, {
+      resolveAuthenticatedUserId: resolveTestHeaderUserId,
+    });
 
     const freeCheck = await routes.request("/handles/availability?handle=AB_1");
     expect(freeCheck.status).toBe(200);
@@ -96,7 +106,7 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-authenticated-user-id": userAlpha.id,
+        "x-test-user-id": userAlpha.id,
       },
       body: JSON.stringify({ handle: "ab_1" }),
     });
@@ -108,16 +118,12 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
       expect(await takenQueryCheck.json()).toEqual({ available: false, handle: "ab_1" });
     }
 
-    const takenPathCheck = await routes.request("/handles/AB_1/availability");
-    expect(takenPathCheck.status).toBe(200);
-    expect(await takenPathCheck.json()).toEqual({ available: false, handle: "ab_1" });
-
     for (const bodyVariant of ["ab_1", "AB_1", "  Ab_1  "]) {
       const conflictBravo = await routes.request("/handles", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-authenticated-user-id": userBravo.id,
+          "x-test-user-id": userBravo.id,
         },
         body: JSON.stringify({ handle: bodyVariant }),
       });
@@ -127,14 +133,16 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
 
   it("allows exactly one of two parallel requests for the same free handle and returns 409 for the other", async () => {
     const { db } = requireHarness();
-    const routes = createHandleRoutes(db);
+    const routes = createHandleRoutes(db, {
+      resolveAuthenticatedUserId: resolveTestHeaderUserId,
+    });
 
     const [alphaResponse, bravoResponse] = await Promise.all([
       routes.request("/handles", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-authenticated-user-id": userAlpha.id,
+          "x-test-user-id": userAlpha.id,
         },
         body: JSON.stringify({ handle: "race_handle" }),
       }),
@@ -142,7 +150,7 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-authenticated-user-id": userBravo.id,
+          "x-test-user-id": userBravo.id,
         },
         body: JSON.stringify({ handle: "RACE_HANDLE" }),
       }),
@@ -161,31 +169,63 @@ describe.skipIf(!canRunPostgresTests)("handleRoutes Postgres integration (HEN-64
     expect(assignedHandles).toEqual(["race_handle"]);
   });
 
-  it("enforces owner RLS as bjj_app so user B cannot set user A's handle", async () => {
+  it("enforces owner RLS as bjj_app so user B cannot set user A's handle and default resolver ignores spoofed headers", async () => {
     const { db } = requireHarness();
-    const routes = createHandleRoutes(db);
 
-    const crossUserAttempt = await routes.request(`/users/${userAlpha.id}/handle`, {
-      method: "PUT",
+    const previousNodeEnvironment = process.env.NODE_ENV;
+    delete process.env.NODE_ENV;
+    try {
+      const defaultRoutes = createHandleRoutes(db);
+      const spoofedHeaderAttempt = await defaultRoutes.request("/handles", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-authenticated-user-id": userAlpha.id,
+        },
+        body: JSON.stringify({ handle: "spoofed_handle" }),
+      });
+      expect(spoofedHeaderAttempt.status).toBe(401);
+    } finally {
+      if (previousNodeEnvironment === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnvironment;
+      }
+    }
+
+    const rlsUpdateResult = await withUserContext(db, userBravo.id, (transaction) =>
+      transaction.updateTable("users").set({ handle: "bravo_hijack" }).where("id", "=", userAlpha.id).returning(["id", "handle"]).executeTakeFirst(),
+    );
+    expect(rlsUpdateResult).toBeUndefined();
+
+    const routes = createHandleRoutes(db, {
+      resolveAuthenticatedUserId: resolveTestHeaderUserId,
+    });
+    const extraUserIdFieldAttempt = await routes.request("/handles", {
+      method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-authenticated-user-id": userBravo.id,
+        "x-test-user-id": userBravo.id,
       },
-      body: JSON.stringify({ handle: "bravo_hijack" }),
+      body: JSON.stringify({ userId: userAlpha.id, handle: "bravo_hijack" }),
     });
-    expect(crossUserAttempt.status).toBe(404);
+    expect(extraUserIdFieldAttempt.status).toBe(400);
 
-    const alphaBefore = await withUserContext(db, userAlpha.id, (transaction) =>
+    const alphaAfterAttempts = await withUserContext(db, userAlpha.id, (transaction) =>
       transaction.selectFrom("users").select(["handle"]).where("id", "=", userAlpha.id).executeTakeFirstOrThrow(),
     );
-    expect(alphaBefore.handle).toBeNull();
+    expect(alphaAfterAttempts.handle).toBeNull();
 
-    const selfSetAttempt = await routes.request(`/users/${userAlpha.id}/handle`, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        "x-authenticated-user-id": userAlpha.id,
-      },
+    const sessionContextApp = new Hono<{ Variables: { user: { id: string } } }>();
+    sessionContextApp.use("*", async (context, next) => {
+      context.set("user", { id: userAlpha.id });
+      await next();
+    });
+    mountHandleRoutes(sessionContextApp as unknown as Hono, db);
+
+    const selfSetAttempt = await sessionContextApp.request("/handles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ handle: "Alpha_Own" }),
     });
     expect(selfSetAttempt.status).toBe(200);
