@@ -29,6 +29,15 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Decided by:** Henry
 - **Consequences:** Used by HEN-56 (Python worker lint and test).
 
+## A4: Auth DB layer and migrations are Kysely, and our migrations own Better Auth's tables [Proposed]
+
+- **Status:** Proposed by the HEN-47 spike; pending Sara's sign-off.
+- **Decision:** Kysely is the DB access layer for every table (`@better-auth/kysely-adapter` for Better Auth). Kysely's `Migrator` runs plain SQL migrations. Our migrations own Better Auth's tables. Better Auth's CLI `generate` may be used as a reference only, and `migrate` is never run.
+- **Rejected alternatives:** Drizzle ORM + drizzle-kit, node-pg-migrate, dbmate, raw `pg`.
+- **Date:** 2026-10-22
+- **Decided by:** Pending (Sara)
+- **Consequences:** HEN-58 builds the schema, RLS and the `bjj_auth_lookup` function as SQL migrations, plus the email-hash adapter wrapper. See `docs/spikes/HEN-47-better-auth.md`.
+
 ## D24: Owner can see their own footage unmasked
 
 Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
