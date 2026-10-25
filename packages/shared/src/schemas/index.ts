@@ -6,4 +6,5 @@ export * from "./accessGrant.js";
 export * from "./consentRecord.js";
 export * from "./notes.js";
 export * from "./jobContract.js";
+export * from "./signUpRequest.js";
 // §2.6 (review request, offer, review, rating) waits on Henry's open questions (ARCHITECTURE.md §7).
