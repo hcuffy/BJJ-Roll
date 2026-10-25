@@ -7,6 +7,16 @@ import { createDatabase, runDatabaseMigrations, withUserContext, type BjjRollDat
 
 const postgresImage = "postgres:18.6";
 
+/** Container shutdown delivers 57P01 while a client is still ending. A listener keeps that from failing the Vitest run. */
+export function ignoreAdminShutdownError(pool: Pool): void {
+  pool.on("error", (error: Error) => {
+    if ("code" in error && error.code === "57P01") {
+      return;
+    }
+    throw error;
+  });
+}
+
 export interface MigratedTestDatabase {
   pool: Pool;
   /** Admin connection string of this suite's database. */
@@ -81,6 +91,7 @@ export async function startMigratedTestDatabase(): Promise<MigratedTestDatabase>
   }
 
   const pool = new Pool({ connectionString, max: 6 });
+  ignoreAdminShutdownError(pool);
   const db = createDatabase(pool);
   await runDatabaseMigrations(db);
 
@@ -121,6 +132,7 @@ export async function createAppRoleLoginPool(harness: MigratedTestDatabase): Pro
   loginUrl.username = roleName;
   loginUrl.password = password;
   const pool = new Pool({ connectionString: loginUrl.toString(), max: 6 });
+  ignoreAdminShutdownError(pool);
   return {
     pool,
     roleName,
