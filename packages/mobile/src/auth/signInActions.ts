@@ -3,32 +3,79 @@ import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from 
 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 
-export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string | null };
+/** Why an action failed; screens use it to place the message next to the field it is about. */
+export type FailureReason = "ageRequired" | "invalidEmail" | "invalidCode" | "invalidLink" | "network" | "rateLimited" | "unknown" | "ignored";
 
-const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
+export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly reason: FailureReason; readonly message: string | null };
+
+/** Mirrors OTP_EXPIRY_MINUTES in backend/src/auth/authLimits.ts (a test keeps the two in step). */
+export const OTP_EXPIRY_MINUTES = 10;
+
+/** Mirrors MAGIC_LINK_EXPIRY_MINUTES in backend/src/auth/authLimits.ts (a test keeps the two in step). */
+export const MAGIC_LINK_EXPIRY_MINUTES = 15;
+
+// Plain-language copy (Vera's HEN-78 review, item 8). Raw server messages are never shown.
+export const FAILURE_MESSAGES = {
+  invalidEmail: "Enter a valid email address.",
+  invalidCode: "That code didn't work. Check the email or send a new code.",
+  invalidLink: "This sign-in link is invalid or has expired. Request a new one.",
+  network: "No connection. Check your internet and try again.",
+  rateLimited: "Too many tries. Wait a minute and try again.",
+  unknown: "Something went wrong. Please try again.",
+} as const;
+const INVALID_CODE_ERRORS = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]);
+const HTTP_TOO_MANY_REQUESTS = 429;
 /** Error code of the backend's 400 when a new account is requested without `ageConfirmed: true` (HEN-77). */
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 const OTP_PATTERN = /^\d{6}$/u;
 
+function failure(reason: Exclude<FailureReason, "ageRequired" | "ignored">): ActionResult {
+  return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
+}
+
 function checkEntry(entry: EmailEntry): ActionResult | null {
   if (!isAgeConfirmed(entry)) {
-    return { ok: false, message: AGE_GATE_REFUSAL_MESSAGE };
+    return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
   if (!isEmailAddress(entry.email)) {
-    return { ok: false, message: "Enter a valid email address." };
+    return failure("invalidEmail");
   }
   return null;
 }
 
-async function postAuth(client: MobileAuthClient, path: string, body: Record<string, unknown>): Promise<ActionResult> {
-  const { error } = await client.$fetch(path, { method: "POST", body });
-  if (error && "code" in error && error.code === AGE_CONFIRMATION_REQUIRED_CODE) {
-    return { ok: false, message: AGE_GATE_REFUSAL_MESSAGE };
+type ClientErrorReason = "invalidCode" | "invalidLink";
+
+interface AuthRequest {
+  readonly path: string;
+  readonly body: Record<string, unknown>;
+  /** How to read a 4xx that is not the age refusal or a rate limit. */
+  readonly clientErrorReason?: ClientErrorReason;
+}
+
+async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason }: AuthRequest): Promise<ActionResult> {
+  let error: { readonly status: number; readonly code?: unknown } | null;
+  try {
+    ({ error } = await client.$fetch(path, { method: "POST", body }));
+  } catch {
+    // fetch rejects when the phone is offline or the backend cannot be reached.
+    return failure("network");
   }
-  if (error) {
-    return { ok: false, message: error.message ?? GENERIC_ERROR_MESSAGE };
+  if (!error) {
+    return { ok: true };
   }
-  return { ok: true };
+  if (error.code === AGE_CONFIRMATION_REQUIRED_CODE) {
+    return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
+  }
+  if (error.status === HTTP_TOO_MANY_REQUESTS) {
+    return failure("rateLimited");
+  }
+  if (clientErrorReason === "invalidCode" && typeof error.code === "string" && INVALID_CODE_ERRORS.has(error.code)) {
+    return failure("invalidCode");
+  }
+  if (clientErrorReason === "invalidLink" && error.status >= 400 && error.status < 500) {
+    return failure("invalidLink");
+  }
+  return failure("unknown");
 }
 
 /** Emails a 6-digit sign-in code. No request is sent unless the 17+ box is ticked. */
@@ -37,7 +84,10 @@ export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry)
   if (refused) {
     return refused;
   }
-  return await postAuth(client, "/email-otp/send-verification-otp", { email: entry.email.trim(), type: "sign-in", ageConfirmed: true });
+  return await postAuth(client, {
+    path: "/email-otp/send-verification-otp",
+    body: { email: entry.email.trim(), type: "sign-in", ageConfirmed: true },
+  });
 }
 
 /** Emails a magic link that opens the app at bjjroll://auth. No request unless the 17+ box is ticked. */
@@ -46,7 +96,10 @@ export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry)
   if (refused) {
     return refused;
   }
-  return await postAuth(client, "/sign-in/magic-link", { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ageConfirmed: true });
+  return await postAuth(client, {
+    path: "/sign-in/magic-link",
+    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ageConfirmed: true },
+  });
 }
 
 export interface CodeEntry extends EmailEntry {
@@ -61,9 +114,13 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
   }
   const code = entry.code.trim();
   if (!OTP_PATTERN.test(code)) {
-    return { ok: false, message: "Enter the 6-digit code from the email." };
+    return { ok: false, reason: "invalidCode", message: "Enter the 6-digit code from the email." };
   }
-  return await postAuth(client, "/sign-in/email-otp", { email: entry.email.trim(), otp: code, ageConfirmed: true });
+  return await postAuth(client, {
+    path: "/sign-in/email-otp",
+    body: { email: entry.email.trim(), otp: code, ageConfirmed: true },
+    clientErrorReason: "invalidCode",
+  });
 }
 
 /** Handles a bjjroll://auth deep link: swaps its one-time code for a session. Other URLs are ignored (message null). */
@@ -72,19 +129,19 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   try {
     parsed = new URL(url);
   } catch {
-    return { ok: false, message: null };
+    return { ok: false, reason: "ignored", message: null };
   }
   if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth") {
-    return { ok: false, message: null };
+    return { ok: false, reason: "ignored", message: null };
   }
   if (parsed.searchParams.has("error")) {
-    return { ok: false, message: "This sign-in link is invalid or has expired. Request a new one." };
+    return failure("invalidLink");
   }
   const code = parsed.searchParams.get("code");
   if (!code) {
-    return { ok: false, message: null };
+    return { ok: false, reason: "ignored", message: null };
   }
-  return await postAuth(client, "/magic-link/exchange", { code });
+  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink" });
 }
 
 /** User id of the stored session, or null when signed out (also on network errors). */

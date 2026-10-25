@@ -3,7 +3,9 @@ import { vi } from "vitest";
 // Stand-ins for the native modules the app loads, so it runs under Vitest in Node.
 // Host components are plain strings that screenHarness.ts renders and queries.
 vi.mock("react-native", () => ({
+  // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
+  AccessibilityInfo: { announceForAccessibility: vi.fn() },
   AppState: { addEventListener: () => ({ remove: () => undefined }) },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
@@ -11,10 +13,18 @@ vi.mock("react-native", () => ({
   Text: "Text",
   TextInput: "TextInput",
   View: "View",
+  KeyboardAvoidingView: "KeyboardAvoidingView",
+  ScrollView: "ScrollView",
+  StatusBar: "StatusBar",
 }));
+// The safe-area library's view gets its own host name so tests can tell it apart from RN's deprecated built-in.
+vi.mock("react-native-safe-area-context", async () => {
+  const { safeAreaInsetsState } = await import("./screenHarness");
+  return { SafeAreaProvider: "SafeAreaProvider", SafeAreaView: "SafeAreaContextView", useSafeAreaInsets: () => safeAreaInsetsState };
+});
 vi.mock("react", async (importOriginal) => {
-  const { harnessUseEffect, harnessUseState } = await import("./screenHarness");
-  return { ...(await importOriginal<typeof import("react")>()), useState: harnessUseState, useEffect: harnessUseEffect };
+  const { harnessUseEffect, harnessUseReference, harnessUseState } = await import("./screenHarness");
+  return { ...(await importOriginal<typeof import("react")>()), useState: harnessUseState, useEffect: harnessUseEffect, useRef: harnessUseReference };
 });
 vi.mock("expo-constants", () => ({ default: { expoConfig: { scheme: "bjjroll" } } }));
 vi.mock("expo-linking", async () => {

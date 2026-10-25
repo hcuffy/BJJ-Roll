@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
+import { vi } from "vitest";
 
 /**
  * Minimal screen renderer for Vitest in Node (no DOM, no extra test dependencies).
@@ -16,6 +17,7 @@ type Component = (props: Record<string, unknown>) => ReactNode;
 
 interface HookSlots {
   values: unknown[];
+  cleanups: Map<number, () => void>;
 }
 
 interface PendingEffect {
@@ -27,6 +29,8 @@ interface PendingEffect {
 
 /** Deep link the mocked expo-linking useURL() returns. */
 export const deepLinkState: { url: string | null } = { url: null };
+/** What the mocked useSafeAreaInsets returns; a test can set a bottom nav-bar inset and reset it. */
+export const safeAreaInsetsState = { top: 0, bottom: 0, left: 0, right: 0 };
 
 // Checked by shape, not via react's isValidElement: this module must not import react at runtime (react is mocked to use it).
 function isReactElement(node: ReactNode): node is ReactElement {
@@ -71,11 +75,31 @@ export function harnessUseState<Value>(initial: Value | (() => Value)): [Value, 
   return [slots.values[index] as Value, setValue];
 }
 
+export function harnessUseReference<Value>(initial: Value): { current: Value } {
+  const { slots, index } = nextHook();
+  if (!(index in slots.values)) {
+    slots.values[index] = { current: initial };
+  }
+  return slots.values[index] as { current: Value };
+}
+
 export function harnessUseEffect(effect: () => unknown, deps?: readonly unknown[]): void {
   const { slots, index } = nextHook();
   const previousDeps = slots.values[index] as readonly unknown[] | undefined;
   if (!sameDeps(previousDeps, deps)) {
     activeRenderer?.pendingEffects.push({ slots, index, effect, deps });
+  }
+}
+
+function runCleanup(slots: HookSlots, index: number): void {
+  const cleanup = slots.cleanups.get(index);
+  slots.cleanups.delete(index);
+  cleanup?.();
+}
+
+function runAllCleanups(slots: HookSlots): void {
+  for (const index of [...slots.cleanups.keys()]) {
+    runCleanup(slots, index);
   }
 }
 
@@ -111,15 +135,20 @@ class ScreenRenderer {
       activeRenderer = previousRenderer;
       this.rendering = false;
     }
-    for (const path of this.slotsByPath.keys()) {
+    for (const [path, slots] of this.slotsByPath) {
       if (!this.visitedPaths.has(path)) {
         this.slotsByPath.delete(path);
+        runAllCleanups(slots);
       }
     }
     const effects = this.pendingEffects.splice(0);
     for (const { slots, index, effect, deps } of effects) {
       slots.values[index] = deps;
-      effect();
+      runCleanup(slots, index);
+      const cleanup = effect();
+      if (typeof cleanup === "function") {
+        slots.cleanups.set(index, cleanup as () => void);
+      }
     }
   }
 
@@ -141,7 +170,7 @@ class ScreenRenderer {
       const component = node.type as Component;
       const componentPath = `${path}:${component.name}`;
       this.visitedPaths.add(componentPath);
-      const slots = this.slotsByPath.get(componentPath) ?? { values: [] };
+      const slots = this.slotsByPath.get(componentPath) ?? { values: [], cleanups: new Map() };
       this.slotsByPath.set(componentPath, slots);
       const [outerSlots, outerIndex] = [currentSlots, hookIndex];
       currentSlots = slots;
@@ -170,11 +199,29 @@ function allNodes(nodes: readonly (HostNode | string)[]): HostNode[] {
   return nodes.flatMap((node) => (typeof node === "string" ? [] : [node, ...allNodes(node.children)]));
 }
 
-/** Lets pending promises (fake fetch, SecureStore, state updates) settle. */
+/** Lets pending promises (fake fetch, SecureStore, state updates) settle. Works with real and with Vitest fake timers. */
 export async function settle(): Promise<void> {
   for (let round = 0; round < 20; round += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (vi.isFakeTimers()) {
+      await vi.advanceTimersByTimeAsync(0);
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
+}
+
+type StyleValue = Record<string, unknown> | readonly StyleValue[] | false | null | undefined | ((state: { pressed: boolean }) => StyleValue);
+
+/** Flattens a React Native style prop like StyleSheet.flatten; a Pressable style function gets { pressed }. */
+export function flattenStyle(style: unknown, pressed = false): Record<string, unknown> {
+  const value = style as StyleValue;
+  if (typeof value === "function") {
+    return flattenStyle(value({ pressed }), pressed);
+  }
+  if (Array.isArray(value)) {
+    return Object.assign({}, ...value.map((item) => flattenStyle(item, pressed))) as Record<string, unknown>;
+  }
+  return value ? { ...(value as Record<string, unknown>) } : {};
 }
 
 export async function renderScreen(element: ReactNode) {
@@ -210,6 +257,8 @@ export async function renderScreen(element: ReactNode) {
       return match;
     },
     findAllByType: (type: string) => nodes().filter((node) => node.type === type),
+    pressables: () => nodes().filter((node) => typeof node.props.onPress === "function"),
+    getPressable: (text: string) => pressableWithText(text),
     isDisabled: (text: string) => pressableWithText(text).props.disabled === true,
     /** Presses like a user: a disabled Pressable ignores the press. */
     press: async (text: string) => {
@@ -225,6 +274,11 @@ export async function renderScreen(element: ReactNode) {
     },
     changeText: async (label: string, value: string) => {
       (screen.getByLabelText(label).props.onChangeText as (text: string) => void)(value);
+      await settle();
+    },
+    /** Calls a prop handler on the element with this accessibility label (onBlur, onFocus, onSubmitEditing). */
+    fire: async (label: string, handler: string) => {
+      (screen.getByLabelText(label).props[handler] as () => void)();
       await settle();
     },
     rerender: async () => {

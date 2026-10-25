@@ -58,23 +58,58 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 
 ### 4. Code path (AC1)
 
-1. Start screen: "Sign in to BJJ Roll". **Continue** and **Email me a sign-in link instead** are both greyed out.
-2. Type your email. The buttons stay greyed out.
-3. Tap **I am 17 or older**. The box shows ✓ and both buttons turn on.
-4. Tap **Continue**. Expect the "Enter your code" screen with "We emailed a 6-digit code to <your email>."
-5. Open the email and type the 6 digits. **Sign in** turns on only at 6 digits. Tap it.
+1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue** looks dimmed but still responds.
+2. Tap **Continue** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
+3. Type your email and tap **I am 17 or older**. The box shows ✓ and **Continue** turns lime.
+4. Tap **Continue** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
+5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
+7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
 
 ### 5. Magic-link path (AC2, development build)
 
 1. On the start screen, tap **I am 17 or older**, type your email, and tap **Email me a sign-in link instead**.
-2. Expect "Check your email and open the link on this phone."
+2. Expect the "Check your email" card: "We sent a sign-in link to <your email>. Open it on this phone." with **Resend link** and **Use a different email**.
 3. Open the link on the same device, either from the mail app or with `adb shell am start -a android.intent.action.VIEW -d "<link from the email>"`.
 4. The browser hands over to the app (`bjjroll://auth?code=…`). Expect "You are signed in".
-5. Open the same link again. Expect "This sign-in link is invalid or has expired. Request a new one." and no sign-in.
+5. Open the same link again. Expect a red card above the title: "This sign-in link is invalid or has expired. Request a new one." and no sign-in.
 
 ### 6. Sign-out and restart (AC5)
 
 1. While signed in, fully close the app and reopen it. Expect "You are signed in" (the session survived in SecureStore).
 2. Tap **Sign out**. Expect the "Sign in to BJJ Roll" screen with the box unticked.
 3. Fully close the app and reopen it. Expect the "Sign in to BJJ Roll" screen again.
+
+## M2-close device list
+
+Checks the unit tests cannot cover. Run them on one small and one large phone per platform (for example iPhone SE and a recent iPhone; a small Android and a Pixel-size Android). Keep screenshots private (team box only, not GitHub).
+
+**Keyboard**
+
+- [ ] The keyboard never covers **Continue**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView padding; Android: `adjustResize`).
+- [ ] A tap on a button while the keyboard is open works the first time (no tap spent just closing the keyboard).
+- [ ] Email field: Go submits. Code field: number pad, Done submits, and iOS/Android offer the emailed code for autofill.
+
+**Safe area insets (react-native-safe-area-context)**
+
+- [ ] Nothing sits under the status bar, notch, Dynamic Island or home indicator on any screen, including Loading and the expired-link error card (Android edge-to-edge and iOS).
+- [ ] Rotating the phone or switching gesture/3-button navigation on Android keeps content inside the safe area.
+
+**Screen readers (TalkBack and VoiceOver)**
+
+- [ ] A wrong code, an invalid email, the "tick the box" hint, a network error and the expired-link card are each read out once, without moving focus there by hand (Android live region, iOS announcement).
+- [ ] The busy buttons ("Sending code…", "Signing in…") are read as busy/disabled.
+- [ ] The 17+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
+- [ ] Field labels are read once, and the field's error is read as its hint.
+
+**Vera's "needs device screenshot" items (HEN-78 design review)**
+
+- [ ] Keyboard does not cover Continue or Sign in on a small phone (iPhone SE size, small Android).
+- [ ] Email placeholder colour and its contrast on the dark field (platform default colour).
+- [ ] Largest dynamic type (iOS AX5, Android 200%): no clipping in inputs, and every screen scrolls instead of overflowing.
+- [ ] VoiceOver and TalkBack reading of the checkbox (label, checked state, ✓ not read twice).
+- [ ] The ✓ and ✉ glyphs render and centre correctly (font fallback).
+- [ ] The deep-link error card sits below the status bar or notch.
+- [ ] iOS and Android offer the emailed code for autofill.
+- [ ] Pressed feedback (0.98 scale) and Android ripple on the buttons.
+- [ ] The system font compared with the style guide's Courtly geometric sans.
