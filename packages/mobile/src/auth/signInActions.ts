@@ -11,6 +11,9 @@ export type ActionResult = { readonly ok: true } | { readonly ok: false; readonl
 /** Mirrors OTP_EXPIRY_MINUTES in backend/src/auth/authLimits.ts (a test keeps the two in step). */
 export const OTP_EXPIRY_MINUTES = 10;
 
+/** Mirrors MAGIC_LINK_EXPIRY_MINUTES in backend/src/auth/authLimits.ts (a test keeps the two in step). */
+export const MAGIC_LINK_EXPIRY_MINUTES = 15;
+
 // Plain-language copy (Vera's HEN-78 review, item 8). Raw server messages are never shown.
 export const FAILURE_MESSAGES = {
   invalidEmail: "Enter a valid email address.",

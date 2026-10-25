@@ -18,13 +18,13 @@ vi.mock("react-native", () => ({
   StatusBar: "StatusBar",
 }));
 // The safe-area library's view gets its own host name so tests can tell it apart from RN's deprecated built-in.
-vi.mock("react-native-safe-area-context", () => ({
-  SafeAreaProvider: "SafeAreaProvider",
-  SafeAreaView: "SafeAreaContextView",
-}));
+vi.mock("react-native-safe-area-context", async () => {
+  const { safeAreaInsetsState } = await import("./screenHarness");
+  return { SafeAreaProvider: "SafeAreaProvider", SafeAreaView: "SafeAreaContextView", useSafeAreaInsets: () => safeAreaInsetsState };
+});
 vi.mock("react", async (importOriginal) => {
-  const { harnessUseEffect, harnessUseState } = await import("./screenHarness");
-  return { ...(await importOriginal<typeof import("react")>()), useState: harnessUseState, useEffect: harnessUseEffect };
+  const { harnessUseEffect, harnessUseReference, harnessUseState } = await import("./screenHarness");
+  return { ...(await importOriginal<typeof import("react")>()), useState: harnessUseState, useEffect: harnessUseEffect, useRef: harnessUseReference };
 });
 vi.mock("expo-constants", () => ({ default: { expoConfig: { scheme: "bjjroll" } } }));
 vi.mock("expo-linking", async () => {

@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
+import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
 
@@ -31,6 +32,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
   const ready = ageConfirmed && isEmailAddress(email);
 
   const startAction = () => {
@@ -72,8 +74,10 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
       onCodeSent(email.trim());
     } else if (linkSentTo === null) {
       setLinkSentTo(email.trim());
+      linkCooldown.restart();
     } else {
       setNotice(`We sent a new link to ${email.trim()}.`);
+      linkCooldown.restart();
     }
   };
 
@@ -89,14 +93,16 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
           </Text>
           <View style={authStyles.cardBody}>
             <StatusText message={`We sent a sign-in link to ${linkSentTo}. Open it on this phone.`} style={authStyles.notice} />
+            <Text style={textStyles.bodyMuted}>Link expires in {MAGIC_LINK_EXPIRY_MINUTES} minutes.</Text>
             <StatusText message={notice} style={textStyles.bodyMuted} />
           </View>
         </View>
         <StatusText message={formError} style={authStyles.fieldError} />
         <View style={authStyles.actions}>
           <AuthButton
-            title="Resend link"
+            title={linkCooldown.secondsLeft > 0 && sending !== "link" ? `Resend in ${formatCountdown(linkCooldown.secondsLeft)}` : "Resend link"}
             variant="secondary"
+            disabled={linkCooldown.secondsLeft > 0}
             loading={sending === "link"}
             loadingTitle="Sending link…"
             onPress={() => void send("link")}
@@ -155,6 +161,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
       <View>
         <Pressable
           accessibilityRole="checkbox"
+          accessibilityLabel={AGE_CONFIRMATION_LABEL}
           accessibilityState={{ checked: ageConfirmed }}
           accessibilityHint={ageError ?? undefined}
           style={authStyles.checkboxRow}
@@ -164,7 +171,11 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
             setAgeError(null);
           }}>
           <View style={[authStyles.checkbox, ageConfirmed && authStyles.checkboxTicked]}>
-            {ageConfirmed ? <Text style={authStyles.checkmark}>✓</Text> : null}
+            {ageConfirmed ? (
+              <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
+                ✓
+              </Text>
+            ) : null}
           </View>
           <Text style={authStyles.checkboxLabel}>{AGE_CONFIRMATION_LABEL}</Text>
         </Pressable>

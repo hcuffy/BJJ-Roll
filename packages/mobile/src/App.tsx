@@ -55,7 +55,8 @@ export function App() {
         return (
           <SafeAreaView style={authStyles.safeArea}>
             <View style={authStyles.centred}>
-              <ActivityIndicator size="large" color={colours.primary} accessibilityLabel="Loading" />
+              {/* Muted spinner (lime is for the primary action); the visible word is the one thing screen readers read. */}
+              <ActivityIndicator size="large" color={colours.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
               <Text style={textStyles.bodyMuted}>Loading</Text>
             </View>
           </SafeAreaView>

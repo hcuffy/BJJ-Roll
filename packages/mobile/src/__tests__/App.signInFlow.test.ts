@@ -101,13 +101,16 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).not.toContain(message);
   });
 
-  it("shows a labelled lime spinner on the dark background while the session loads, with light status bar icons", async () => {
+  it("shows a muted spinner and one readable 'Loading' on the dark background while the session loads, with light status bar icons", async () => {
     backend.fetchImplementation.mockImplementation(() => new Promise<Response>(() => undefined));
     const screen = await startApp();
 
     expect(screen.text()).toContain("Loading");
     const [spinner] = screen.findAllByType("ActivityIndicator");
-    expect(spinner?.props.color).toBe(colours.primary);
+    // Muted, not lime (lime is reserved for the primary action), and "Loading" is read once: the spinner is hidden.
+    expect(spinner?.props.color).toBe(colours.textSecondary);
+    expect(spinner?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });
+    expect(spinner?.props.accessibilityLabel).toBeUndefined();
     expect(screen.findAllByType("StatusBar")[0]?.props).toMatchObject({ barStyle: "light-content", backgroundColor: colours.background });
     expect(flattenStyle(screen.findAllByType("View")[0]?.props.style).backgroundColor).toBe(colours.background);
   });

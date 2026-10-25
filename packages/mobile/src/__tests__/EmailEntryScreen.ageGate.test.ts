@@ -1,7 +1,9 @@
 import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/signInActions";
 import { createMobileAuthClient } from "../auth/authClient";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
@@ -25,6 +27,7 @@ describe("EmailEntryScreen", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     Platform.OS = "android";
   });
 
@@ -46,6 +49,10 @@ describe("EmailEntryScreen", () => {
 
     expect(flattenStyle(screen.getPressable("Continue").props.style).backgroundColor).toBe(colours.surfaceRaised);
     expect(flattenStyle(screen.queryByText("Continue")?.props.style).color).toBe(colours.textSecondary);
+    // Dimmed, but still pressable, so it must not tell screen readers it is disabled; the hint explains what is missing.
+    expect(screen.getPressable("Continue").props.disabled).toBe(false);
+    expect(screen.getPressable("Continue").props.accessibilityState).toMatchObject({ disabled: false });
+    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Enter your email and tick the 17 or older box first.");
     await screen.press("Continue");
     expect(screen.text()).toContain("Tick the box to confirm you are 17 or older.");
     expect(screen.getByRole("checkbox").props.accessibilityHint).toBe("Tick the box to confirm you are 17 or older.");
@@ -168,7 +175,13 @@ describe("EmailEntryScreen", () => {
     expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith("No connection. Check your internet and try again.");
   });
 
+  it("keeps the link expiry copy in step with the backend's MAGIC_LINK_EXPIRY_MINUTES", () => {
+    const backendLimits = readFileSync(new URL("../../../backend/src/auth/authLimits.ts", import.meta.url), "utf8");
+    expect(Number(/export const MAGIC_LINK_EXPIRY_MINUTES = (\d+);/.exec(backendLimits)?.[1])).toBe(MAGIC_LINK_EXPIRY_MINUTES);
+  });
+
   it("after the link is sent, replaces the form with a 'Check your email' notice (not error style) with Resend link", async () => {
+    vi.useFakeTimers();
     const screen = await renderEmailEntry();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
@@ -180,9 +193,16 @@ describe("EmailEntryScreen", () => {
     expect(flattenStyle(notice?.props.style).color).toBe(colours.textPrimary);
     expect(screen.findAllByType("Text").some((text) => flattenStyle(text.props.style).color === colours.danger)).toBe(false);
     expect(screen.findAllByType("TextInput")).toEqual([]);
+    expect(flattenStyle(screen.queryByText(`Link expires in ${MAGIC_LINK_EXPIRY_MINUTES} minutes.`)?.props.style).color).toBe(colours.textSecondary);
 
+    // Same 30s cooldown as Resend code.
+    expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await screen.rerender();
     await screen.press("Resend link");
     expect(backend.requests.filter((request) => request.url.endsWith("/sign-in/magic-link"))).toHaveLength(2);
+    expect(screen.text()).toContain("We sent a new link to member@example.test.");
+    expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
 
     await screen.press("Use a different email");
     expect(screen.getByLabelText("Email").props.value).toBe("member@example.test");

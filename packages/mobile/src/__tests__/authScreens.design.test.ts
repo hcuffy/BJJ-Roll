@@ -1,12 +1,13 @@
 import { createElement, type ReactElement } from "react";
-import { describe, expect, it } from "vitest";
+import { Platform } from "react-native";
+import { afterEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { CodeEntryScreen } from "../screens/CodeEntryScreen";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { colours, radius, sizes } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
-import { flattenStyle, renderScreen, textOf } from "./screenHarness";
+import { flattenStyle, renderScreen, safeAreaInsetsState, textOf } from "./screenHarness";
 
 const client = createMobileAuthClient({
   backendUrl: TEST_BACKEND_URL,
@@ -32,6 +33,11 @@ const renderReadyEmailEntry = async () => {
 };
 
 describe.each(screens)("%s screen design", (_name, build) => {
+  afterEach(() => {
+    Platform.OS = "android";
+    safeAreaInsetsState.bottom = 0;
+  });
+
   it("gives every tappable element and field at least a 48dp target, and every button a full pill shape", async () => {
     const screen = await renderScreen(build());
     for (const pressable of screen.pressables()) {
@@ -83,8 +89,27 @@ describe.each(screens)("%s screen design", (_name, build) => {
     const [safeArea, ...extra] = screen.findAllByType("SafeAreaContextView");
     expect(extra).toHaveLength(0);
     expect(flattenStyle(safeArea?.props.style)).toMatchObject({ flex: 1, backgroundColor: colours.background });
-    expect(safeArea?.props.edges).toBeUndefined();
+    // The bottom edge is padded inside the scroll view instead, so content can scroll clear of the nav bar.
+    expect(safeArea?.props.edges).toEqual(["top", "left", "right"]);
     expect(screen.findAllByType("SafeAreaView")).toHaveLength(0);
+  });
+
+  it("keeps the last button above the Android nav bar / iOS home indicator: bottom padding = bottom inset + 24", async () => {
+    safeAreaInsetsState.bottom = 48;
+    const screen = await renderScreen(build());
+    expect(flattenStyle(screen.findAllByType("ScrollView")[0]?.props.contentContainerStyle).paddingBottom).toBe(48 + 24);
+    safeAreaInsetsState.bottom = 0;
+    const flat = await renderScreen(build());
+    expect(flattenStyle(flat.findAllByType("ScrollView")[0]?.props.contentContainerStyle).paddingBottom).toBe(24);
+  });
+
+  it("moves content above the keyboard on both platforms (Android: height, iOS: padding) and lets a drag close it", async () => {
+    const android = await renderScreen(build());
+    expect(android.findAllByType("KeyboardAvoidingView")[0]?.props.behavior).toBe("height");
+    expect(android.findAllByType("ScrollView")[0]?.props.keyboardDismissMode).toBe("on-drag");
+    Platform.OS = "ios";
+    const ios = await renderScreen(build());
+    expect(ios.findAllByType("KeyboardAvoidingView")[0]?.props.behavior).toBe("padding");
   });
 
   it("gives pressed buttons visible feedback (scale 0.98)", async () => {
@@ -125,6 +150,14 @@ describe("email entry design details", () => {
     expect(flattenStyle(box()?.props.style)).toMatchObject({ backgroundColor: colours.primary, borderColor: colours.primary });
     const tick = box()?.children.find((child) => typeof child !== "string" && child.type === "Text");
     expect(tick && typeof tick !== "string" && flattenStyle(tick.props.style).color).toBe(colours.onPrimary);
+  });
+
+  it("gives the checkbox an explicit screen-reader label and hides the ✓ glyph from screen readers", async () => {
+    const screen = await renderScreen(emailEntry());
+    expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 17 or older");
+    await screen.pressRole("checkbox");
+    const tick = screen.findAllByType("Text").find((text) => textOf(text) === "✓");
+    expect(tick?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });
   });
 
   it("turns the link action into a surface-2 secondary pill with a white label", async () => {

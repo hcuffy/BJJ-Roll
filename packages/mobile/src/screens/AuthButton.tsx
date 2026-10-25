@@ -7,7 +7,7 @@ export interface AuthButtonProps {
   /** primary: the one lime pill per screen. secondary: surface-2 pill. tertiary: text-only, still 48dp tall. */
   readonly variant?: "primary" | "secondary" | "tertiary";
   readonly disabled?: boolean;
-  /** Looks disabled but stays pressable, so a tap can explain what is missing. */
+  /** Looks disabled but stays pressable (and is announced as enabled), so a tap can explain what is missing. */
   readonly looksDisabled?: boolean;
   /** Shows a spinner and `loadingTitle` in the same-size pill, and blocks presses. */
   readonly loading?: boolean;
@@ -52,7 +52,7 @@ export function AuthButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: blocked || looksDisabled, busy: loading }}
+      accessibilityState={{ disabled: blocked, busy: loading }}
       accessibilityHint={accessibilityHint}
       disabled={blocked}
       onPress={onPress}

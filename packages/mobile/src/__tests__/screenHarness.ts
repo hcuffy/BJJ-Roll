@@ -29,6 +29,8 @@ interface PendingEffect {
 
 /** Deep link the mocked expo-linking useURL() returns. */
 export const deepLinkState: { url: string | null } = { url: null };
+/** What the mocked useSafeAreaInsets returns; a test can set a bottom nav-bar inset and reset it. */
+export const safeAreaInsetsState = { top: 0, bottom: 0, left: 0, right: 0 };
 
 // Checked by shape, not via react's isValidElement: this module must not import react at runtime (react is mocked to use it).
 function isReactElement(node: ReactNode): node is ReactElement {
@@ -71,6 +73,14 @@ export function harnessUseState<Value>(initial: Value | (() => Value)): [Value, 
     renderer?.rerender();
   };
   return [slots.values[index] as Value, setValue];
+}
+
+export function harnessUseReference<Value>(initial: Value): { current: Value } {
+  const { slots, index } = nextHook();
+  if (!(index in slots.values)) {
+    slots.values[index] = { current: initial };
+  }
+  return slots.values[index] as { current: Value };
 }
 
 export function harnessUseEffect(effect: () => unknown, deps?: readonly unknown[]): void {
