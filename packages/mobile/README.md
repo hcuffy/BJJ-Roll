@@ -102,6 +102,12 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 - [ ] The 17+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
 - [ ] Field labels are read once, and the field's error is read as its hint.
 
+**Account deletion (HEN-65 AC7)**
+
+- [ ] Signed in, tap **Delete account**: the "Delete your account?" confirm step shows and nothing is deleted yet. **Cancel** goes back with the account intact.
+- [ ] Tap **Delete account** again, then **Delete my account**: "Deleting account…" shows, then the "Sign in to BJJ Roll" screen.
+- [ ] Fully close the app and reopen it: still the "Sign in to BJJ Roll" screen (signed out).
+
 **Vera's "needs device screenshot" items (HEN-78 design review)**
 
 - [ ] Keyboard does not cover Continue or Sign in on a small phone (iPhone SE size, small Android).

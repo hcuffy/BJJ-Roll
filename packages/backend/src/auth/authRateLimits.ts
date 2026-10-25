@@ -8,7 +8,6 @@ import {
   RATE_LIMIT_WINDOW_SECONDS,
 } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
-import { emailRateLimitKey } from "../database/cascadeDelete.js";
 
 export interface RateLimitRuleConfig {
   readonly window: number;
@@ -48,6 +47,14 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
     max: MAX_VERIFIES_PER_IP_PER_WINDOW,
   },
 };
+
+/**
+ * Key of the per-email send counter in `public.rate_limits`; the email HMAC equals `users.email_hash`.
+ * The row is not removed on account deletion; it ages out with its window (HEN-65).
+ */
+export function emailRateLimitKey(emailHmac: string): string {
+  return `email:${emailHmac}`;
+}
 
 /**
  * Enforces the Postgres-backed 3 sends / email / 15 minutes rate limit using the keyed email HMAC (never plaintext email).

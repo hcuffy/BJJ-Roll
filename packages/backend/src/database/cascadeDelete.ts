@@ -4,20 +4,17 @@ import type { BjjRollDatabase, UserDataTableName } from "./schema.js";
 
 export interface AccountDeletionCascadeStep {
   table: UserDataTableName;
-  mechanism: "foreign_key_cascade" | "before_delete_trigger_and_fk_cascade" | "explicit_delete_by_email_hash_key" | "primary_row";
+  mechanism: "foreign_key_cascade" | "before_delete_trigger_and_fk_cascade" | "primary_row";
   description: string;
 }
 
 /**
  * Explicit account deletion cascade map aligned with ARCHITECTURE.md §5.
  * Every user-data table in `public` is accounted for when a user deletes their account.
+ * `public.rate_limits` is deliberately not in the map: the per-email send counter (key `email:<email_hash>`, hash only) stays
+ * until its 15-minute window expires, so deleting the account and signing up again cannot reset the send limit (HEN-65).
  */
 export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = [
-  {
-    table: "rate_limits",
-    mechanism: "explicit_delete_by_email_hash_key",
-    description: "Deletes the per-email send counter keyed `email:<email_hash>`; per-IP counters hold no user data and stay (HEN-65).",
-  },
   {
     table: "verifications",
     mechanism: "before_delete_trigger_and_fk_cascade",
@@ -45,12 +42,6 @@ export interface CascadeDeleteAccountResult {
   deletedSessionCount: number;
   deletedAccountCount: number;
   deletedVerificationCount: number;
-  deletedRateLimitCount: number;
-}
-
-/** Key of the per-email send counter in `public.rate_limits`; the email HMAC equals `users.email_hash`. */
-export function emailRateLimitKey(emailHash: string): string {
-  return `email:${emailHash}`;
 }
 
 export function verificationIdentifiersForEmailHash(emailHash: string): readonly string[] {
@@ -59,7 +50,7 @@ export function verificationIdentifiersForEmailHash(emailHash: string): readonly
 
 /**
  * Deletes the authenticated user's account inside their RLS context (`app.user_id = userId`)
- * and returns the count of rows removed across `users`, `sessions`, `accounts`, `verifications`, and `rate_limits`.
+ * and returns the count of rows removed across `users`, `sessions`, `accounts`, and `verifications`.
  */
 export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: string): Promise<CascadeDeleteAccountResult> {
   return withUserContext(db, userId, async (transaction) => {
@@ -71,7 +62,6 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
         deletedSessionCount: 0,
         deletedAccountCount: 0,
         deletedVerificationCount: 0,
-        deletedRateLimitCount: 0,
       };
     }
 
@@ -100,11 +90,6 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
       )
       .executeTakeFirstOrThrow();
 
-    const rateLimitDeleteResult = await transaction
-      .deleteFrom("rateLimits")
-      .where("key", "=", emailRateLimitKey(existingUser.emailHash))
-      .executeTakeFirst();
-
     const deleteResult = await transaction.deleteFrom("users").where("id", "=", userId).executeTakeFirst();
 
     return {
@@ -112,7 +97,6 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
       deletedSessionCount: Number(sessionsBefore.count),
       deletedAccountCount: Number(accountsBefore.count),
       deletedVerificationCount: Number(verificationsBefore.count),
-      deletedRateLimitCount: Number(rateLimitDeleteResult.numDeletedRows ?? 0n),
     };
   });
 }

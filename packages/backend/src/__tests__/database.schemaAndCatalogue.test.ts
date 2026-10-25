@@ -95,7 +95,6 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
 
     expect(tableSecurityResult.rows).toEqual([
       { table_name: "accounts", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
-      { table_name: "rate_limits", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "sessions", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "users", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "verifications", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },

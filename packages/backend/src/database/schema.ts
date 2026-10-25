@@ -51,24 +51,14 @@ export interface VerificationsTable {
   updatedAt: Generated<Date>;
 }
 
-/** Better Auth counters (migration 002). Per-email rows use the key `email:<users.email_hash>`; per-IP rows hold no user data. */
-export interface RateLimitsTable {
-  id: string;
-  key: string;
-  count: number;
-  lastRequest: ColumnType<string, number | string, number | string>;
-}
-
 export interface BjjRollDatabase {
   users: UsersTable;
   sessions: SessionsTable;
   accounts: AccountsTable;
   verifications: VerificationsTable;
-  rateLimits: RateLimitsTable;
 }
 
 export type DatabaseSchema = BjjRollDatabase;
 
-/** Physical table names in `public` that hold rows for a user; every one is in the account deletion cascade map. */
-export const userDataTables = ["users", "sessions", "accounts", "verifications", "rate_limits"] as const;
+export const userDataTables = ["users", "sessions", "accounts", "verifications"] as const;
 export type UserDataTableName = (typeof userDataTables)[number];

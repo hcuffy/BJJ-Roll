@@ -1,6 +1,6 @@
 import { accountDeletionResponseSchema, accountExportSchema } from "@bjj-roll/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { accountDeletionCascadeMap, emailRateLimitKey, verificationIdentifiersForEmailHash } from "../database/cascadeDelete.js";
+import { accountDeletionCascadeMap, verificationIdentifiersForEmailHash } from "../database/cascadeDelete.js";
 import type { UserDataTableName } from "../database/schema.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import {
@@ -117,9 +117,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
             [...verificationIdentifiersForEmailHash(emailHash)],
           ]);
         }
-        case "rate_limits": {
-          return countOf("public.rate_limits WHERE key = $1", [emailRateLimitKey(emailHash)]);
-        }
       }
     };
     const counts: Partial<Record<UserDataTableName, number>> = {};
@@ -152,7 +149,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     expect(before.users).toBe(1);
     expect(before.sessions).toBe(2);
     expect(before.verifications).toBeGreaterThan(0);
-    expect(before.rate_limits).toBe(1);
     const bystanderBefore = await remainingRowCounts(bystander.userId, bystanderHash);
 
     const response = await accountRequest("DELETE", "/account", { cookie: firstSession.cookie });
