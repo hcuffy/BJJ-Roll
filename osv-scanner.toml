@@ -1,11 +1,34 @@
 # OSV-Scanner exceptions (HEN-222). Each one needs a reason and an ignoreUntil at most 30 days out.
 
 [[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-ignoreUntil = 2026-11-20T00:00:00Z
-reason = "braces 3.0.3 comes in via Expo (micromatch). No fixed version exists yet. Recheck by the date."
-
-[[IgnoredVulns]]
 id = "GHSA-86w9-cpqp-85rv"
 ignoreUntil = 2026-11-20T00:00:00Z
 reason = "node-forge 1.4.0 comes in via @expo/cli (dev tooling). No fixed version exists yet. Recheck by the date."
+
+[[IgnoredVulns]]
+id = "GHSA-4qv8-2p9j-2685"
+ignoreUntil = 2026-11-01T00:00:00Z
+reason = "undici 8.11.2 via testcontainers (backend dev only). Fixed version 8.12.2 published 2026-10-15, blocked by 14-day minimumReleaseAge, bump after 2026-10-29."
+
+[[IgnoredVulns]]
+id = "GHSA-f72v-6w45-q472"
+ignoreUntil = 2026-11-01T00:00:00Z
+reason = "undici 8.11.2 via testcontainers (backend dev only). Fixed version 8.12.2 published 2026-10-15, blocked by 14-day minimumReleaseAge, bump after 2026-10-29."
+
+[[IgnoredVulns]]
+id = "GHSA-xjj6-f33q-929c"
+ignoreUntil = 2026-11-01T00:00:00Z
+reason = "undici 8.11.2 via testcontainers (backend dev only). Fixed version 8.12.2 published 2026-10-15, blocked by 14-day minimumReleaseAge, bump after 2026-10-29."
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = 2026-10-28T00:00:00Z
+reason = "zod 4.6.5 (shared, better-auth, backend runtime). Fixed version 4.6.6 published 2026-10-11, blocked by 14-day minimumReleaseAge, bump after 2026-10-25. The 3.25.76 copy is covered by the PackageOverrides entry below."
+
+[[PackageOverrides]]
+name = "zod"
+version = "3.25.76"
+ecosystem = "npm"
+vulnerability.ignore = true
+effectiveUntil = 2026-11-20T00:00:00Z
+reason = "zod 3.25.76 comes in only via @expo/cli (Expo CLI tooling), not in the backend runtime or the mobile app bundle. No 3.x fix exists (fixed in 4.6.6). Expo SDK 57 is pinned. Recheck by the date."
