@@ -7,6 +7,7 @@ import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { colours, radius, sizes } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { emitKeyboardEvent, resetKeyboardListeners } from "./keyboardHarness";
 import { flattenStyle, renderScreen, safeAreaInsetsState, textOf } from "./screenHarness";
 
 const client = createMobileAuthClient({
@@ -42,6 +43,7 @@ describe.each(screens)("%s screen design", (_name, build) => {
   afterEach(() => {
     Platform.OS = "android";
     safeAreaInsetsState.bottom = 0;
+    resetKeyboardListeners();
   });
 
   it("gives every tappable element and field at least a 48dp target, and every button a full pill shape", async () => {
@@ -107,6 +109,22 @@ describe.each(screens)("%s screen design", (_name, build) => {
     safeAreaInsetsState.bottom = 0;
     const flat = await renderScreen(build());
     expect(flattenStyle(flat.findAllByType("ScrollView")[0]?.props.contentContainerStyle).paddingBottom).toBe(24);
+  });
+
+  it("on iOS leaves a 24 gap above the open keyboard, without the home-indicator inset", async () => {
+    Platform.OS = "ios";
+    safeAreaInsetsState.bottom = 34;
+    const screen = await renderScreen(build());
+    const paddingBottom = () => flattenStyle(screen.findAllByType("ScrollView")[0]?.props.contentContainerStyle).paddingBottom;
+    expect(paddingBottom()).toBe(34 + 24);
+
+    emitKeyboardEvent("keyboardWillShow");
+    await screen.rerender();
+    expect(paddingBottom()).toBe(24);
+
+    emitKeyboardEvent("keyboardWillHide");
+    await screen.rerender();
+    expect(paddingBottom()).toBe(34 + 24);
   });
 
   it("moves content above the keyboard on both platforms (Android: height, iOS: padding) and lets a drag close it", async () => {
@@ -192,7 +210,12 @@ describe("code entry design details", () => {
     const label = screen.findAllByType("Text").find((text) => textOf(text) === "6-digit code");
     expect(flattenStyle(label?.props.style)).toMatchObject({ fontSize: 13, fontWeight: "500" });
     expect(flattenStyle(screen.queryByText("Code expires in 10 minutes.")?.props.style).color).toBe(colours.textSecondary);
-    expect(flattenStyle(screen.getPressable("Resend in 0:30").props.style).backgroundColor).toBe(colours.surfaceRaised);
+    // A blocked secondary pill has no fill and a muted label, so it reads clearly as "not yet" next to an active one.
+    expect(flattenStyle(screen.getPressable("Resend in 0:30").props.style)).toMatchObject({
+      backgroundColor: "transparent",
+      borderRadius: radius.pill,
+    });
+    expect(flattenStyle(screen.queryByText("Resend in 0:30")?.props.style).color).toBe(colours.textSecondary);
     expect(flattenStyle(screen.getPressable("Use a different email").props.style).backgroundColor).toBeUndefined();
   });
 });

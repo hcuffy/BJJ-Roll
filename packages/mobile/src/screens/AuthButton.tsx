@@ -38,6 +38,8 @@ const styles = StyleSheet.create({
   danger: { minHeight: sizes.buttonHeight, backgroundColor: colours.danger },
   dangerText: {},
   dimmed: { backgroundColor: colours.surfaceRaised },
+  // A blocked secondary pill (e.g. "Resend in 0:30") drops its fill, so it reads as "not yet" next to an active one.
+  blockedSecondary: { backgroundColor: "transparent" },
   pressed: { transform: [{ scale: 0.98 }] },
   label: { ...typeScale.body, fontWeight: "600", textAlign: "center", color: colours.textPrimary },
   labelOnPrimary: { color: colours.onPrimary },
@@ -73,6 +75,7 @@ export function AuthButton({
         styles.base,
         styles[variant],
         dimmed && variant !== "tertiary" && variant !== "dangerText" && styles.dimmed,
+        disabled && !loading && variant === "secondary" && styles.blockedSecondary,
         pressed && styles.pressed,
       ]}>
       {loading ? <ActivityIndicator size="small" color={onPrimary ? colours.onPrimary : colours.textPrimary} /> : null}

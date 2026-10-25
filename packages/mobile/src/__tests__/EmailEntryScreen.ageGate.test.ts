@@ -52,7 +52,7 @@ describe("EmailEntryScreen", () => {
     // Dimmed, but still pressable, so it must not tell screen readers it is disabled; the hint explains what is missing.
     expect(screen.getPressable("Continue").props.disabled).toBe(false);
     expect(screen.getPressable("Continue").props.accessibilityState).toMatchObject({ disabled: false });
-    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Enter your email and tick the 17 or older box first.");
+    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Tick the 17 or older box first.");
     await screen.press("Continue");
     expect(screen.text()).toContain("Tick the box to confirm you are 17 or older.");
     expect(screen.getByRole("checkbox").props.accessibilityHint).toBe("Tick the box to confirm you are 17 or older.");
@@ -64,6 +64,24 @@ describe("EmailEntryScreen", () => {
     await screen.pressRole("checkbox");
     expect(screen.text()).not.toContain("Tick the box to confirm");
     expect(flattenStyle(screen.getPressable("Continue").props.style).backgroundColor).toBe(colours.primary);
+  });
+
+  it("hints only what is missing, on both dimmed send buttons, and drops the hint once ready", async () => {
+    const hints = (screen: Awaited<ReturnType<typeof renderEmailEntry>>) => [
+      screen.getPressable("Continue").props.accessibilityHint,
+      screen.getPressable("Email me a sign-in link instead").props.accessibilityHint,
+    ];
+    const screen = await renderEmailEntry();
+    expect(hints(screen)).toEqual(Array(2).fill("Enter your email and tick the 17 or older box first."));
+
+    await screen.changeText("Email", "member@example.test");
+    expect(hints(screen)).toEqual(Array(2).fill("Tick the 17 or older box first."));
+
+    await screen.pressRole("checkbox");
+    expect(hints(screen)).toEqual([undefined, undefined]);
+
+    await screen.changeText("Email", "member@example");
+    expect(hints(screen)).toEqual(Array(2).fill("Enter your email first."));
   });
 
   it("shows an inline email error when the field is left with an invalid address, and clears it on edit", async () => {
@@ -197,8 +215,13 @@ describe("EmailEntryScreen", () => {
 
     // Same 30s cooldown as Resend code.
     expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
+    // Blocked: no fill and a muted label. Ready again: the surface-2 pill with a white label.
+    expect(flattenStyle(screen.getPressable("Resend in 0:30").props.style).backgroundColor).toBe("transparent");
+    expect(flattenStyle(screen.queryByText("Resend in 0:30")?.props.style).color).toBe(colours.textSecondary);
     await vi.advanceTimersByTimeAsync(30_000);
     await screen.rerender();
+    expect(flattenStyle(screen.getPressable("Resend link").props.style).backgroundColor).toBe(colours.surfaceRaised);
+    expect(flattenStyle(screen.queryByText("Resend link")?.props.style).color).toBe(colours.textPrimary);
     await screen.press("Resend link");
     expect(backend.requests.filter((request) => request.url.endsWith("/sign-in/magic-link"))).toHaveLength(2);
     expect(screen.text()).toContain("We sent a new link to member@example.test.");
