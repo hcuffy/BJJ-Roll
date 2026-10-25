@@ -49,15 +49,18 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
 };
 
 /**
- * Enforces the Postgres-backed 3 sends / email / 15 minutes rate limit using the keyed email HMAC (never plaintext email).
- * Fixed window from the first send; `public.rate_limits` comes from migration 002 (no runtime DDL).
+ * Key of the per-email send counter in `public.rate_limits`; the email HMAC equals `users.email_hash`.
+ * The row is not removed on account deletion; it ages out with its window (HEN-65).
  */
-export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {
-  const emailHmac = codec.computeEmailHmac(rawEmail);
-  const rateLimitKey = `email:${emailHmac}`;
-  const nowMilliseconds = Date.now();
-  const windowMilliseconds = RATE_LIMIT_WINDOW_SECONDS * 1000;
+export function emailRateLimitKey(emailHmac: string): string {
+  return `email:${emailHmac}`;
+}
 
+/**
+ * One more request on this `public.rate_limits` key, counted atomically (one upsert), so parallel requests each count.
+ * Fixed window from the first request. Returns the count in the current window.
+ */
+export async function incrementRateLimitCounter(pool: Pool, key: string, windowSeconds: number): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -75,20 +78,44 @@ export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCrypto
            ELSE public.rate_limits.last_request
          END
        RETURNING count`,
-      [randomUUID(), rateLimitKey, nowMilliseconds, windowMilliseconds],
+      [randomUUID(), key, Date.now(), windowSeconds * 1000],
     );
     await client.query("COMMIT");
-
-    const currentCount = result.rows[0]?.count ?? 1;
-    if (currentCount > MAX_SENDS_PER_EMAIL_PER_WINDOW) {
-      throw new APIError("TOO_MANY_REQUESTS", {
-        message: "Too many verification emails requested for this address. Please try again later.",
-      });
-    }
+    return result.rows[0]?.count ?? 1;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally {
     client.release();
+  }
+}
+
+/** Drops the counter for this key, so its budget starts again. */
+export async function resetRateLimitCounter(pool: Pool, key: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL ROLE bjj_app");
+    await client.query("DELETE FROM public.rate_limits WHERE key = $1", [key]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Enforces the Postgres-backed 3 sends / email / 15 minutes rate limit using the keyed email HMAC (never plaintext email).
+ * Fixed window from the first send; `public.rate_limits` comes from migration 002 (no runtime DDL).
+ */
+export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {
+  const rateLimitKey = emailRateLimitKey(codec.computeEmailHmac(rawEmail));
+  const currentCount = await incrementRateLimitCounter(pool, rateLimitKey, RATE_LIMIT_WINDOW_SECONDS);
+  if (currentCount > MAX_SENDS_PER_EMAIL_PER_WINDOW) {
+    throw new APIError("TOO_MANY_REQUESTS", {
+      message: "Too many verification emails requested for this address. Please try again later.",
+    });
   }
 }

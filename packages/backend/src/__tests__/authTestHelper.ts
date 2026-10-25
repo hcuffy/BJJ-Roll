@@ -32,20 +32,20 @@ export interface StartedAuthTestEnvironment {
 }
 
 export async function startAuthTestEnvironment(
-  overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger">>,
+  overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger">> & { emailSender?: FakeEmailSender },
 ): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
   const appLogin = await createAppRoleLoginPool(database);
   const secrets = generateTestAuthSecrets();
   const keyring = loadAuthKeyringFromEnvironment(secrets);
   const codec = createAuthCryptoCodec(keyring);
-  const emailSender = new FakeEmailSender();
+  const { emailSender = new FakeEmailSender(), ...authOverrides } = overrides ?? {};
   const auth = createAuth({
     pool: appLogin.pool,
     emailSender,
     keyring,
     baseURL: testBaseUrl,
-    ...overrides,
+    ...authOverrides,
   });
   const app = createApp({ auth, database: createDatabase(appLogin.pool) });
 

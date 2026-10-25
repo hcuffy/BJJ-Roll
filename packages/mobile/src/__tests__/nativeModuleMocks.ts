@@ -7,8 +7,9 @@ vi.mock("react-native", async () => ({
   Keyboard: { addListener: (await import("./keyboardHarness")).harnessKeyboardAddListener },
   // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
-  AccessibilityInfo: { announceForAccessibility: vi.fn() },
+  AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },
   AppState: { addEventListener: () => ({ remove: () => undefined }) },
+  Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })) },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
   Pressable: "Pressable",
