@@ -22,5 +22,5 @@ reason = "undici 8.11.2 via testcontainers (backend dev only). Fixed version 8.1
 
 [[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
-ignoreUntil = 2026-10-28T00:00:00Z
+ignoreUntil = 2026-11-20T00:00:00Z
 reason = "zod 3.25.76: tooling only via @expo/cli, no 3.x fix, Expo SDK 57 pinned."
