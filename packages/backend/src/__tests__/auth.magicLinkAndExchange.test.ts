@@ -45,7 +45,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     const ipAddress = "198.51.100.21";
 
     const sendResponse = await postAuthJson(app, "/sign-in/magic-link", {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL },
+      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, ageConfirmed: true },
       ipAddress,
     });
     expect(sendResponse.status).toBe(200);
@@ -137,7 +137,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     try {
       // Magic link used 1 second after 15 minutes: rejected, no exchange code.
       vi.setSystemTime(startMs);
-      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.one@example.com" }, ipAddress });
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.one@example.com", ageConfirmed: true }, ipAddress });
       const expiredLink = latestMagicLinkFor("expired.magic.one@example.com");
       vi.setSystemTime(startMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 + 1000);
       const expiredVerify = await getAuthPath(app, expiredLink, { ipAddress });
@@ -147,7 +147,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       // Magic link used 1 second before 15 minutes: accepted.
       const secondStartMs = startMs + 60 * 60 * 1000;
       vi.setSystemTime(secondStartMs);
-      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com" }, ipAddress });
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com", ageConfirmed: true }, ipAddress });
       const validLink = latestMagicLinkFor("expired.magic.two@example.com");
       vi.setSystemTime(secondStartMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 - 1000);
       const validVerify = await getAuthPath(app, validLink, { ipAddress });
@@ -162,7 +162,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       expect(extractSessionCookie(expiredExchange)).toBe("");
 
       // A fresh code used at 59 seconds: accepted.
-      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com" }, ipAddress });
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com", ageConfirmed: true }, ipAddress });
       const thirdLink = latestMagicLinkFor("expired.magic.two@example.com");
       const thirdVerify = await getAuthPath(app, thirdLink, { ipAddress });
       const onTimeCode = new URL(thirdVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
@@ -201,7 +201,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
         requestIndex += 1;
         const sentBefore = emailSender.sentMessages.length;
         const response = await postAuthJson(app, "/sign-in/magic-link", {
-          body: { email: `redirect.post.${String(requestIndex)}@example.com`, callbackURL: DEEP_LINK_CALLBACK_URL, [parameter]: hostile },
+          body: {
+            email: `redirect.post.${String(requestIndex)}@example.com`,
+            callbackURL: DEEP_LINK_CALLBACK_URL,
+            [parameter]: hostile,
+            ageConfirmed: true,
+          },
           ipAddress: `198.51.101.${String(requestIndex)}`,
         });
         expect({ parameter, hostile, status: response.status }).toEqual({ parameter, hostile, status: 400 });
@@ -215,7 +220,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
   it("open redirect: GET /magic-link/verify rejects every non-bjjroll redirect parameter with 400, never 302, and keeps the token", async () => {
     const { app } = current();
     const email = "redirect.verify@example.com";
-    await postAuthJson(app, "/sign-in/magic-link", { body: { email }, ipAddress: "198.51.102.1" });
+    await postAuthJson(app, "/sign-in/magic-link", { body: { email, ageConfirmed: true }, ipAddress: "198.51.102.1" });
     const magicLink = new URL(latestMagicLinkFor(email));
     let requestIndex = 0;
     for (const parameter of redirectParameters) {

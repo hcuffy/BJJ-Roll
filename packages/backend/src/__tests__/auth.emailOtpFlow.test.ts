@@ -45,7 +45,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     const ipAddress = "198.51.100.11";
 
     const sendResponse = await postAuthJson(app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in" },
+      body: { email, type: "sign-in", ageConfirmed: true },
       ipAddress,
     });
     expect(sendResponse.status).toBe(200);
@@ -109,7 +109,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(startMs);
-      await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email: "expired.otp@example.com", type: "sign-in" }, ipAddress });
+      await postAuthJson(app, "/email-otp/send-verification-otp", {
+        body: { email: "expired.otp@example.com", type: "sign-in", ageConfirmed: true },
+        ipAddress,
+      });
       const expiredCode = latestOtpFor("expired.otp@example.com");
       vi.setSystemTime(startMs + OTP_EXPIRY_SECONDS * 1000 + 1000);
       const expiredResponse = await postAuthJson(app, "/sign-in/email-otp", {
@@ -121,7 +124,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
 
       const secondStartMs = startMs + 60 * 60 * 1000;
       vi.setSystemTime(secondStartMs);
-      await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email: "ontime.otp@example.com", type: "sign-in" }, ipAddress });
+      await postAuthJson(app, "/email-otp/send-verification-otp", {
+        body: { email: "ontime.otp@example.com", type: "sign-in", ageConfirmed: true },
+        ipAddress,
+      });
       const onTimeCode = latestOtpFor("ontime.otp@example.com");
       vi.setSystemTime(secondStartMs + OTP_EXPIRY_SECONDS * 1000 - 1000);
       const onTimeResponse = await postAuthJson(app, "/sign-in/email-otp", { body: { email: "ontime.otp@example.com", otp: onTimeCode }, ipAddress });
@@ -135,7 +141,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     const { app } = current();
     const email = "reuse.otp@example.com";
     const ipAddress = "198.51.100.14";
-    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in" }, ipAddress });
+    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", ageConfirmed: true }, ipAddress });
     const otpCode = latestOtpFor(email);
 
     const firstUse = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: otpCode }, ipAddress });
@@ -153,7 +159,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     const ipAddress = "198.51.100.13";
 
     await postAuthJson(app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in" },
+      body: { email, type: "sign-in", ageConfirmed: true },
       ipAddress,
     });
     const otpCode = latestOtpFor(email);

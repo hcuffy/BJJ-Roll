@@ -74,7 +74,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     for (let count = 1; count <= 15; count += 1) {
       const sentBefore = emailSender.sentMessages.length;
       const response = await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: `xff.rotate.${String(count)}@example.com`, type: "sign-in" },
+        body: { email: `xff.rotate.${String(count)}@example.com`, type: "sign-in", ageConfirmed: true },
         ipAddress: socketIp,
         headers: {
           "x-forwarded-for": `203.0.113.${String(count)}`,
@@ -97,14 +97,14 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     const rateEmail = "per.email.limit@example.com";
     for (let attempt = 1; attempt <= MAX_SENDS_PER_EMAIL_PER_WINDOW; attempt += 1) {
       const okResponse = await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: rateEmail, type: "sign-in" },
+        body: { email: rateEmail, type: "sign-in", ageConfirmed: true },
         ipAddress: `198.51.100.${String(30 + attempt)}`,
       });
       expect(okResponse.status).toBe(200);
     }
     const sentBeforeEmailOverflow = current().emailSender.sentMessages.length;
     const fourthEmailSend = await postAuthJson(app, "/sign-in/magic-link", {
-      body: { email: rateEmail, callbackURL: DEEP_LINK_CALLBACK_URL },
+      body: { email: rateEmail, callbackURL: DEEP_LINK_CALLBACK_URL, ageConfirmed: true },
       ipAddress: "198.51.100.39",
     });
     expect(fourthEmailSend.status).toBe(429);
@@ -115,14 +115,14 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     const sharedSendIp = "198.51.100.50";
     for (let count = 1; count <= MAX_SENDS_PER_IP_PER_WINDOW; count += 1) {
       const okResponse = await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: `ip.send.${String(count)}@example.com`, type: "sign-in" },
+        body: { email: `ip.send.${String(count)}@example.com`, type: "sign-in", ageConfirmed: true },
         ipAddress: sharedSendIp,
       });
       expect(okResponse.status).toBe(200);
     }
     const sentBeforeIpOverflow = current().emailSender.sentMessages.length;
     const eleventhIpSend = await postAuthJson(app, "/email-otp/send-verification-otp", {
-      body: { email: "ip.send.overflow@example.com", type: "sign-in" },
+      body: { email: "ip.send.overflow@example.com", type: "sign-in", ageConfirmed: true },
       ipAddress: sharedSendIp,
     });
     expect(eleventhIpSend.status).toBe(429);
@@ -163,7 +163,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     try {
       // Run OTP flow for Alpha
       await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: emailAlpha, type: "sign-in" },
+        body: { email: emailAlpha, type: "sign-in", ageConfirmed: true },
         ipAddress,
       });
       const otpAlpha = latestOtpFor(emailAlpha);
@@ -178,7 +178,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
 
       // Run Magic Link + Exchange flow for Bravo
       await postAuthJson(app, "/sign-in/magic-link", {
-        body: { email: emailBravo, callbackURL: DEEP_LINK_CALLBACK_URL },
+        body: { email: emailBravo, callbackURL: DEEP_LINK_CALLBACK_URL, ageConfirmed: true },
         ipAddress,
       });
       const magicUrlBravo = latestMagicLinkFor(emailBravo);

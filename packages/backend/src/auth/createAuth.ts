@@ -10,6 +10,7 @@ import type { Context, Hono } from "hono";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
+import { ageGateRefusalForNewUser } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
@@ -123,6 +124,12 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
+        const ageGateRefusal = await ageGateRefusalForNewUser(middlewareContext.path, middlewareContext.body, (email) =>
+          middlewareContext.context.internalAdapter.findUserByEmail(email),
+        );
+        if (ageGateRefusal) {
+          return ageGateRefusal;
+        }
         if (middlewareContext.path === "/email-otp/send-verification-otp" || middlewareContext.path === "/sign-in/magic-link") {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
           if (typeof body?.email === "string" && body.email.includes("@")) {

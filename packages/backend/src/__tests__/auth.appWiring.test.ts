@@ -111,7 +111,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 handle routes use
     const { app, emailSender } = environment;
     const ipAddress = "198.51.100.95";
     const email = "handle.wiring@example.com";
-    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in" }, ipAddress });
+    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", ageConfirmed: true }, ipAddress });
     const sent = emailSender.sentMessages.at(-1);
     if (sent?.kind !== "one_time_code") {
       throw new Error("No OTP sent");
