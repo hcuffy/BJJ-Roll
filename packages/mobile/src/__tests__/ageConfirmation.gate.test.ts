@@ -28,8 +28,8 @@ describe("age confirmation gate", () => {
     const codeResult = await sendEmailCode(client, { email: "member@example.test", ageConfirmed: false });
     const linkResult = await sendMagicLink(client, { email: "member@example.test", ageConfirmed: false });
 
-    expect(codeResult).toEqual({ ok: false, message: AGE_GATE_REFUSAL_MESSAGE });
-    expect(linkResult).toEqual({ ok: false, message: AGE_GATE_REFUSAL_MESSAGE });
+    expect(codeResult).toEqual({ ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE });
+    expect(linkResult).toEqual({ ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE });
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 });

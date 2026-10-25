@@ -3,7 +3,9 @@ import { vi } from "vitest";
 // Stand-ins for the native modules the app loads, so it runs under Vitest in Node.
 // Host components are plain strings that screenHarness.ts renders and queries.
 vi.mock("react-native", () => ({
+  // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
+  AccessibilityInfo: { announceForAccessibility: vi.fn() },
   AppState: { addEventListener: () => ({ remove: () => undefined }) },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
@@ -11,6 +13,10 @@ vi.mock("react-native", () => ({
   Text: "Text",
   TextInput: "TextInput",
   View: "View",
+  KeyboardAvoidingView: "KeyboardAvoidingView",
+  ScrollView: "ScrollView",
+  StatusBar: "StatusBar",
+  SafeAreaView: "SafeAreaView",
 }));
 vi.mock("react", async (importOriginal) => {
   const { harnessUseEffect, harnessUseState } = await import("./screenHarness");

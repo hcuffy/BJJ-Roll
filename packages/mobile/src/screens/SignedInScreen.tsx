@@ -1,7 +1,7 @@
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
-import { authStyles } from "./authStyles";
+import { AuthScreenLayout } from "./AuthScreenLayout";
 
 export interface SignedInScreenProps {
   readonly onSignOut: () => void;
@@ -10,9 +10,11 @@ export interface SignedInScreenProps {
 /** Placeholder until the real home screen lands. */
 export function SignedInScreen({ onSignOut }: SignedInScreenProps) {
   return (
-    <View style={authStyles.screen}>
-      <Text style={textStyles.title}>You are signed in</Text>
-      <AuthButton title="Sign out" onPress={onSignOut} />
-    </View>
+    <AuthScreenLayout>
+      <Text accessibilityRole="header" style={textStyles.display}>
+        You are signed in
+      </Text>
+      <AuthButton title="Sign out" variant="secondary" onPress={onSignOut} />
+    </AuthScreenLayout>
   );
 }
