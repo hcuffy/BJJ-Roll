@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@better-auth/expo": "1.7.7",
+    "@bjj-roll/shared": "workspace:*",
     "@expo/ui": "~57.0.22",
     "better-auth": "1.7.7",
     "expo": "~57.0.27",

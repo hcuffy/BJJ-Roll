@@ -1,4 +1,4 @@
-import { AGE_REQUIRED_MESSAGE, isEmailAddress, type EmailEntry } from "./ageConfirmation";
+import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, type EmailEntry } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
@@ -6,11 +6,13 @@ export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string | null };
 
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
+/** Error code of the backend's 400 when a new account is requested without `ageConfirmed: true` (HEN-77). */
+export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 const OTP_PATTERN = /^\d{6}$/u;
 
 function checkEntry(entry: EmailEntry): ActionResult | null {
-  if (!entry.ageConfirmed) {
-    return { ok: false, message: AGE_REQUIRED_MESSAGE };
+  if (!isAgeConfirmed(entry)) {
+    return { ok: false, message: AGE_GATE_REFUSAL_MESSAGE };
   }
   if (!isEmailAddress(entry.email)) {
     return { ok: false, message: "Enter a valid email address." };
@@ -20,6 +22,9 @@ function checkEntry(entry: EmailEntry): ActionResult | null {
 
 async function postAuth(client: MobileAuthClient, path: string, body: Record<string, unknown>): Promise<ActionResult> {
   const { error } = await client.$fetch(path, { method: "POST", body });
+  if (error && "code" in error && error.code === AGE_CONFIRMATION_REQUIRED_CODE) {
+    return { ok: false, message: AGE_GATE_REFUSAL_MESSAGE };
+  }
   if (error) {
     return { ok: false, message: error.message ?? GENERIC_ERROR_MESSAGE };
   }

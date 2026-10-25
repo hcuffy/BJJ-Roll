@@ -1,3 +1,4 @@
+import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
@@ -59,17 +60,17 @@ describe("EmailEntryScreen", () => {
     expect(sentTo).toEqual(["member@example.test"]);
   });
 
-  it("shows the backend's age-gate refusal message instead of moving on", async () => {
-    const refusalMessage = "Server refusal from the age gate";
+  it("shows the shared 17+ refusal message when the backend refuses with AGE_CONFIRMATION_REQUIRED", async () => {
+    const serverWording = "Server wording for the age gate";
     backend.fetchImplementation.mockImplementationOnce(() =>
-      Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: refusalMessage }, { status: 400 })),
+      Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: serverWording }, { status: 400 })),
     );
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
     await screen.pressRole("checkbox");
     await screen.press("Continue");
 
-    expect(screen.queryByText(refusalMessage)).not.toBeNull();
+    expect(screen.queryByText(AGE_GATE_REFUSAL_MESSAGE)).not.toBeNull();
     expect(sentTo).toEqual([]);
   });
 });

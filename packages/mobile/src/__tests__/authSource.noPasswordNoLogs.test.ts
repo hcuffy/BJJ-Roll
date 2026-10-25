@@ -34,4 +34,12 @@ describe("mobile app source", () => {
       expect(text, filePath).not.toMatch(/console\.|__DEV__|devCode/u);
     }
   });
+
+  it("takes the 17+ rule from @bjj-roll/shared instead of a local copy (HEN-77)", () => {
+    const ageConfirmation = sourceFiles.find(({ filePath }) => filePath.endsWith("ageConfirmation.ts"));
+    expect(ageConfirmation?.text).toMatch(/from "@bjj-roll\/shared"/u);
+    for (const { filePath, text } of sourceFiles) {
+      expect(text, filePath).not.toMatch(/You must be 17 or older|TODO\(HEN-77\)/u);
+    }
+  });
 });

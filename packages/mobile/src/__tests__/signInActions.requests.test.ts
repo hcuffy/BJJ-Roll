@@ -1,3 +1,4 @@
+import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { completeMagicLink, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
@@ -72,5 +73,21 @@ describe("sign-in requests", () => {
     expect(await completeMagicLink(client, "bjjroll://auth")).toEqual({ ok: false, message: null });
     expect((await completeMagicLink(client, "bjjroll://auth?error=INVALID_TOKEN")).ok).toBe(false);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
+  });
+
+  it("turns the backend's 400 AGE_CONFIRMATION_REQUIRED into the shared 17+ refusal message", async () => {
+    const { backend, client } = createTestClient();
+    backend.fetchImplementation.mockImplementation(() =>
+      Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: "server wording" }, { status: 400 })),
+    );
+
+    expect(await sendEmailCode(client, { email: "member@example.test", ageConfirmed: true })).toEqual({
+      ok: false,
+      message: AGE_GATE_REFUSAL_MESSAGE,
+    });
+    expect(await sendMagicLink(client, { email: "member@example.test", ageConfirmed: true })).toEqual({
+      ok: false,
+      message: AGE_GATE_REFUSAL_MESSAGE,
+    });
   });
 });
