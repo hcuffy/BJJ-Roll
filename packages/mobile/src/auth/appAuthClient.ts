@@ -7,4 +7,6 @@ import { createMobileAuthClient } from "./authClient";
 export const appSecureStore = SecureStore;
 
 /** The app's auth client: backend URL from Expo config, session kept only in SecureStore. */
-export const appAuthClient = createMobileAuthClient({ backendUrl: readBackendUrl(Constants.expoConfig), storage: SecureStore });
+/** Backend origin; the account routes (HEN-65) sit outside /api/auth, so they are called by absolute URL. */
+export const appBackendUrl = readBackendUrl(Constants.expoConfig);
+export const appAuthClient = createMobileAuthClient({ backendUrl: appBackendUrl, storage: SecureStore });

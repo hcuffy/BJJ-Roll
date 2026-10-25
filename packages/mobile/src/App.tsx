@@ -2,7 +2,8 @@ import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { appAuthClient, appSecureStore } from "./auth/appAuthClient";
+import { deleteAccount, exportAccountData, type AccountSession } from "./auth/accountActions";
+import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -36,6 +37,8 @@ export function App() {
     });
   }, [deepLinkUrl]);
 
+  const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
+
   const handleSignOut = () => {
     void signOut(appAuthClient, appSecureStore).finally(() => setScreen({ name: "email" }));
   };
@@ -63,7 +66,14 @@ export function App() {
         );
       }
       case "signedIn": {
-        return <SignedInScreen onSignOut={handleSignOut} />;
+        return (
+          <SignedInScreen
+            onSignOut={handleSignOut}
+            onExportData={() => exportAccountData(accountSession())}
+            onDeleteAccount={() => deleteAccount(accountSession())}
+            onAccountDeleted={() => setScreen({ name: "email" })}
+          />
+        );
       }
       case "code": {
         return (

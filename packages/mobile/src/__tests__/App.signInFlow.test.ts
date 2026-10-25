@@ -14,6 +14,7 @@ vi.mock("../auth/appAuthClient", () => ({
   get appSecureStore() {
     return appClient.store;
   },
+  appBackendUrl: "http://backend.test",
 }));
 
 const { App } = await import("../App");
@@ -66,6 +67,28 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     const restartedAfterSignOut = await startApp();
     expect(restartedAfterSignOut.text()).toContain("Sign in to BJJ Roll");
+  });
+
+  it("delete account (HEN-65): confirm, DELETE /account with the session cookie, then back to signed-out, also after a restart", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Continue");
+    await screen.changeText("6-digit code", "123456");
+    expect(screen.text()).toContain("You are signed in");
+
+    await screen.press("Delete account");
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Sign in to BJJ Roll");
+    const deleteRequests = backend.requests.filter((request) => request.method === "DELETE");
+    expect(deleteRequests.map((request) => request.url)).toEqual([`${TEST_BACKEND_URL}/account`]);
+    expect(deleteRequests[0]?.cookie).toContain("signed-session-value");
+    expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
+    expect(secureStore.items.has("bjjroll_session_data")).toBe(false);
+
+    const restarted = await startApp();
+    expect(restarted.text()).toContain("Sign in to BJJ Roll");
   });
 
   it("magic link: requests a bjjroll://auth link, then opening the link signs the user in", async () => {

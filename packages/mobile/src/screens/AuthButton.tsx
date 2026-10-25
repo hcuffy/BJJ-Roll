@@ -4,8 +4,11 @@ import { colours, radius, sizes, spacing, typeScale } from "../theme/tokens";
 export interface AuthButtonProps {
   readonly title: string;
   readonly onPress: () => void;
-  /** primary: the one lime pill per screen. secondary: surface-2 pill. tertiary: text-only, still 48dp tall. */
-  readonly variant?: "primary" | "secondary" | "tertiary";
+  /**
+   * primary: the one lime pill per screen. secondary: surface-2 pill. tertiary: text-only, still 48dp tall.
+   * danger: red-orange pill with a dark text label, only for the confirm step of an action that cannot be undone.
+   */
+  readonly variant?: "primary" | "secondary" | "tertiary" | "danger";
   readonly disabled?: boolean;
   /** Looks disabled but stays pressable (and is announced as enabled), so a tap can explain what is missing. */
   readonly looksDisabled?: boolean;
@@ -28,6 +31,7 @@ const styles = StyleSheet.create({
   primary: { minHeight: sizes.buttonHeight, backgroundColor: colours.primary },
   secondary: { backgroundColor: colours.surfaceRaised },
   tertiary: {},
+  danger: { minHeight: sizes.buttonHeight, backgroundColor: colours.danger },
   dimmed: { backgroundColor: colours.surfaceRaised },
   pressed: { transform: [{ scale: 0.98 }] },
   label: { ...typeScale.body, fontWeight: "600", textAlign: "center", color: colours.textPrimary },
@@ -46,9 +50,10 @@ export function AuthButton({
   accessibilityHint,
 }: AuthButtonProps) {
   const blocked = disabled || loading;
-  // While loading the pill keeps its lime fill; otherwise disabled is shown by fill and label colour, not opacity.
+  // While loading the pill keeps its fill; otherwise disabled is shown by fill and label colour, not opacity.
   const dimmed = !loading && (disabled || looksDisabled);
-  const onPrimary = variant === "primary" && !dimmed;
+  // Primary (lime) and danger (red-orange) fills both take the dark label.
+  const onPrimary = (variant === "primary" || variant === "danger") && !dimmed;
   return (
     <Pressable
       accessibilityRole="button"
