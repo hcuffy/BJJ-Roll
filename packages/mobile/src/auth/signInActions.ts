@@ -1,5 +1,5 @@
 import { AGE_REQUIRED_MESSAGE, isEmailAddress, type EmailEntry } from "./ageConfirmation";
-import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
+import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 
@@ -88,7 +88,19 @@ export async function readSignedInUserId(client: MobileAuthClient): Promise<stri
   return data?.user.id ?? null;
 }
 
-/** Signs out on the server and clears the session cookie from SecureStore. */
-export async function signOut(client: MobileAuthClient): Promise<void> {
-  await client.signOut();
+/** The SecureStore keys the Expo auth client writes; sign-out deletes both. */
+export const SESSION_STORAGE_KEYS = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESSION_STORAGE_PREFIX}_session_data`] as const;
+
+export interface SessionKeyStore {
+  readonly deleteItemAsync: (key: string) => Promise<void>;
+}
+
+/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). */
+export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  try {
+    await client.signOut();
+  } catch {
+    // Offline or server error: the local session is still removed below, so the user is signed out on this phone.
+  }
+  await Promise.all(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
 }

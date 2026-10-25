@@ -1,7 +1,7 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-import { appAuthClient } from "./auth/appAuthClient";
+import { appAuthClient, appSecureStore } from "./auth/appAuthClient";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -34,7 +34,7 @@ export function App() {
   }, [deepLinkUrl]);
 
   const handleSignOut = () => {
-    void signOut(appAuthClient).finally(() => setScreen({ name: "email" }));
+    void signOut(appAuthClient, appSecureStore).finally(() => setScreen({ name: "email" }));
   };
 
   switch (screen.name) {
