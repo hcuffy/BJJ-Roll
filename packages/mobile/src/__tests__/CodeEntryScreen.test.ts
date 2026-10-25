@@ -122,6 +122,21 @@ describe("CodeEntryScreen", () => {
     expect(signedIn).toBe(0);
   });
 
+  it("lets the user retry after a wrong code", async () => {
+    backend.fetchImplementation.mockImplementationOnce(() =>
+      Promise.resolve(Response.json({ code: "INVALID_OTP", message: "Invalid OTP" }, { status: 400 })),
+    );
+    const screen = await renderCodeEntry();
+    await screen.changeText("6-digit code", "000000");
+    await screen.rerender();
+    expect(signedIn).toBe(0);
+
+    await screen.changeText("6-digit code", "123456");
+    await screen.rerender();
+
+    expect(signedIn).toBe(1);
+  });
+
   it("offers Resend code after a 30 second countdown, sends a new code, and restarts the countdown", async () => {
     vi.useFakeTimers();
     const screen = await renderCodeEntry();
