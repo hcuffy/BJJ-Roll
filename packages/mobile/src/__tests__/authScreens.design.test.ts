@@ -18,7 +18,13 @@ const client = createMobileAuthClient({
 const emailEntry = () => createElement(EmailEntryScreen, { client, onCodeSent: () => undefined });
 const codeEntry = () =>
   createElement(CodeEntryScreen, { client, email: "member@example.test", onSignedIn: () => undefined, onBack: () => undefined });
-const signedIn = () => createElement(SignedInScreen, { onSignOut: () => undefined });
+const signedIn = () =>
+  createElement(SignedInScreen, {
+    onSignOut: () => undefined,
+    onExportData: () => Promise.resolve({ ok: true, json: "{}" } as const),
+    onDeleteAccount: () => Promise.resolve({ ok: true } as const),
+    onAccountDeleted: () => undefined,
+  });
 const screens: [string, () => ReactElement][] = [
   ["email entry", emailEntry],
   ["code entry", codeEntry],
