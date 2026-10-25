@@ -8,6 +8,7 @@ import {
   RATE_LIMIT_WINDOW_SECONDS,
 } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
+import { emailRateLimitKey } from "../database/cascadeDelete.js";
 
 export interface RateLimitRuleConfig {
   readonly window: number;
@@ -54,7 +55,7 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
  */
 export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {
   const emailHmac = codec.computeEmailHmac(rawEmail);
-  const rateLimitKey = `email:${emailHmac}`;
+  const rateLimitKey = emailRateLimitKey(emailHmac);
   const nowMilliseconds = Date.now();
   const windowMilliseconds = RATE_LIMIT_WINDOW_SECONDS * 1000;
 

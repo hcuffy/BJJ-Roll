@@ -1,6 +1,7 @@
 export {
   accountDeletionCascadeMap,
   cascadeDeleteUserAccount,
+  emailRateLimitKey,
   verificationIdentifiersForEmailHash,
   type AccountDeletionCascadeStep,
   type CascadeDeleteAccountResult,
@@ -18,6 +19,7 @@ export {
   type AccountsTable,
   type BjjRollDatabase,
   type DatabaseSchema,
+  type RateLimitsTable,
   type SessionsTable,
   type UserDataTableName,
   type UsersTable,

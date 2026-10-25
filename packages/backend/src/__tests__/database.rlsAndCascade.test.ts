@@ -3,6 +3,7 @@ import {
   accountDeletionCascadeMap,
   cascadeDeleteUserAccount,
   createUserAccountRoutes,
+  emailRateLimitKey,
   userDataTables,
   withAppRoleUnscoped,
   withUserContext,
@@ -210,7 +211,7 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
   it("AC 2: deleting a user cascades and removes their sessions, accounts, and OTP/verification rows", async () => {
     const { db, pool } = requireHarness();
 
-    expect(accountDeletionCascadeMap.map((entry) => entry.table)).toEqual(["verifications", "sessions", "accounts", "users"]);
+    expect(accountDeletionCascadeMap.map((entry) => entry.table)).toEqual(["rate_limits", "verifications", "sessions", "accounts", "users"]);
     expect(new Set(accountDeletionCascadeMap.map((entry) => entry.table))).toEqual(new Set(userDataTables));
 
     await withUserContext(db, userAlpha.id, async (transaction) => {
@@ -226,13 +227,24 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
     expect(remainingAlphaAccounts.rows).toEqual([]);
     expect(remainingAlphaVerifications.rows).toEqual([]);
 
+    // HEN-65: the per-email send counter goes with the account; a per-IP counter is not user data and stays.
+    await pool.query("INSERT INTO public.rate_limits (id, key, count, last_request) VALUES ($1, $2, 1, 0), ($3, $4, 1, 0)", [
+      "rate-limit-bravo-email",
+      emailRateLimitKey(userBravo.emailHash),
+      "rate-limit-shared-ip",
+      "203.0.113.10/email-otp/send-verification-otp",
+    ]);
+
     const cascadeResult = await cascadeDeleteUserAccount(db, userBravo.id);
     expect(cascadeResult).toEqual({
       deletedUserCount: 1,
       deletedSessionCount: 1,
       deletedAccountCount: 1,
       deletedVerificationCount: 2,
+      deletedRateLimitCount: 1,
     });
+    const remainingRateLimits = await pool.query<{ id: string }>("SELECT id FROM public.rate_limits ORDER BY id");
+    expect(remainingRateLimits.rows).toEqual([{ id: "rate-limit-shared-ip" }]);
 
     const totalRemaining = await pool.query<{ count: number }>(
       `SELECT (

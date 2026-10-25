@@ -1,6 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { Pool } from "pg";
+import { mountAccountRoutes } from "./accountRoutes.js";
 import { createAuth, mountAuthRoutes, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
 import { createDatabase } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
@@ -9,8 +10,8 @@ import { mountHandleRoutes } from "./handleRoutes.js";
 import { loadServerConfig, type ServerConfig, type ServerEnvironment } from "./serverConfig.js";
 
 export interface CreateAppOptions {
-  readonly auth?: Pick<AuthInstance, "handler" | "resolveSessionUserId"> | CreateAuthOptions;
-  /** When set together with auth, mounts the handle routes with the auth session as the user resolver. */
+  readonly auth?: Pick<AuthInstance, "handler" | "resolveSessionUserId" | "codec"> | CreateAuthOptions;
+  /** When set together with auth, mounts the handle and account routes with the auth session as the user resolver. */
   readonly database?: Kysely<BjjRollDatabase>;
 }
 
@@ -23,9 +24,12 @@ export function createApp(options?: CreateAppOptions): Hono {
     const authInstance = "handler" in options.auth ? options.auth : createAuth(options.auth);
     mountAuthRoutes(honoApp, authInstance);
     if (options.database) {
-      mountHandleRoutes(honoApp, {
+      const resolveAuthenticatedUserId = (context: Context) => authInstance.resolveSessionUserId(context.req.raw.headers);
+      mountHandleRoutes(honoApp, { db: options.database, resolveAuthenticatedUserId });
+      mountAccountRoutes(honoApp, {
         db: options.database,
-        resolveAuthenticatedUserId: (context) => authInstance.resolveSessionUserId(context.req.raw.headers),
+        resolveAuthenticatedUserId,
+        decryptUserEmail: (emailCiphertext, keyVersion) => authInstance.codec.decryptUserEmail(emailCiphertext, keyVersion),
       });
     }
   }
@@ -39,7 +43,7 @@ export interface ServerApp {
   readonly pool: Pool;
 }
 
-/** The production app: validates config (fails fast, never prints values), then mounts /health, /api/auth/*, and handle routes. */
+/** The production app: validates config (fails fast, never prints values), then mounts /health, /api/auth/*, handle routes and account routes. */
 export function createAppFromEnvironment(env: ServerEnvironment = process.env): ServerApp {
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });
