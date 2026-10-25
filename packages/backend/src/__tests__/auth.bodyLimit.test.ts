@@ -3,6 +3,14 @@ import { createApp } from "../app.js";
 import { AUTH_REQUEST_BODY_LIMIT_BYTES } from "../auth/index.js";
 import { socketEnvironment, testBaseUrl } from "./authTestHelper.js";
 
+// Pinned on purpose: the test must fail if the limit drifts from 32 KiB (for example to 1 MiB).
+const expectedLimitBytes = 32 * 1024;
+
+function authBodyOfSize(byteLength: number): string {
+  const emptyBody = JSON.stringify({ email: "@example.test" });
+  return JSON.stringify({ email: `${"x".repeat(byteLength - emptyBody.length)}@example.test` });
+}
+
 describe("HEN-71 auth body limit", () => {
   const app = createApp({
     auth: {
@@ -11,27 +19,31 @@ describe("HEN-71 auth body limit", () => {
     },
   });
 
-  it("returns 413 for an oversized /api/auth body and lets a normal-size auth request through", async () => {
-    const oversizedBody = JSON.stringify({ email: `${"x".repeat(AUTH_REQUEST_BODY_LIMIT_BYTES)}@example.test` });
-    expect(new TextEncoder().encode(oversizedBody).byteLength).toBeGreaterThan(AUTH_REQUEST_BODY_LIMIT_BYTES);
-
-    const oversized = await app.request(
+  const postAuth = (body: string, ipAddress: string, headers: Record<string, string> = {}) =>
+    app.request(
       `${testBaseUrl}/api/auth/sign-in/email-otp`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: oversizedBody },
-      socketEnvironment("198.51.100.20"),
+      { method: "POST", headers: { "content-type": "application/json", ...headers }, body },
+      socketEnvironment(ipAddress),
     );
-    expect(oversized.status).toBe(413);
 
-    const normal = await app.request(
-      `${testBaseUrl}/api/auth/sign-in/email-otp`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: "member@example.test", otp: "123456" }),
-      },
-      socketEnvironment("198.51.100.21"),
-    );
-    expect(normal.status).not.toBe(413);
-    expect(normal.status).toBe(200);
+  it("keeps the limit at 32 KiB", () => {
+    expect(AUTH_REQUEST_BODY_LIMIT_BYTES).toBe(expectedLimitBytes);
+  });
+
+  it("lets a body just under 32 KiB through and returns 413 for a body just over it", async () => {
+    const justUnder = authBodyOfSize(expectedLimitBytes - 1);
+    const justOver = authBodyOfSize(expectedLimitBytes + 1);
+    expect(new TextEncoder().encode(justUnder).byteLength).toBe(expectedLimitBytes - 1);
+    expect(new TextEncoder().encode(justOver).byteLength).toBe(expectedLimitBytes + 1);
+
+    expect((await postAuth(justUnder, "198.51.100.21")).status).toBe(200);
+    expect((await postAuth(justOver, "198.51.100.20")).status).toBe(413);
+  });
+
+  it("returns 413 when the Content-Length header is over 32 KiB", async () => {
+    const response = await postAuth(JSON.stringify({ email: "member@example.test" }), "198.51.100.22", {
+      "content-length": String(expectedLimitBytes + 1),
+    });
+    expect(response.status).toBe(413);
   });
 });
