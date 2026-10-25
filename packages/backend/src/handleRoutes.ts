@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { sql, type Kysely } from "kysely";
-import { handleSchema, setHandleRequestSchema } from "../../shared/dist/index.js";
+import { handleSchema, setHandleRequestSchema } from "@bjj-roll/shared";
 import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
 

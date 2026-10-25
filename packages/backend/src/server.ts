@@ -1,8 +1,8 @@
 import { serve } from "@hono/node-server";
-import { app } from "./app.js";
+import { createAppFromEnvironment } from "./app.js";
 
-const port = 3000;
+const { app, config } = createAppFromEnvironment();
 
-serve({ fetch: app.fetch, port }, (info) => {
-  console.warn(`Backend listening on http://localhost:${info.port}`);
+serve({ fetch: app.fetch, port: config.port }, (info) => {
+  console.warn(`Backend listening on port ${String(info.port)}`);
 });

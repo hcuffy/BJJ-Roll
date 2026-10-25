@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEEP_LINK_CALLBACK_URL, MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS, MAGIC_LINK_EXPIRY_SECONDS } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import {
@@ -129,55 +129,119 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(secondExchange.status).toBe(401);
   });
 
-  it("rejects expired magic-link tokens and expired 60s exchange codes", async () => {
-    const { app, pool, codec } = current();
-    const email = "expired.magic@example.com";
+  it("AC 7 (fake clock): magic link valid 15 minutes, exchange code valid 60 seconds", async () => {
+    const { app } = current();
     const ipAddress = "198.51.100.22";
+    const startMs = Date.parse("2026-03-01T10:00:00.000Z");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      // Magic link used 1 second after 15 minutes: rejected, no exchange code.
+      vi.setSystemTime(startMs);
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.one@example.com" }, ipAddress });
+      const expiredLink = latestMagicLinkFor("expired.magic.one@example.com");
+      vi.setSystemTime(startMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 + 1000);
+      const expiredVerify = await getAuthPath(app, expiredLink, { ipAddress });
+      expect(expiredVerify.status).toBe(400);
+      expect(expiredVerify.headers.get("location") ?? "").not.toContain("code=");
 
-    // 1. Expired magic link
-    await postAuthJson(app, "/sign-in/magic-link", {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL },
-      ipAddress,
-    });
-    const firstMagicUrl = latestMagicLinkFor(email);
-    const firstRawToken = new URL(firstMagicUrl).searchParams.get("token") ?? "";
-    await pool.query("UPDATE public.verifications SET expires_at = now() - interval '1 second' WHERE identifier = $1", [
-      `magic-link:${codec.hashMagicLinkToken(firstRawToken)}`,
-    ]);
-    const expiredVerify = await getAuthPath(app, firstMagicUrl, { ipAddress });
-    expect(expiredVerify.headers.get("location") ?? "").not.toContain("code=");
+      // Magic link used 1 second before 15 minutes: accepted.
+      const secondStartMs = startMs + 60 * 60 * 1000;
+      vi.setSystemTime(secondStartMs);
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com" }, ipAddress });
+      const validLink = latestMagicLinkFor("expired.magic.two@example.com");
+      vi.setSystemTime(secondStartMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 - 1000);
+      const validVerify = await getAuthPath(app, validLink, { ipAddress });
+      expect(validVerify.status).toBe(302);
+      const lateCode = new URL(validVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
+      expect(lateCode.length).toBeGreaterThan(16);
 
-    // 2. Expired 60s exchange code
-    await postAuthJson(app, "/sign-in/magic-link", {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL },
-      ipAddress,
-    });
-    const secondMagicUrl = latestMagicLinkFor(email);
-    const validVerify = await getAuthPath(app, secondMagicUrl, { ipAddress });
-    const redirectLocation = validVerify.headers.get("location") ?? "";
-    const exchangeCode = new URL(redirectLocation).searchParams.get("code") ?? "";
-    expect(exchangeCode.length).toBeGreaterThan(16);
+      // Exchange code used 1 second after 60 seconds: rejected, and the row is gone (single use even when expired).
+      vi.setSystemTime(Date.now() + MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS * 1000 + 1000);
+      const expiredExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: lateCode }, ipAddress });
+      expect(expiredExchange.status).toBe(401);
+      expect(extractSessionCookie(expiredExchange)).toBe("");
 
-    await pool.query("UPDATE public.verifications SET expires_at = now() - interval '1 second' WHERE identifier = $1", [
-      `magic-link-exchange:${codec.hashExchangeCode(exchangeCode)}`,
-    ]);
-
-    const expiredExchange = await postAuthJson(app, "/exchange-code", {
-      body: { code: exchangeCode },
-      ipAddress,
-    });
-    expect(expiredExchange.status).toBe(401);
+      // A fresh code used at 59 seconds: accepted.
+      await postAuthJson(app, "/sign-in/magic-link", { body: { email: "expired.magic.two@example.com" }, ipAddress });
+      const thirdLink = latestMagicLinkFor("expired.magic.two@example.com");
+      const thirdVerify = await getAuthPath(app, thirdLink, { ipAddress });
+      const onTimeCode = new URL(thirdVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
+      vi.setSystemTime(Date.now() + (MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS - 1) * 1000);
+      const onTimeExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: onTimeCode }, ipAddress });
+      expect(onTimeExchange.status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("rejects non-bjjroll callbackURL to prevent open redirects", async () => {
+  it("AC 7: the /exchange-code alias is gone", async () => {
     const { app } = current();
-    const response = await postAuthJson(app, "/sign-in/magic-link", {
-      body: {
-        email: "redirect.check@example.com",
-        callbackURL: "https://evil.example.com/steal",
-      },
-      ipAddress: "198.51.100.23",
+    const response = await postAuthJson(app, "/exchange-code", { body: { code: "anything" }, ipAddress: "198.51.100.24" });
+    expect(response.status).toBe(404);
+  });
+
+  const hostileRedirects = [
+    "https://evil.example.com/steal",
+    "//evil.example.com",
+    "javascript:alert(1)",
+    "https%3A%2F%2Fevil.example.com",
+    "bjjroll://@evil.example.com",
+    "bjjroll://evil.example.com/callback",
+    "bjjroll://user:pass@auth/callback",
+    " bjjroll://auth/callback",
+    "bjjroll://auth.evil.example.com/callback",
+  ];
+  const redirectParameters = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
+
+  it("open redirect: POST /sign-in/magic-link rejects every non-bjjroll redirect parameter with 400 and sends no email", async () => {
+    const { app, emailSender } = current();
+    let requestIndex = 0;
+    for (const parameter of redirectParameters) {
+      for (const hostile of hostileRedirects) {
+        requestIndex += 1;
+        const sentBefore = emailSender.sentMessages.length;
+        const response = await postAuthJson(app, "/sign-in/magic-link", {
+          body: { email: `redirect.post.${String(requestIndex)}@example.com`, callbackURL: DEEP_LINK_CALLBACK_URL, [parameter]: hostile },
+          ipAddress: `198.51.101.${String(requestIndex)}`,
+        });
+        expect({ parameter, hostile, status: response.status }).toEqual({ parameter, hostile, status: 400 });
+        expect(response.headers.get("location")).toBeNull();
+        expect(((await response.json()) as { code: string }).code).toBe("INVALID_CALLBACK_URL");
+        expect(emailSender.sentMessages.length).toBe(sentBefore);
+      }
+    }
+  });
+
+  it("open redirect: GET /magic-link/verify rejects every non-bjjroll redirect parameter with 400, never 302, and keeps the token", async () => {
+    const { app } = current();
+    const email = "redirect.verify@example.com";
+    await postAuthJson(app, "/sign-in/magic-link", { body: { email }, ipAddress: "198.51.102.1" });
+    const magicLink = new URL(latestMagicLinkFor(email));
+    let requestIndex = 0;
+    for (const parameter of redirectParameters) {
+      for (const hostile of hostileRedirects) {
+        requestIndex += 1;
+        const url = new URL(magicLink);
+        url.searchParams.set(parameter, hostile);
+        const response = await getAuthPath(app, url.toString(), { ipAddress: `198.51.102.${String(requestIndex + 1)}` });
+        expect({ parameter, hostile, status: response.status }).toEqual({ parameter, hostile, status: 400 });
+        expect(response.headers.get("location")).toBeNull();
+      }
+    }
+
+    // A bad token with a hostile errorCallbackURL: still 400, no redirect to the error URL.
+    const badToken = await getAuthPath(app, "/magic-link/verify?token=not-a-real-token&errorCallbackURL=https%3A%2F%2Fevil.example.com", {
+      ipAddress: "198.51.102.200",
     });
-    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(badToken.status).toBe(400);
+    expect(badToken.headers.get("location")).toBeNull();
+
+    // The rejected attempts did not consume the token: a clean verify still works, with deep-link error/new-user URLs.
+    magicLink.searchParams.set("newUserCallbackURL", "bjjroll://auth/welcome");
+    magicLink.searchParams.set("errorCallbackURL", "bjjroll://auth/error");
+    const cleanVerify = await getAuthPath(app, magicLink.toString(), { ipAddress: "198.51.102.201" });
+    expect(cleanVerify.status).toBe(302);
+    const location = cleanVerify.headers.get("location") ?? "";
+    expect(location.startsWith("bjjroll://auth/welcome?code=")).toBe(true);
   });
 });

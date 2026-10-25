@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { OTP_EXPIRY_SECONDS, OTP_MAX_ATTEMPTS, SESSION_SLIDING_EXPIRY_SECONDS } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import {
@@ -102,25 +102,49 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     expect(rawDump).not.toContain(otpCode);
   });
 
-  it("rejects an expired OTP after 10 minutes", async () => {
-    const { app, pool, codec } = current();
-    const email = "expired.otp@example.com";
+  it("AC 7 (fake clock): OTP accepted 1 second before 10 minutes, rejected 1 second after", async () => {
+    const { app } = current();
     const ipAddress = "198.51.100.12";
+    const startMs = Date.parse("2026-03-01T10:00:00.000Z");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(startMs);
+      await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email: "expired.otp@example.com", type: "sign-in" }, ipAddress });
+      const expiredCode = latestOtpFor("expired.otp@example.com");
+      vi.setSystemTime(startMs + OTP_EXPIRY_SECONDS * 1000 + 1000);
+      const expiredResponse = await postAuthJson(app, "/sign-in/email-otp", {
+        body: { email: "expired.otp@example.com", otp: expiredCode },
+        ipAddress,
+      });
+      expect(expiredResponse.status).toBe(400);
+      expect(extractSessionCookie(expiredResponse)).toBe("");
 
-    await postAuthJson(app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in" },
-      ipAddress,
-    });
+      const secondStartMs = startMs + 60 * 60 * 1000;
+      vi.setSystemTime(secondStartMs);
+      await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email: "ontime.otp@example.com", type: "sign-in" }, ipAddress });
+      const onTimeCode = latestOtpFor("ontime.otp@example.com");
+      vi.setSystemTime(secondStartMs + OTP_EXPIRY_SECONDS * 1000 - 1000);
+      const onTimeResponse = await postAuthJson(app, "/sign-in/email-otp", { body: { email: "ontime.otp@example.com", otp: onTimeCode }, ipAddress });
+      expect(onTimeResponse.status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("AC 5: a used OTP cannot be used again", async () => {
+    const { app } = current();
+    const email = "reuse.otp@example.com";
+    const ipAddress = "198.51.100.14";
+    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in" }, ipAddress });
     const otpCode = latestOtpFor(email);
-    const identifier = `sign-in-otp-${codec.computeEmailHmac(email)}`;
 
-    await pool.query("UPDATE public.verifications SET expires_at = now() - interval '1 second' WHERE identifier = $1", [identifier]);
+    const firstUse = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: otpCode }, ipAddress });
+    expect(firstUse.status).toBe(200);
+    expect(extractSessionCookie(firstUse)).toContain("=");
 
-    const signInResponse = await postAuthJson(app, "/sign-in/email-otp", {
-      body: { email, otp: otpCode },
-      ipAddress,
-    });
-    expect(signInResponse.status).toBeGreaterThanOrEqual(400);
+    const secondUse = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: otpCode }, ipAddress });
+    expect(secondUse.status).toBe(400);
+    expect(extractSessionCookie(secondUse)).toBe("");
   });
 
   it("invalidates the OTP after 5 wrong verification attempts and requires a new code", async () => {

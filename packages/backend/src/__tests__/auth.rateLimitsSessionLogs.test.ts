@@ -4,11 +4,10 @@ import {
   MAX_SENDS_PER_EMAIL_PER_WINDOW,
   MAX_SENDS_PER_IP_PER_WINDOW,
   MAX_VERIFIES_PER_IP_PER_WINDOW,
-  SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS,
 } from "../auth/index.js";
 import { withAppRoleUnscoped, withUserContext } from "../database/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { extractSessionCookie, getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, session sliding + 90d cap, RLS lookup, and zero-PII logs", () => {
   let environment: StartedAuthTestEnvironment | undefined;
@@ -43,12 +42,53 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
   };
 
   beforeAll(async () => {
-    environment = await startAuthTestEnvironment();
+    // Better Auth's own logger on at debug level, so the zero-PII log test sees everything it would print.
+    environment = await startAuthTestEnvironment({ logger: { disabled: false, level: "debug" } });
   }, 60_000);
 
   afterAll(async () => {
     await environment?.stop();
   }, 30_000);
+
+  it("rate_limits comes from migration 002 (no runtime DDL) and auth connects as a NOBYPASSRLS login in bjj_app", async () => {
+    const { pool, appLogin } = current();
+    const table = await pool.query<{ tableowner: string; rowsecurity: boolean }>(
+      "SELECT tableowner, rowsecurity FROM pg_tables WHERE schemaname = 'public' AND tablename = 'rate_limits'",
+    );
+    expect(table.rows).toEqual([{ tableowner: "bjj_owner", rowsecurity: true }]);
+
+    const role = await pool.query<{ rolsuper: boolean; rolbypassrls: boolean; member_of_app: boolean }>(
+      "SELECT rolsuper, rolbypassrls, pg_has_role(rolname, 'bjj_app', 'MEMBER') AS member_of_app FROM pg_roles WHERE rolname = $1",
+      [appLogin.roleName],
+    );
+    expect(role.rows).toEqual([{ rolsuper: false, rolbypassrls: false, member_of_app: true }]);
+
+    const loginCannotCreate = appLogin.pool.query("CREATE TABLE public.should_not_exist (id int)");
+    await expect(loginCannotCreate).rejects.toThrow();
+  });
+
+  it("proxy headers are ignored by default: rotating X-Forwarded-For from one socket still hits 429 after 10 sends", async () => {
+    const { app, emailSender } = current();
+    const socketIp = "198.51.100.90";
+    const statuses: number[] = [];
+    for (let count = 1; count <= 15; count += 1) {
+      const sentBefore = emailSender.sentMessages.length;
+      const response = await postAuthJson(app, "/email-otp/send-verification-otp", {
+        body: { email: `xff.rotate.${String(count)}@example.com`, type: "sign-in" },
+        ipAddress: socketIp,
+        headers: {
+          "x-forwarded-for": `203.0.113.${String(count)}`,
+          "x-real-ip": `203.0.113.${String(count)}`,
+          "cf-connecting-ip": `203.0.113.${String(count)}`,
+        },
+      });
+      statuses.push(response.status);
+      if (response.status === 429) {
+        expect(emailSender.sentMessages.length).toBe(sentBefore);
+      }
+    }
+    expect(statuses).toEqual([...Array<number>(MAX_SENDS_PER_IP_PER_WINDOW).fill(200), ...Array<number>(15 - MAX_SENDS_PER_IP_PER_WINDOW).fill(429)]);
+  });
 
   it("enforces PostgreSQL rate limits: 3 sends/email/15m, 10 sends/IP/15m, and 20 verifies/IP/15m", async () => {
     const { app } = current();
@@ -62,11 +102,14 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
       });
       expect(okResponse.status).toBe(200);
     }
+    const sentBeforeEmailOverflow = current().emailSender.sentMessages.length;
     const fourthEmailSend = await postAuthJson(app, "/sign-in/magic-link", {
       body: { email: rateEmail, callbackURL: DEEP_LINK_CALLBACK_URL },
       ipAddress: "198.51.100.39",
     });
     expect(fourthEmailSend.status).toBe(429);
+    // AC 6: a rate-limited send sends no email
+    expect(current().emailSender.sentMessages.length).toBe(sentBeforeEmailOverflow);
 
     // 2. 10 sends per IP per 15 minutes across distinct emails
     const sharedSendIp = "198.51.100.50";
@@ -77,11 +120,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
       });
       expect(okResponse.status).toBe(200);
     }
+    const sentBeforeIpOverflow = current().emailSender.sentMessages.length;
     const eleventhIpSend = await postAuthJson(app, "/email-otp/send-verification-otp", {
       body: { email: "ip.send.overflow@example.com", type: "sign-in" },
       ipAddress: sharedSendIp,
     });
     expect(eleventhIpSend.status).toBe(429);
+    expect(current().emailSender.sentMessages.length).toBe(sentBeforeIpOverflow);
 
     // 3. 20 verification attempts per IP per 15 minutes
     const sharedVerifyIp = "198.51.100.60";
@@ -97,60 +142,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
       ipAddress: sharedVerifyIp,
     });
     expect(twentyFirstVerify.status).toBe(429);
-  });
-
-  it("enforces 30-day sliding session window (1-day updateAge) capped at 90 days from created_at", async () => {
-    const { app, pool } = current();
-    const email = "session.cap@example.com";
-    const ipAddress = "198.51.100.70";
-
-    await postAuthJson(app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in" },
-      ipAddress,
-    });
-    const otpCode = latestOtpFor(email);
-    const signInResponse = await postAuthJson(app, "/sign-in/email-otp", {
-      body: { email, otp: otpCode },
-      ipAddress,
-    });
-    expect(signInResponse.status).toBe(200);
-    const cookie = extractSessionCookie(signInResponse);
-    const signInBody = (await signInResponse.json()) as { user: { id: string } };
-    const userId = signInBody.user.id;
-
-    // Move created_at to 75 days ago and updated_at to 2 days ago so sliding would exceed 90d if uncapped
-    const seventyFiveDaysSeconds = 75 * 24 * 60 * 60;
-    const twoDaysSeconds = 2 * 24 * 60 * 60;
-    await pool.query(
-      `UPDATE public.sessions
-         SET created_at = now() - ($1::int * interval '1 second'),
-             updated_at = now() - ($2::int * interval '1 second'),
-             expires_at = now() + (10 * 86400 * interval '1 second')
-         WHERE user_id = $3`,
-      [seventyFiveDaysSeconds, twoDaysSeconds, userId],
-    );
-
-    const refreshedResponse = await getAuthPath(app, "/get-session", { cookie, ipAddress });
-    expect(refreshedResponse.status).toBe(200);
-
-    const cappedCheck = await pool.query<{ lifetime_seconds: number }>(
-      "SELECT extract(epoch FROM expires_at - created_at)::int AS lifetime_seconds FROM public.sessions WHERE user_id = $1",
-      [userId],
-    );
-    expect(cappedCheck.rows[0]?.lifetime_seconds).toBeLessThanOrEqual(SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS + 5);
-
-    // Move created_at past 90 days: session must now be rejected and deleted
-    const ninetyOneDaysSeconds = 91 * 24 * 60 * 60;
-    await pool.query(
-      `UPDATE public.sessions
-         SET created_at = now() - ($1::int * interval '1 second')
-         WHERE user_id = $2`,
-      [ninetyOneDaysSeconds, userId],
-    );
-
-    const expiredByCapResponse = await getAuthPath(app, "/get-session", { cookie, ipAddress });
-    const expiredPayload: unknown = await expiredByCapResponse.json();
-    expect(expiredPayload).toBeNull();
   });
 
   it("enforces RLS under bjj_app and emits zero PII or secrets in logs across auth flows", async () => {

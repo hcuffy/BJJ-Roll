@@ -9,8 +9,6 @@ import {
 } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
-const initializedPools = new WeakSet<Pool>();
-
 export interface RateLimitRuleConfig {
   readonly window: number;
   readonly max: number;
@@ -48,37 +46,13 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
     window: RATE_LIMIT_WINDOW_SECONDS,
     max: MAX_VERIFIES_PER_IP_PER_WINDOW,
   },
-  "/exchange-code": {
-    window: RATE_LIMIT_WINDOW_SECONDS,
-    max: MAX_VERIFIES_PER_IP_PER_WINDOW,
-  },
 };
 
 /**
- * Ensures `public.rate_limits` exists and grants `bjj_app` access idempotently without adding a second migration row.
- */
-export async function ensureAuthRateLimitsTable(pool: Pool): Promise<void> {
-  if (initializedPools.has(pool)) {
-    return;
-  }
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS public.rate_limits (
-      id text PRIMARY KEY,
-      key text NOT NULL UNIQUE,
-      count integer NOT NULL,
-      last_request bigint NOT NULL
-    );
-    REVOKE ALL ON TABLE public.rate_limits FROM PUBLIC;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.rate_limits TO bjj_app;
-  `);
-  initializedPools.add(pool);
-}
-
-/**
  * Enforces the Postgres-backed 3 sends / email / 15 minutes rate limit using the keyed email HMAC (never plaintext email).
+ * Fixed window from the first send; `public.rate_limits` comes from migration 002 (no runtime DDL).
  */
 export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {
-  await ensureAuthRateLimitsTable(pool);
   const emailHmac = codec.computeEmailHmac(rawEmail);
   const rateLimitKey = `email:${emailHmac}`;
   const nowMilliseconds = Date.now();
@@ -96,7 +70,10 @@ export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCrypto
            WHEN $3 - public.rate_limits.last_request >= $4 THEN 1
            ELSE public.rate_limits.count + 1
          END,
-         last_request = $3
+         last_request = CASE
+           WHEN $3 - public.rate_limits.last_request >= $4 THEN $3
+           ELSE public.rate_limits.last_request
+         END
        RETURNING count`,
       [randomUUID(), rateLimitKey, nowMilliseconds, windowMilliseconds],
     );
