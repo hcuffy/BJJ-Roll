@@ -86,7 +86,7 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 **Keyboard**
 
-- [ ] The keyboard never covers **Continue**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView padding; Android: `adjustResize`).
+- [ ] The keyboard never covers **Continue**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView `padding`, with a 24 gap above the keyboard; Android: KeyboardAvoidingView `height`, which shrinks the view by the keyboard height on edge-to-edge). On Android, check the content does not shift twice (once from the view, once from the window resizing).
 - [ ] A tap on a button while the keyboard is open works the first time (no tap spent just closing the keyboard).
 - [ ] Email field: Go submits. Code field: number pad, Done submits, and iOS/Android offer the emailed code for autofill.
 

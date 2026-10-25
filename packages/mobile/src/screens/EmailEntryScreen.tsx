@@ -23,6 +23,17 @@ export interface EmailEntryScreenProps {
 
 type Sending = "code" | "link" | null;
 
+/** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
+function missingHint(emailValid: boolean, ageConfirmed: boolean): string | undefined {
+  if (!emailValid && !ageConfirmed) {
+    return "Enter your email and tick the 17 or older box first.";
+  }
+  if (!emailValid) {
+    return "Enter your email first.";
+  }
+  return ageConfirmed ? undefined : "Tick the 17 or older box first.";
+}
+
 export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClearLinkError }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -34,6 +45,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
   const ready = ageConfirmed && isEmailAddress(email);
+  const sendHint = missingHint(isEmailAddress(email), ageConfirmed);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -186,7 +198,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
         <AuthButton
           title="Continue"
           looksDisabled={!ready}
-          accessibilityHint={ready ? undefined : "Enter your email and tick the 17 or older box first."}
+          accessibilityHint={sendHint}
           loading={sending === "code"}
           loadingTitle="Sending code…"
           disabled={sending === "link"}
@@ -196,6 +208,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
           title="Email me a sign-in link instead"
           variant="secondary"
           looksDisabled={!ready}
+          accessibilityHint={sendHint}
           loading={sending === "link"}
           loadingTitle="Sending link…"
           disabled={sending === "code"}
