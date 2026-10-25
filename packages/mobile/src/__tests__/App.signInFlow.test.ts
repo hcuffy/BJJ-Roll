@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 import { colours } from "../theme/tokens";
 import { deepLinkState, flattenStyle, type HostNode, renderScreen, textOf } from "./screenHarness";
 
@@ -14,9 +14,11 @@ vi.mock("../auth/appAuthClient", () => ({
   get appSecureStore() {
     return appClient.store;
   },
+  appBackendUrl: "http://backend.test",
 }));
 
 const { App } = await import("../App");
+const DELETED_NOTICE = "Your account was deleted. If you sign up again, you get a new, empty account.";
 
 describe("App sign-in flow (Android, fake backend)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
@@ -66,6 +68,63 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     const restartedAfterSignOut = await startApp();
     expect(restartedAfterSignOut.text()).toContain("Sign in to BJJ Roll");
+  });
+
+  it("delete account (HEN-65): confirm, email a code, DELETE /account with code and cookie, then signed-out, also after a restart", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Continue");
+    await screen.changeText("6-digit code", "123456");
+    expect(screen.text()).toContain("You are signed in");
+
+    await screen.press("Delete account");
+    await screen.press("Email me a code");
+    expect(backend.requests.filter((request) => request.method === "DELETE")).toEqual([]);
+    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Sign in to BJJ Roll");
+    const accountRequests = backend.requests.filter((request) => new URL(request.url).pathname.startsWith("/account"));
+    expect(accountRequests.map((request) => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "POST /account/delete-code",
+      "DELETE /account",
+    ]);
+    const deleteRequests = backend.requests.filter((request) => request.method === "DELETE");
+    expect(deleteRequests[0]?.body).toEqual({ code: TEST_DELETE_CODE });
+    expect(deleteRequests[0]?.cookie).toContain("signed-session-value");
+    expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
+    expect(secureStore.items.has("bjjroll_session_data")).toBe(false);
+
+    const restarted = await startApp();
+    expect(restarted.text()).toContain("Sign in to BJJ Roll");
+    expect(restarted.text()).not.toContain(DELETED_NOTICE);
+  });
+
+  it("after delete (Vera item 3): the sign-in screen shows a one-time neutral, announced notice: re-signup is a new empty account", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Continue");
+    await screen.changeText("6-digit code", "123456");
+    await screen.press("Delete account");
+    await screen.press("Email me a code");
+    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Sign in to BJJ Roll");
+    expect(screen.text()).toContain(DELETED_NOTICE);
+    const notice = screen.queryByText(DELETED_NOTICE);
+    expect(notice?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
+    expect(flattenStyle(notice?.props.style)).toMatchObject({ color: colours.textPrimary });
+    const card = screen.findAllByType("View").find((node) => node.children.includes(notice as HostNode));
+    expect(flattenStyle(card?.props.style)).toMatchObject({ backgroundColor: colours.surface, borderRadius: 16, padding: 16 });
+    expect(flattenStyle(card?.props.style).borderColor).toBeUndefined();
+    // Above the title, like the link error card.
+    expect(screen.text().indexOf(DELETED_NOTICE)).toBeLessThan(screen.text().indexOf("Sign in to BJJ Roll"));
+
+    await screen.changeText("Email", "someone@example.test");
+    expect(screen.text()).not.toContain(DELETED_NOTICE);
   });
 
   it("magic link: requests a bjjroll://auth link, then opening the link signs the user in", async () => {

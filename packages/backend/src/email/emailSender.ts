@@ -1,7 +1,16 @@
+/** What a one-time code is for. Default sign_in; account_deletion is the fresh code DELETE /account needs (HEN-65). */
+export type OneTimeCodePurpose = "sign_in" | "account_deletion";
+
 export interface SendOneTimeCodeInput {
   to: string;
   code: string;
   expiresInMinutes: number;
+  purpose?: OneTimeCodePurpose;
+}
+
+/** The address is captured before the account is purged (HEN-65). */
+export interface SendAccountDeletedNoticeInput {
+  to: string;
 }
 
 export interface SendMagicLinkInput {
@@ -13,6 +22,7 @@ export interface SendMagicLinkInput {
 export interface EmailSender {
   sendOneTimeCode(input: SendOneTimeCodeInput): Promise<void>;
   sendMagicLink(input: SendMagicLinkInput): Promise<void>;
+  sendAccountDeletedNotice(input: SendAccountDeletedNoticeInput): Promise<void>;
 }
 
 export type EmailSendFailureReason = "configuration" | "http_status" | "network" | "timeout";
@@ -56,6 +66,16 @@ export function renderOneTimeCodeEmail(input: SendOneTimeCodeInput): RenderedEma
   assertNonEmptyText(input.to);
   assertNonEmptyText(input.code);
   assertPositiveMinutes(input.expiresInMinutes);
+  if (input.purpose === "account_deletion") {
+    return {
+      subject: "Your BJJ Roll code to delete your account",
+      text: [
+        `Your code to delete your BJJ Roll account is ${input.code}.`,
+        `It expires in ${input.expiresInMinutes} minutes.`,
+        "If you did not ask to delete your account, ignore this email and your account stays as it is.",
+      ].join(" "),
+    };
+  }
   const lines = [
     `Your BJJ Roll sign-in code is ${input.code}.`,
     `It expires in ${input.expiresInMinutes} minutes.`,
@@ -79,5 +99,17 @@ export function renderMagicLinkEmail(input: SendMagicLinkInput): RenderedEmailMe
   return {
     subject: "Your BJJ Roll sign-in link",
     text: lines.join("\n"),
+  };
+}
+
+export function renderAccountDeletedEmail(input: SendAccountDeletedNoticeInput): RenderedEmailMessage {
+  assertNonEmptyText(input.to);
+  return {
+    subject: "Your BJJ Roll account was deleted",
+    text: [
+      "Your BJJ Roll account has been deleted, along with your handle and sign-in details. This cannot be undone.",
+      "",
+      "If you sign up again with this email address, you will get a new, empty account.",
+    ].join("\n"),
   };
 }

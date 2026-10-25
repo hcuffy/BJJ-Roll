@@ -37,6 +37,8 @@ describe("theme tokens (Vera's style guide v0)", () => {
     expect(contrast(colours.textPrimary, colours.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.danger, colours.background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.danger, colours.surface)).toBeGreaterThanOrEqual(4.5);
+    // Label on the filled danger pill (delete-account confirm, HEN-65).
+    expect(contrast(colours.onPrimary, colours.danger)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.border, colours.background)).toBeGreaterThanOrEqual(3);
     expect(contrast(colours.border, colours.surfaceRaised)).toBeGreaterThanOrEqual(3);
     expect(contrast(colours.textSecondary, colours.background)).toBeGreaterThanOrEqual(3);

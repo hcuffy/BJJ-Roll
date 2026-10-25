@@ -2,7 +2,8 @@ import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { appAuthClient, appSecureStore } from "./auth/appAuthClient";
+import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
+import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -16,6 +17,7 @@ type AuthScreen =
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const deepLinkUrl = Linking.useURL();
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export function App() {
       }
     });
   }, [deepLinkUrl]);
+
+  const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignOut = () => {
     void signOut(appAuthClient, appSecureStore).finally(() => setScreen({ name: "email" }));
@@ -63,7 +67,18 @@ export function App() {
         );
       }
       case "signedIn": {
-        return <SignedInScreen onSignOut={handleSignOut} />;
+        return (
+          <SignedInScreen
+            onSignOut={handleSignOut}
+            onExportData={() => exportAccountData(accountSession())}
+            onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
+            onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+            onAccountDeleted={() => {
+              setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
+              setScreen({ name: "email" });
+            }}
+          />
+        );
       }
       case "code": {
         return (
@@ -81,6 +96,8 @@ export function App() {
             client={appAuthClient}
             linkError={linkError}
             onClearLinkError={() => setLinkError(null)}
+            accountNotice={accountNotice}
+            onClearAccountNotice={() => setAccountNotice(null)}
             onCodeSent={(email) => setScreen({ name: "code", email })}
           />
         );

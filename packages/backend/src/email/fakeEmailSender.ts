@@ -1,8 +1,11 @@
 import {
   EmailSendError,
   type EmailSender,
+  type OneTimeCodePurpose,
+  renderAccountDeletedEmail,
   renderMagicLinkEmail,
   renderOneTimeCodeEmail,
+  type SendAccountDeletedNoticeInput,
   type SendMagicLinkInput,
   type SendOneTimeCodeInput,
 } from "./emailSender.js";
@@ -12,6 +15,7 @@ export interface FakeSentOneTimeCodeMessage {
   to: string;
   code: string;
   expiresInMinutes: number;
+  purpose?: OneTimeCodePurpose;
   subject: string;
   text: string;
 }
@@ -25,7 +29,14 @@ export interface FakeSentMagicLinkMessage {
   text: string;
 }
 
-export type FakeSentEmailMessage = FakeSentOneTimeCodeMessage | FakeSentMagicLinkMessage;
+export interface FakeSentAccountDeletedMessage {
+  kind: "account_deleted";
+  to: string;
+  subject: string;
+  text: string;
+}
+
+export type FakeSentEmailMessage = FakeSentOneTimeCodeMessage | FakeSentMagicLinkMessage | FakeSentAccountDeletedMessage;
 
 /**
  * In-memory email sender for tests and local development without external network calls.
@@ -50,6 +61,7 @@ export class FakeEmailSender implements EmailSender {
         to: input.to.trim(),
         code: input.code,
         expiresInMinutes: input.expiresInMinutes,
+        ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
         subject: rendered.subject,
         text: rendered.text,
       });
@@ -70,6 +82,16 @@ export class FakeEmailSender implements EmailSender {
         subject: rendered.subject,
         text: rendered.text,
       });
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new EmailSendError("configuration"));
+    }
+  }
+
+  sendAccountDeletedNotice(input: SendAccountDeletedNoticeInput): Promise<void> {
+    try {
+      const rendered = renderAccountDeletedEmail(input);
+      this.#sentMessages.push({ kind: "account_deleted", to: input.to.trim(), subject: rendered.subject, text: rendered.text });
       return Promise.resolve();
     } catch (error) {
       return Promise.reject(error instanceof Error ? error : new EmailSendError("configuration"));
