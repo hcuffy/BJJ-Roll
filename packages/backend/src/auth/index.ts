@@ -33,6 +33,7 @@ export {
   type AuthSecretEnvironment,
 } from "./authSecrets.js";
 export {
+  AUTH_REQUEST_BODY_LIMIT_BYTES,
   createAuth,
   mountAuthRoutes,
   resolveClientIpAddress,

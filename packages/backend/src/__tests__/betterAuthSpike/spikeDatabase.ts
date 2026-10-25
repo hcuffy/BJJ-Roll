@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool } from "pg";
+import { ignoreAdminShutdownError } from "../databaseTestHarness.js";
 import { spikeSchemaSql, spikeTables } from "./spikeSchema.js";
 
 // Same rule as database.containerRoundTrip.test.ts: always runs in CI, skipped locally without Docker.
@@ -16,6 +17,7 @@ export interface SpikeDatabase {
 export async function startSpikeDatabase(): Promise<SpikeDatabase> {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer("postgres:18.6").start();
   const pool = new Pool({ connectionString: container.getConnectionUri(), max: 5 });
+  ignoreAdminShutdownError(pool);
   await pool.query(spikeSchemaSql);
   return {
     pool,
