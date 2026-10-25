@@ -19,11 +19,21 @@ export interface EmailEntryScreenProps {
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
   readonly onClearLinkError?: () => void;
+  /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
+  readonly accountNotice?: string | null;
+  readonly onClearAccountNotice?: () => void;
 }
 
 type Sending = "code" | "link" | null;
 
-export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClearLinkError }: EmailEntryScreenProps) {
+export function EmailEntryScreen({
+  client,
+  onCodeSent,
+  linkError = null,
+  onClearLinkError,
+  accountNotice = null,
+  onClearAccountNotice,
+}: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [sending, setSending] = useState<Sending>(null);
@@ -37,6 +47,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
 
   const startAction = () => {
     onClearLinkError?.();
+    onClearAccountNotice?.();
     setFormError(null);
     setNotice(null);
   };
@@ -128,6 +139,11 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
           <StatusText message={linkError} style={authStyles.cardError} />
         </View>
       ) : null}
+      {accountNotice ? (
+        <View style={authStyles.card}>
+          <StatusText message={accountNotice} style={authStyles.notice} />
+        </View>
+      ) : null}
       <View style={authStyles.heading}>
         <Text accessibilityRole="header" style={textStyles.display}>
           Sign in to BJJ Roll
@@ -150,6 +166,7 @@ export function EmailEntryScreen({ client, onCodeSent, linkError = null, onClear
           setEmail(text);
           setEmailError(null);
           onClearLinkError?.();
+          onClearAccountNotice?.();
         }}
         onBlur={() => {
           if (email.trim() !== "" && !isEmailAddress(email)) {

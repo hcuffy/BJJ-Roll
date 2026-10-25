@@ -17,6 +17,7 @@ type AuthScreen =
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const deepLinkUrl = Linking.useURL();
 
   useEffect(() => {
@@ -71,7 +72,10 @@ export function App() {
             onSignOut={handleSignOut}
             onExportData={() => exportAccountData(accountSession())}
             onDeleteAccount={() => deleteAccount(accountSession())}
-            onAccountDeleted={() => setScreen({ name: "email" })}
+            onAccountDeleted={() => {
+              setAccountNotice("Your account was deleted.");
+              setScreen({ name: "email" });
+            }}
           />
         );
       }
@@ -91,6 +95,8 @@ export function App() {
             client={appAuthClient}
             linkError={linkError}
             onClearLinkError={() => setLinkError(null)}
+            accountNotice={accountNotice}
+            onClearAccountNotice={() => setAccountNotice(null)}
             onCodeSent={(email) => setScreen({ name: "code", email })}
           />
         );

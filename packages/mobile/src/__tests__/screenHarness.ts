@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { vi } from "vitest";
+import { attachHostReference } from "./hostReference";
 
 /**
  * Minimal screen renderer for Vitest in Node (no DOM, no extra test dependencies).
@@ -187,7 +188,7 @@ class ScreenRenderer {
     if (typeof node.type !== "string") {
       return children;
     }
-    return [{ type: node.type, props, children }];
+    return [attachHostReference({ type: node.type, props, children })];
   }
 }
 

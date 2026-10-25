@@ -89,6 +89,30 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     const restarted = await startApp();
     expect(restarted.text()).toContain("Sign in to BJJ Roll");
+    expect(restarted.text()).not.toContain("Your account was deleted.");
+  });
+
+  it("after delete (Vera item 3): the sign-in screen shows a one-time neutral, announced notice, cleared by the next input", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Continue");
+    await screen.changeText("6-digit code", "123456");
+    await screen.press("Delete account");
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Sign in to BJJ Roll");
+    const notice = screen.queryByText("Your account was deleted.");
+    expect(notice?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
+    expect(flattenStyle(notice?.props.style)).toMatchObject({ color: colours.textPrimary });
+    const card = screen.findAllByType("View").find((node) => node.children.includes(notice as HostNode));
+    expect(flattenStyle(card?.props.style)).toMatchObject({ backgroundColor: colours.surface, borderRadius: 16, padding: 16 });
+    expect(flattenStyle(card?.props.style).borderColor).toBeUndefined();
+    // Above the title, like the link error card.
+    expect(screen.text().indexOf("Your account was deleted.")).toBeLessThan(screen.text().indexOf("Sign in to BJJ Roll"));
+
+    await screen.changeText("Email", "someone@example.test");
+    expect(screen.text()).not.toContain("Your account was deleted.");
   });
 
   it("magic link: requests a bjjroll://auth link, then opening the link signs the user in", async () => {

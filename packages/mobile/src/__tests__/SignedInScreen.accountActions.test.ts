@@ -1,11 +1,11 @@
 import { createElement } from "react";
-import { Share } from "react-native";
+import { AccessibilityInfo, Share } from "react-native";
 import { beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import type { AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { colours } from "../theme/tokens";
-import { flattenStyle, renderScreen } from "./screenHarness";
+import { flattenStyle, renderScreen, textOf } from "./screenHarness";
 
 const EXPORT_JSON = '{\n  "user": {}\n}';
 
@@ -32,6 +32,7 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     exportResult = Promise.resolve({ ok: true, json: EXPORT_JSON });
     deleteResult = Promise.resolve({ ok: true });
     shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+    vi.mocked(AccessibilityInfo.sendAccessibilityEvent).mockClear();
   });
 
   const renderSignedIn = () =>
@@ -141,7 +142,6 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     await screen.rerender();
     expect(screen.text()).toContain("Deleting account…");
     expect(screen.isDisabled("Cancel")).toBe(true);
-    expect(screen.isDisabled("Sign out")).toBe(true);
 
     pending.resolve({ ok: true });
     await screen.rerender();
@@ -163,5 +163,93 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     await screen.press("Delete my account");
     expect(deleteCalls).toBe(2);
     expect(deletedCalls).toBe(1);
+  });
+
+  it("design (Vera item 1): Sign out comes first; an Account section at the bottom ends with Delete account as red text", async () => {
+    const screen = await renderSignedIn();
+
+    const order = screen
+      .findAllByType("Text")
+      .map((node) => textOf(node))
+      .filter((text) => ["Sign out", "Account", "Export my data", "Delete account"].includes(text));
+    expect(order).toEqual(["Sign out", "Account", "Export my data", "Delete account"]);
+    expect(flattenStyle(screen.queryByText("Account")?.props.style)).toMatchObject({ fontSize: 13, lineHeight: 18, color: colours.textSecondary });
+
+    const deleteEntry = screen.getPressable("Delete account");
+    const deleteEntryStyle = flattenStyle(deleteEntry.props.style);
+    expect(deleteEntryStyle.backgroundColor).toBeUndefined();
+    expect(deleteEntryStyle.minHeight).toBe(48);
+    expect(flattenStyle(screen.queryByText("Delete account")?.props.style)).toMatchObject({ color: colours.danger });
+    // The filled red pill is kept for the confirm step only.
+    expect(screen.pressables().filter((node) => flattenStyle(node.props.style).backgroundColor === colours.danger)).toEqual([]);
+  });
+
+  it("design: the confirm pill label is the dark #111313 on red, never white", async () => {
+    const screen = await renderSignedIn();
+    await screen.press("Delete account");
+
+    expect(flattenStyle(screen.queryByText("Delete my account")?.props.style)).toMatchObject({ color: colours.onPrimary });
+    expect(colours.onPrimary).toBe("#111313");
+  });
+
+  it("a11y (Vera item 2): opening the confirm moves screen-reader focus to its heading; Cancel moves it back to Delete account", async () => {
+    const screen = await renderSignedIn();
+    const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);
+    expect(focusEvents).not.toHaveBeenCalled();
+
+    await screen.press("Delete account");
+    expect(focusEvents).toHaveBeenCalledTimes(1);
+    const [headingTarget, headingEvent] = focusEvents.mock.calls[0] ?? [];
+    expect(headingEvent).toBe("focus");
+    expect(textOf(headingTarget as never)).toBe("Delete your account?");
+    expect((headingTarget as unknown as { props: { accessibilityRole: string } }).props.accessibilityRole).toBe("header");
+
+    await screen.press("Cancel");
+    expect(focusEvents).toHaveBeenCalledTimes(2);
+    const [returnTarget, returnEvent] = focusEvents.mock.calls[1] ?? [];
+    expect(returnEvent).toBe("focus");
+    expect(returnTarget).toBe(screen.getPressable("Delete account"));
+  });
+
+  it("design (Vera item 4): 'Export my data first' inside the confirm exports, blocks the danger pill meanwhile, and shows errors", async () => {
+    const pending = deferred<AccountExportResult>();
+    exportResult = pending.promise;
+    const screen = await renderSignedIn();
+    await screen.press("Delete account");
+
+    const exportFirst = screen.getPressable("Export my data first");
+    expect(flattenStyle(exportFirst.props.style).backgroundColor).toBeUndefined();
+    expect(flattenStyle(exportFirst.props.style).minHeight).toBe(48);
+    const order = screen
+      .findAllByType("Text")
+      .map((node) => textOf(node))
+      .filter((text) => ["Export my data first", "Delete my account", "Cancel"].includes(text));
+    expect(order).toEqual(["Export my data first", "Delete my account", "Cancel"]);
+
+    await screen.press("Export my data first");
+    expect(screen.text()).toContain("Preparing export…");
+    expect(screen.isDisabled("Delete my account")).toBe(true);
+    await screen.press("Delete my account");
+    expect(deleteCalls).toBe(0);
+
+    pending.resolve({ ok: true, json: EXPORT_JSON });
+    await screen.rerender();
+    expect(exportCalls).toBe(1);
+    expect(shareSpy).toHaveBeenCalledWith({ title: "BJJ Roll data export", message: EXPORT_JSON });
+    expect(screen.text()).toContain("Delete your account?");
+    expect(screen.isDisabled("Delete my account")).toBe(false);
+
+    exportResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    await screen.press("Export my data first");
+    expect(screen.queryByText(`Export failed. ${FAILURE_MESSAGES.network}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+  });
+
+  it("the confirm is a binary choice: Sign out is hidden while it is open", async () => {
+    const screen = await renderSignedIn();
+    await screen.press("Delete account");
+    expect(screen.queryByText("Sign out")).toBeNull();
+
+    await screen.press("Cancel");
+    expect(screen.queryByText("Sign out")).not.toBeNull();
   });
 });
