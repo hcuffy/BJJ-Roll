@@ -9,6 +9,8 @@ const postgresImage = "postgres:18.6";
 
 export interface MigratedTestDatabase {
   pool: Pool;
+  /** Admin connection string of this suite's database. */
+  connectionString: string;
   db: Kysely<BjjRollDatabase>;
   stop: () => Promise<void>;
 }
@@ -84,6 +86,7 @@ export async function startMigratedTestDatabase(): Promise<MigratedTestDatabase>
 
   return {
     pool,
+    connectionString,
     db,
     stop: async () => {
       await db.destroy();
@@ -96,6 +99,34 @@ export async function startMigratedTestDatabase(): Promise<MigratedTestDatabase>
       if (container) {
         await container.stop();
       }
+    },
+  };
+}
+
+export interface AppRoleLoginPool {
+  pool: Pool;
+  roleName: string;
+  stop: () => Promise<void>;
+}
+
+/**
+ * A LOGIN role that is NOSUPERUSER NOBYPASSRLS and only a member of bjj_app, like the production app login.
+ * Code under test that connects with it cannot bypass RLS even if it forgets SET ROLE.
+ */
+export async function createAppRoleLoginPool(harness: MigratedTestDatabase): Promise<AppRoleLoginPool> {
+  const roleName = `bjj_test_app_${randomBytes(6).toString("hex")}`;
+  const password = randomBytes(24).toString("hex");
+  await harness.pool.query(`CREATE ROLE ${roleName} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '${password}' IN ROLE bjj_app`);
+  const loginUrl = new URL(harness.connectionString);
+  loginUrl.username = roleName;
+  loginUrl.password = password;
+  const pool = new Pool({ connectionString: loginUrl.toString(), max: 6 });
+  return {
+    pool,
+    roleName,
+    stop: async () => {
+      await pool.end();
+      await harness.pool.query(`DROP ROLE IF EXISTS ${roleName}`);
     },
   };
 }

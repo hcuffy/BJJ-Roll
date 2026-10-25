@@ -1,94 +1,103 @@
 import type { Hono } from "hono";
 import type { Pool } from "pg";
 import { createApp } from "../app.js";
-import { createAuthCryptoCodec, generateTestAuthSecrets, loadAuthKeyringFromEnvironment, type AuthCryptoCodec } from "../auth/index.js";
+import { createDatabase } from "../database/connection.js";
+import {
+  createAuth,
+  createAuthCryptoCodec,
+  generateTestAuthSecrets,
+  loadAuthKeyringFromEnvironment,
+  type AuthCryptoCodec,
+  type AuthInstance,
+  type CreateAuthOptions,
+} from "../auth/index.js";
 import { FakeEmailSender } from "../email/index.js";
-import { startMigratedTestDatabase, type MigratedTestDatabase } from "./databaseTestHarness.js";
+import { createAppRoleLoginPool, startMigratedTestDatabase, type AppRoleLoginPool, type MigratedTestDatabase } from "./databaseTestHarness.js";
 
 export const testBaseUrl = "http://localhost:3000";
 
+export const defaultTestClientIp = "203.0.113.10";
+
 export interface StartedAuthTestEnvironment {
   database: MigratedTestDatabase;
+  /** Admin pool (BYPASSRLS superuser) for inspecting raw rows only. */
   pool: Pool;
+  /** NOBYPASSRLS login role the auth code under test connects as. */
+  appLogin: AppRoleLoginPool;
   app: Hono;
+  auth: AuthInstance;
   emailSender: FakeEmailSender;
   codec: AuthCryptoCodec;
   stop: () => Promise<void>;
 }
 
-export async function startAuthTestEnvironment(): Promise<StartedAuthTestEnvironment> {
+export async function startAuthTestEnvironment(
+  overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger">>,
+): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
+  const appLogin = await createAppRoleLoginPool(database);
   const secrets = generateTestAuthSecrets();
   const keyring = loadAuthKeyringFromEnvironment(secrets);
   const codec = createAuthCryptoCodec(keyring);
   const emailSender = new FakeEmailSender();
-  const app = createApp({
-    auth: {
-      pool: database.pool,
-      emailSender,
-      keyring,
-      baseURL: testBaseUrl,
-    },
+  const auth = createAuth({
+    pool: appLogin.pool,
+    emailSender,
+    keyring,
+    baseURL: testBaseUrl,
+    ...overrides,
   });
+  const app = createApp({ auth, database: createDatabase(appLogin.pool) });
 
   return {
     database,
     pool: database.pool,
+    appLogin,
     app,
+    auth,
     emailSender,
     codec,
     stop: async () => {
+      await appLogin.stop();
       await database.stop();
     },
   };
 }
 
-export function postAuthJson(
-  app: Hono,
-  path: string,
-  options: {
-    body: Record<string, unknown>;
-    ipAddress?: string;
-    cookie?: string;
-  },
-): Promise<Response> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-forwarded-for": options.ipAddress ?? "203.0.113.10",
-  };
+/** Hono node-server env shape: getConnInfo reads the TCP peer address from here. */
+export function socketEnvironment(ipAddress: string): { incoming: { socket: { remoteAddress: string } } } {
+  return { incoming: { socket: { remoteAddress: ipAddress } } };
+}
+
+export interface AuthRequestOptions {
+  /** TCP peer address (socket), not a header. */
+  ipAddress?: string;
+  cookie?: string;
+  headers?: Record<string, string>;
+}
+
+export function postAuthJson(app: Hono, path: string, options: AuthRequestOptions & { body: Record<string, unknown> }): Promise<Response> {
+  const headers: Record<string, string> = { "content-type": "application/json", ...options.headers };
   if (options.cookie) {
     headers.cookie = options.cookie;
   }
   return Promise.resolve(
-    app.request(`${testBaseUrl}/api/auth${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(options.body),
-    }),
+    app.request(
+      `${testBaseUrl}/api/auth${path}`,
+      { method: "POST", headers, body: JSON.stringify(options.body) },
+      socketEnvironment(options.ipAddress ?? defaultTestClientIp),
+    ),
   );
 }
 
-export function getAuthPath(
-  app: Hono,
-  urlOrPath: string,
-  options?: {
-    ipAddress?: string;
-    cookie?: string;
-  },
-): Promise<Response> {
+export function getAuthPath(app: Hono, urlOrPath: string, options?: AuthRequestOptions): Promise<Response> {
   const fullUrl = urlOrPath.startsWith("http") ? urlOrPath : `${testBaseUrl}/api/auth${urlOrPath}`;
-  const headers: Record<string, string> = {
-    "x-forwarded-for": options?.ipAddress ?? "203.0.113.10",
-  };
+  const headers: Record<string, string> = { ...options?.headers };
   if (options?.cookie) {
     headers.cookie = options.cookie;
   }
   return Promise.resolve(
-    app.request(fullUrl, {
-      method: "GET",
-      headers,
-      redirect: "manual",
-    }),
+    app.request(fullUrl, { method: "GET", headers, redirect: "manual" }, socketEnvironment(options?.ipAddress ?? defaultTestClientIp)),
   );
 }
 

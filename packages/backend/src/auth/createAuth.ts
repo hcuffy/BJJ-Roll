@@ -1,17 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { expo } from "@better-auth/expo";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware } from "better-auth/api";
 import { emailOTP, magicLink } from "better-auth/plugins";
-import type { Hono } from "hono";
+import type { BetterAuthOptions } from "better-auth/types";
+import type { Context, Hono } from "hono";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
-  DEEP_LINK_CALLBACK_URL,
   DEEP_LINK_SCHEME,
   MAGIC_LINK_EXPIRY_MINUTES,
   MAGIC_LINK_EXPIRY_SECONDS,
@@ -24,7 +25,7 @@ import {
   SESSION_SLIDING_EXPIRY_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
 } from "./authLimits.js";
-import { authIpRateLimitCustomRules, enforcePerEmailSendRateLimit, ensureAuthRateLimitsTable } from "./authRateLimits.js";
+import { authIpRateLimitCustomRules, enforcePerEmailSendRateLimit } from "./authRateLimits.js";
 import {
   createAuthCryptoCodec,
   generateCsprngOtpCode,
@@ -32,111 +33,58 @@ import {
   type AuthCryptoCodec,
   type AuthSecretEnvironment,
 } from "./authSecrets.js";
+import {
+  assertMagicLinkRedirectParameters,
+  AUTH_BASE_PATH,
+  CLIENT_IP_HEADER,
+  normalizeMagicLinkVerifyResponse,
+  prepareMagicLinkRequest,
+  resolveClientIpAddress,
+  TRUSTABLE_PROXY_IP_HEADERS,
+  type TrustableProxyIpHeader,
+} from "./authRequestGuards.js";
 
-const DEFAULT_BASE_URL = "http://localhost:3000";
+export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
 export interface CreateAuthOptions {
   readonly pool: Pool;
   readonly emailSender: EmailSender;
+  readonly baseURL: string;
   readonly keyring?: Keyring;
   readonly env?: AuthSecretEnvironment;
-  readonly baseURL?: string;
   readonly trustedOrigins?: readonly string[];
+  /** Proxy headers to trust for the client IP. Default: none (the socket address is used). */
+  readonly trustedProxyIpHeaders?: readonly TrustableProxyIpHeader[];
+  /** Better Auth logger config. Default: disabled. */
+  readonly logger?: BetterAuthOptions["logger"];
+}
+
+export interface AuthConnectionInfo {
+  /** TCP peer address of the request (from the Node socket). */
+  readonly remoteAddress?: string | undefined;
 }
 
 export interface AuthInstance {
-  readonly handler: (request: Request) => Promise<Response>;
+  readonly handler: (request: Request, connection?: AuthConnectionInfo) => Promise<Response>;
+  /** User id of the valid session carried by these request headers, or null. */
+  readonly resolveSessionUserId: (headers: Headers) => Promise<string | null>;
   readonly codec: AuthCryptoCodec;
   readonly keyring: Keyring;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
 }
 
-function ensureClientIpHeader(request: Request): Request {
-  if (request.headers.has("x-forwarded-for") || request.headers.has("cf-connecting-ip") || request.headers.has("x-real-ip")) {
-    return request;
-  }
-  const headers = new Headers(request.headers);
-  headers.set("x-forwarded-for", "127.0.0.1");
-  return new Request(request, { headers });
-}
-
-function prepareMagicLinkVerifyRequest(request: Request): { request: Request; invalidCallbackResponse: Response | null } {
-  const url = new URL(request.url);
-  if (!url.pathname.endsWith("/magic-link/verify")) {
-    return { request, invalidCallbackResponse: null };
-  }
-  const rawCallbackUrl = url.searchParams.get("callbackURL");
-  if (rawCallbackUrl === null || rawCallbackUrl.trim().length === 0) {
-    url.searchParams.set("callbackURL", DEEP_LINK_CALLBACK_URL);
-    return { request: new Request(url.toString(), request), invalidCallbackResponse: null };
-  }
-  if (!rawCallbackUrl.trim().toLowerCase().startsWith(`${DEEP_LINK_SCHEME}://`)) {
-    return {
-      request,
-      invalidCallbackResponse: new Response(
-        JSON.stringify({
-          code: "INVALID_CALLBACK_URL",
-          error: "INVALID_CALLBACK_URL",
-          message: "Magic link callbackURL must use the bjjroll:// scheme in M2",
-        }),
-        { status: 400, headers: { "content-type": "application/json" } },
-      ),
-    };
-  }
-  return { request, invalidCallbackResponse: null };
-}
-
-function normalizeMagicLinkVerifyResponse(request: Request, response: Response): Response {
-  const url = new URL(request.url);
-  if (!url.pathname.endsWith("/magic-link/verify")) {
-    return response;
-  }
-  const headers = new Headers(response.headers);
-  headers.delete("set-cookie");
-  const location = headers.get("location");
-  if (!location) {
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  }
-  try {
-    const redirectUrl = new URL(location);
-    redirectUrl.searchParams.delete("cookie");
-    redirectUrl.searchParams.delete("token");
-    redirectUrl.searchParams.delete("session");
-    headers.set("location", redirectUrl.toString());
-
-    const errorCode = redirectUrl.searchParams.get("error");
-    if (errorCode !== null) {
-      headers.set("content-type", "application/json");
-      return new Response(
-        JSON.stringify({
-          code: errorCode,
-          error: errorCode,
-          message: "Magic link token is invalid, expired, or has already been used",
-        }),
-        { status: 400, headers },
-      );
-    }
-  } catch {
-    // Keep sanitized headers if location is not a valid URL
-  }
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
 export function createAuth(options: CreateAuthOptions): AuthInstance {
   const keyring = options.keyring ?? loadAuthKeyringFromEnvironment(options.env);
   const codec = createAuthCryptoCodec(keyring);
-  const baseURL = options.baseURL ?? DEFAULT_BASE_URL;
+  const baseURL = options.baseURL;
+  const trustedProxyIpHeaders = options.trustedProxyIpHeaders ?? [];
 
   const betterAuthInstance = betterAuth({
     baseURL,
-    basePath: "/api/auth",
+    basePath: AUTH_BASE_PATH,
     secret: codec.deriveBetterAuthSecret(),
     telemetry: betterAuthTelemetryDisabledConfig,
-    logger: { disabled: true },
+    logger: options.logger ?? { disabled: true },
     trustedOrigins: [`${DEEP_LINK_SCHEME}://`, `${DEEP_LINK_SCHEME}://*`, baseURL, ...(options.trustedOrigins ?? [])],
     database: createEncryptedRlsAuthAdapter({ pool: options.pool, codec }),
     user: {
@@ -169,24 +117,14 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       customRules: authIpRateLimitCustomRules,
     },
     advanced: {
-      ipAddress: { ipAddressHeaders: ["x-forwarded-for", "cf-connecting-ip", "x-real-ip"] },
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       database: { generateId: () => randomUUID() },
     },
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
+        assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
         if (middlewareContext.path === "/email-otp/send-verification-otp" || middlewareContext.path === "/sign-in/magic-link") {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
-          if (middlewareContext.path === "/sign-in/magic-link") {
-            for (const candidate of [body?.callbackURL, body?.newUserCallbackURL, body?.errorCallbackURL]) {
-              if (
-                typeof candidate === "string" &&
-                candidate.trim().length > 0 &&
-                !candidate.trim().toLowerCase().startsWith(`${DEEP_LINK_SCHEME}://`)
-              ) {
-                throw new APIError("BAD_REQUEST", { message: "Magic link callbackURL must use the bjjroll:// scheme in M2" });
-              }
-            }
-          }
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
           }
@@ -216,21 +154,41 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     codec,
     keyring,
     telemetry: betterAuthTelemetryDisabledConfig,
-    async handler(rawRequest: Request): Promise<Response> {
-      await ensureAuthRateLimitsTable(options.pool);
-      const requestWithIp = ensureClientIpHeader(rawRequest);
-      const prepared = prepareMagicLinkVerifyRequest(requestWithIp);
-      if (prepared.invalidCallbackResponse !== null) {
-        return prepared.invalidCallbackResponse;
+    async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
+      const headers = new Headers(rawRequest.headers);
+      const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);
+      for (const headerName of [...TRUSTABLE_PROXY_IP_HEADERS, CLIENT_IP_HEADER]) {
+        headers.delete(headerName);
       }
-      const response = await betterAuthInstance.handler(prepared.request);
-      return normalizeMagicLinkVerifyResponse(prepared.request, response);
+      headers.set(CLIENT_IP_HEADER, clientIp);
+      const prepared = await prepareMagicLinkRequest(new Request(rawRequest, { headers }));
+      if (prepared instanceof Response) {
+        return prepared;
+      }
+      const response = await betterAuthInstance.handler(prepared);
+      return normalizeMagicLinkVerifyResponse(prepared, response);
+    },
+    async resolveSessionUserId(requestHeaders: Headers): Promise<string | null> {
+      try {
+        const session = await betterAuthInstance.api.getSession({ headers: requestHeaders });
+        return session?.user.id ?? null;
+      } catch {
+        return null;
+      }
     },
   };
 }
 
+function readSocketAddress(context: Context): string | undefined {
+  try {
+    return getConnInfo(context).remote.address;
+  } catch {
+    return undefined;
+  }
+}
+
 export function mountAuthRoutes(app: Hono, auth: Pick<AuthInstance, "handler">): void {
-  app.on(["GET", "POST"], "/api/auth/*", async (context) => {
-    return await auth.handler(context.req.raw);
+  app.on(["GET", "POST"], `${AUTH_BASE_PATH}/*`, async (context) => {
+    return await auth.handler(context.req.raw, { remoteAddress: readSocketAddress(context) });
   });
 }

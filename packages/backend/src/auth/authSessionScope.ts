@@ -1,32 +1,144 @@
-import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import type { DBAdapter, Where } from "better-auth/adapters";
 import type { BetterAuthOptions } from "better-auth/types";
-import { sql, type Kysely } from "kysely";
-import type { Pool } from "pg";
-import { lookupUserIdByEmailHmacFromPool } from "../database/index.js";
+import { sql, type Transaction } from "kysely";
 import { extractEmailHmacFromIdentifier, normalizeModelKey, transformVerificationIdentifier } from "./authCodecTransform.js";
 import { SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS, SESSION_UPDATE_AGE_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
 const REVOKE_UNPROVEN_ACCESS_PREFIX = "revoke-unproven-account-access:";
+const HASHED_SESSION_TOKEN_PATTERN = /^[0-9a-f]{64}$/u;
 
-export async function runWithScopedAdapter<TResult>(
-  kyselyDb: Kysely<Record<string, unknown>>,
-  options: BetterAuthOptions,
-  scope: {
-    userId: string | null;
-    useAppRole: boolean;
-    operation: (adapter: DBAdapter<BetterAuthOptions>) => Promise<TResult>;
-  },
-): Promise<TResult> {
-  return await kyselyDb.transaction().execute(async (transactionDb) => {
-    if (scope.useAppRole) {
-      await sql`SET LOCAL ROLE bjj_app`.execute(transactionDb);
-      await sql`SELECT set_config('app.user_id', ${scope.userId ?? ""}, true)`.execute(transactionDb);
+export type AuthTransaction = Transaction<Record<string, unknown>>;
+
+/** Transaction-local settings read by the RLS policies in migrations 001 and 002. */
+export interface AuthScopeSettings {
+  userId: string | null;
+  verificationIdentifier: string | null;
+  verificationId: string | null;
+  sessionTokenHash: string | null;
+}
+
+export function emptyScopeSettings(): AuthScopeSettings {
+  return { userId: null, verificationIdentifier: null, verificationId: null, sessionTokenHash: null };
+}
+
+/** Every auth query runs as bjj_app (NOBYPASSRLS), whatever role the pool logs in as. */
+export async function enterAppRole(transaction: AuthTransaction): Promise<void> {
+  await sql`SET LOCAL ROLE bjj_app`.execute(transaction);
+}
+
+/** Sets all four settings every time so nothing leaks from an earlier operation in the same transaction. */
+export async function applyScopeSettings(transaction: AuthTransaction, settings: AuthScopeSettings): Promise<void> {
+  await sql`SELECT
+    set_config('app.user_id', ${settings.userId ?? ""}, true),
+    set_config('app.verification_identifier', ${settings.verificationIdentifier ?? ""}, true),
+    set_config('app.verification_id', ${settings.verificationId ?? ""}, true),
+    set_config('app.session_token_hash', ${settings.sessionTokenHash ?? ""}, true)`.execute(transaction);
+}
+
+export async function lookupUserIdByEmailHmacInTransaction(transaction: AuthTransaction, emailHmac: string): Promise<string | null> {
+  const result = await sql<{ userId: string | null }>`SELECT public.app_user_id_by_email_hmac(${emailHmac}) AS user_id`.execute(transaction);
+  return result.rows[0]?.userId ?? null;
+}
+
+export function isHashedSessionToken(value: string): boolean {
+  return HASHED_SESSION_TOKEN_PATTERN.test(value);
+}
+
+/** Session tokens are stored only as a keyed HMAC; a value that already is one passes through. */
+export function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): string {
+  return isHashedSessionToken(value) ? value : codec.hashSessionToken(value);
+}
+
+export interface ResolvedWhereScope {
+  readonly clauses: Where[] | undefined;
+  /** True when an email lookup proved no row can match. */
+  readonly unmatched: boolean;
+  /** Raw session token from the where clause, restored on rows returned to Better Auth. */
+  readonly rawSessionToken: string | null;
+}
+
+/**
+ * Encodes where clauses (email -> HMAC, identifiers -> hashed form, session token -> HMAC) and sets the
+ * transaction-local settings the RLS policies need. Runs inside the bjj_app transaction: no pool-role reads.
+ */
+export async function resolveWhereScope(
+  transaction: AuthTransaction,
+  { model, where }: { model: string; where: Where[] | undefined },
+  codec: AuthCryptoCodec,
+): Promise<ResolvedWhereScope> {
+  const modelKey = normalizeModelKey(model);
+  const settings = emptyScopeSettings();
+  let rawSessionToken: string | null = null;
+  const transformed: Where[] = [];
+
+  for (const clause of where ?? []) {
+    const { field, value } = clause;
+    if (modelKey === "user" && field === "email" && typeof value === "string") {
+      const userId = await lookupUserIdByEmailHmacInTransaction(transaction, codec.computeEmailHmac(value));
+      if (userId === null) {
+        await applyScopeSettings(transaction, settings);
+        return { clauses: [], unmatched: true, rawSessionToken: null };
+      }
+      settings.userId = userId;
+      transformed.push({ ...clause, field: "id", value: userId });
+      continue;
     }
-    const scopedAdapter = kyselyAdapter(transactionDb, { type: "postgres" })(options);
-    return await scope.operation(scopedAdapter);
-  });
+    if (modelKey === "user" && field === "id" && typeof value === "string") {
+      settings.userId = value;
+    } else if (
+      (modelKey === "session" || modelKey === "account" || modelKey === "verification") &&
+      (field === "userId" || field === "user_id") &&
+      typeof value === "string"
+    ) {
+      settings.userId = value;
+    } else if (modelKey === "verification" && field === "identifier" && typeof value === "string") {
+      const transformedIdentifier = transformVerificationIdentifier(value, codec);
+      settings.verificationIdentifier = transformedIdentifier;
+      const emailHmac = extractEmailHmacFromIdentifier(value, codec);
+      if (emailHmac !== null) {
+        settings.userId ??= await lookupUserIdByEmailHmacInTransaction(transaction, emailHmac);
+      } else if (transformedIdentifier.startsWith(REVOKE_UNPROVEN_ACCESS_PREFIX)) {
+        const suffixUserId = transformedIdentifier.slice(REVOKE_UNPROVEN_ACCESS_PREFIX.length);
+        if (suffixUserId.length > 0) {
+          settings.userId ??= suffixUserId;
+        }
+      }
+      transformed.push({ ...clause, value: transformedIdentifier });
+      continue;
+    } else if (modelKey === "verification" && field === "id" && typeof value === "string") {
+      settings.verificationId = value;
+    } else if (modelKey === "session" && field === "token") {
+      if (typeof value === "string") {
+        const tokenHash = hashSessionTokenValue(value, codec);
+        settings.sessionTokenHash = tokenHash;
+        rawSessionToken = isHashedSessionToken(value) ? null : value;
+        transformed.push({ ...clause, value: tokenHash });
+        continue;
+      }
+      if (Array.isArray(value)) {
+        transformed.push({
+          ...clause,
+          value: value.map((entry) => (typeof entry === "string" ? hashSessionTokenValue(entry, codec) : entry)) as typeof value,
+        });
+        continue;
+      }
+    }
+    transformed.push(clause);
+  }
+
+  await applyScopeSettings(transaction, settings);
+  if (modelKey === "session" && settings.userId === null && settings.sessionTokenHash !== null) {
+    const owner = await sql<{
+      userId: string;
+    }>`SELECT user_id FROM public.sessions WHERE token = public.app_current_session_token_hash() LIMIT 1`.execute(transaction);
+    const ownerUserId = owner.rows[0]?.userId;
+    if (ownerUserId !== undefined) {
+      settings.userId = ownerUserId;
+      await applyScopeSettings(transaction, settings);
+    }
+  }
+  return { clauses: where ? transformed : undefined, unmatched: false, rawSessionToken };
 }
 
 export function isSessionPastLifetime(row: Record<string, unknown>, nowMs: number): boolean {
@@ -79,90 +191,4 @@ export async function applySessionUpdateRules(
     where: clauses,
     update: encodedUpdate,
   });
-}
-
-export async function encodeWhereClauses(
-  model: string,
-  clauses: Where[] | undefined,
-  dependencies: { pool: Pool; codec: AuthCryptoCodec },
-): Promise<{
-  clauses: Where[] | undefined;
-  resolvedUserId: string | null;
-  unmatchedEmailLookup: boolean;
-}> {
-  if (!clauses || clauses.length === 0) {
-    return { clauses, resolvedUserId: null, unmatchedEmailLookup: false };
-  }
-  const { pool, codec } = dependencies;
-  const modelKey = normalizeModelKey(model);
-  const transformed: Where[] = [];
-  let resolvedUserId: string | null = null;
-
-  for (const clause of clauses) {
-    if (modelKey === "user" && clause.field === "email" && typeof clause.value === "string") {
-      const lookedUpUserId = await lookupUserIdByEmailHmacFromPool(pool, codec.computeEmailHmac(clause.value));
-      if (lookedUpUserId === null) {
-        return { clauses: [], resolvedUserId: null, unmatchedEmailLookup: true };
-      }
-      resolvedUserId = lookedUpUserId;
-      transformed.push({ ...clause, field: "id", value: lookedUpUserId });
-      continue;
-    }
-    if (modelKey === "user" && clause.field === "id" && typeof clause.value === "string") {
-      resolvedUserId = clause.value;
-    } else if (
-      (modelKey === "session" || modelKey === "account" || modelKey === "verification") &&
-      (clause.field === "userId" || clause.field === "user_id") &&
-      typeof clause.value === "string"
-    ) {
-      resolvedUserId = clause.value;
-    } else if (modelKey === "account" && clause.field === "id" && typeof clause.value === "string" && resolvedUserId === null) {
-      const lookedUp = await pool.query<{ user_id: string }>("SELECT user_id FROM public.accounts WHERE id = $1 LIMIT 1", [clause.value]);
-      resolvedUserId = lookedUp.rows[0]?.user_id ?? null;
-    } else if (modelKey === "verification" && clause.field === "identifier" && typeof clause.value === "string") {
-      const transformedIdentifier = transformVerificationIdentifier(clause.value, codec);
-      const emailHmac = extractEmailHmacFromIdentifier(clause.value, codec);
-      if (emailHmac !== null) {
-        resolvedUserId = await lookupUserIdByEmailHmacFromPool(pool, emailHmac);
-      } else if (transformedIdentifier.startsWith(REVOKE_UNPROVEN_ACCESS_PREFIX)) {
-        const suffixUserId = transformedIdentifier.slice(REVOKE_UNPROVEN_ACCESS_PREFIX.length);
-        if (suffixUserId.length > 0) {
-          resolvedUserId = suffixUserId;
-        }
-      } else {
-        const lookedUp = await pool.query<{ user_id: string | null }>(
-          "SELECT user_id FROM public.verifications WHERE identifier = $1 ORDER BY created_at DESC LIMIT 1",
-          [transformedIdentifier],
-        );
-        resolvedUserId = lookedUp.rows[0]?.user_id ?? null;
-      }
-      transformed.push({ ...clause, value: transformedIdentifier });
-      continue;
-    } else if (modelKey === "verification" && clause.field === "id" && typeof clause.value === "string" && resolvedUserId === null) {
-      const lookedUp = await pool.query<{ user_id: string | null }>("SELECT user_id FROM public.verifications WHERE id = $1 LIMIT 1", [clause.value]);
-      resolvedUserId = lookedUp.rows[0]?.user_id ?? null;
-    }
-    transformed.push(clause);
-  }
-  return { clauses: transformed, resolvedUserId, unmatchedEmailLookup: false };
-}
-
-export async function prepareWhereScope(model: string, where: Where[] | undefined, dependencies: { pool: Pool; codec: AuthCryptoCodec }) {
-  const modelKey = normalizeModelKey(model);
-  const encodedWhere = await encodeWhereClauses(model, where, dependencies);
-  let userId = encodedWhere.resolvedUserId;
-  if (modelKey === "session" && userId === null && encodedWhere.clauses) {
-    for (const clause of encodedWhere.clauses) {
-      if ((clause.field === "token" || clause.field === "id") && typeof clause.value === "string") {
-        const column = clause.field === "token" ? "token" : "id";
-        const lookedUp = await dependencies.pool.query<{ user_id: string }>(`SELECT user_id FROM public.sessions WHERE ${column} = $1 LIMIT 1`, [
-          clause.value,
-        ]);
-        userId = lookedUp.rows[0]?.user_id ?? null;
-        break;
-      }
-    }
-  }
-  const useAppRole = userId !== null || modelKey === "rateLimit";
-  return { modelKey, encodedWhere, userId, useAppRole };
 }

@@ -3,7 +3,8 @@ import { createAuthEndpoint, createAuthMiddleware, APIError } from "better-auth/
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth/types";
 import type { Pool } from "pg";
-import { DEEP_LINK_SCHEME, MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS } from "./authLimits.js";
+import { MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS } from "./authLimits.js";
+import { isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
 const EXCHANGE_IDENTIFIER_PREFIX = "magic-link-exchange:";
@@ -22,10 +23,6 @@ interface StoredExchangeCodeRow {
 
 function generateRawExchangeCode(): string {
   return randomBytes(32).toString("base64url");
-}
-
-function isDeepLinkUrl(urlValue: string): boolean {
-  return urlValue.trim().toLowerCase().startsWith(`${DEEP_LINK_SCHEME}://`);
 }
 
 function extractRawSessionTokenFromSetCookie(setCookieHeader: string | null): string | null {
@@ -56,7 +53,10 @@ async function storeExchangeCodeInDatabase(
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL ROLE bjj_app");
-    await client.query("SELECT set_config('app.user_id', $1, true)", [exchangeParameters.userId]);
+    await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.verification_identifier', $2, true)", [
+      exchangeParameters.userId,
+      identifier,
+    ]);
     await client.query(
       `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -79,18 +79,9 @@ async function consumeExchangeCodeFromDatabase(pool: Pool, codec: AuthCryptoCode
   let consumedRow: StoredExchangeCodeRow | undefined;
   try {
     await client.query("BEGIN");
-    const ownerLookup = await client.query<{ user_id: string | null }>(`SELECT user_id FROM public.verifications WHERE identifier = $1 LIMIT 1`, [
-      identifier,
-    ]);
-    const ownerUserId = ownerLookup.rows[0]?.user_id ?? null;
-    if (!ownerUserId) {
-      await client.query("ROLLBACK");
-      throw new APIError("UNAUTHORIZED", {
-        message: "Invalid or already used magic link exchange code",
-      });
-    }
+    // bjj_app (NOBYPASSRLS) sees the row only through verifications_exact_key_policy for this exact hashed identifier.
     await client.query("SET LOCAL ROLE bjj_app");
-    await client.query("SELECT set_config('app.user_id', $1, true)", [ownerUserId]);
+    await client.query("SELECT set_config('app.verification_identifier', $1, true)", [identifier]);
     const deleted = await client.query<StoredExchangeCodeRow>(
       `DELETE FROM public.verifications
        WHERE identifier = $1
@@ -192,7 +183,7 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
           handler: createAuthMiddleware(async (middlewareContext) => {
             const responseHeaders = middlewareContext.context.responseHeaders;
             const locationHeader = responseHeaders?.get("location") ?? null;
-            if (!locationHeader || !isDeepLinkUrl(locationHeader)) {
+            if (!locationHeader || !isAllowedDeepLinkCallbackUrl(locationHeader)) {
               return;
             }
 
@@ -206,10 +197,8 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
 
             if (sessionTokenToRevoke) {
               if (!userId) {
-                const lookedUp = await pool.query<{ user_id: string }>("SELECT user_id FROM public.sessions WHERE token = $1 LIMIT 1", [
-                  sessionTokenToRevoke,
-                ]);
-                userId = lookedUp.rows[0]?.user_id ?? null;
+                const found = await middlewareContext.context.internalAdapter.findSession(sessionTokenToRevoke);
+                userId = found?.user.id ?? null;
               }
               await middlewareContext.context.internalAdapter.deleteSession(sessionTokenToRevoke).catch(() => undefined);
             }
@@ -239,7 +228,6 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
     },
     endpoints: {
       exchangeMagicLinkCode: createAuthEndpoint("/magic-link/exchange", { method: "POST" }, executeExchange),
-      exchangeCodeAlias: createAuthEndpoint("/exchange-code", { method: "POST" }, executeExchange),
     },
   };
 }

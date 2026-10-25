@@ -21,7 +21,7 @@ export {
   SESSION_UPDATE_AGE_DAYS,
   SESSION_UPDATE_AGE_SECONDS,
 } from "./authLimits.js";
-export { authIpRateLimitCustomRules, enforcePerEmailSendRateLimit, ensureAuthRateLimitsTable } from "./authRateLimits.js";
+export { authIpRateLimitCustomRules, enforcePerEmailSendRateLimit } from "./authRateLimits.js";
 export {
   AUTH_DATA_ENCRYPTION_KEY_ENV,
   AUTH_EMAIL_HMAC_KEY_ENV,
@@ -32,4 +32,14 @@ export {
   type AuthCryptoCodec,
   type AuthSecretEnvironment,
 } from "./authSecrets.js";
-export { createAuth, mountAuthRoutes, type AuthInstance, type CreateAuthOptions } from "./createAuth.js";
+export {
+  createAuth,
+  mountAuthRoutes,
+  resolveClientIpAddress,
+  TRUSTABLE_PROXY_IP_HEADERS,
+  type AuthConnectionInfo,
+  type AuthInstance,
+  type CreateAuthOptions,
+  type TrustableProxyIpHeader,
+} from "./createAuth.js";
+export { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl, MAGIC_LINK_REDIRECT_PARAMETERS } from "./deepLinkCallback.js";

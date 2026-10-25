@@ -17,7 +17,6 @@ export const AUTH_EMAIL_HMAC_KEY_ENV = "AUTH_EMAIL_HMAC_KEY";
 export interface AuthSecretEnvironment {
   readonly [AUTH_DATA_ENCRYPTION_KEY_ENV]?: string;
   readonly [AUTH_EMAIL_HMAC_KEY_ENV]?: string;
-  readonly AUTH_HMAC_SECRET_KEY?: string;
   readonly AUTH_DATA_KEY_VERSION?: string;
   readonly [key: string]: string | undefined;
 }
@@ -47,6 +46,7 @@ export interface AuthCryptoCodec {
   hashOtpCode(otp: string): string;
   hashMagicLinkToken(token: string): string;
   hashExchangeCode(code: string): string;
+  hashSessionToken(token: string): string;
 }
 
 const HEX_KEY_PATTERN = /^[0-9a-fA-F]{64}$/u;
@@ -100,7 +100,7 @@ function isKeyringInstance(input: Keyring | AuthSecretConfig): input is Keyring 
 
 export function loadAuthKeyringFromEnvironment(env: AuthSecretEnvironment = process.env): Keyring {
   const dataEncryptionKeyHex = env[AUTH_DATA_ENCRYPTION_KEY_ENV] ?? "";
-  const hmacSecretKeyHex = env[AUTH_EMAIL_HMAC_KEY_ENV] ?? env.AUTH_HMAC_SECRET_KEY ?? "";
+  const hmacSecretKeyHex = env[AUTH_EMAIL_HMAC_KEY_ENV] ?? "";
   if (!dataEncryptionKeyHex) {
     throw new Error(`Missing required deploy-time secret ${AUTH_DATA_ENCRYPTION_KEY_ENV}`);
   }
@@ -209,6 +209,9 @@ export function createAuthCryptoCodec(keyringOrConfig: Keyring | AuthSecretConfi
     },
     hashExchangeCode(code: string): string {
       return computeDomainSeparatedHmac(keyring, "magic-link-exchange-v1", code.trim());
+    },
+    hashSessionToken(token: string): string {
+      return computeDomainSeparatedHmac(keyring, "session-token-v1", token);
     },
   };
 }

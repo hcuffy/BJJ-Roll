@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { userSchema } from "../../../shared/dist/index.js";
+import { userSchema } from "@bjj-roll/shared";
 import { withUserContext } from "../database/connection.js";
 import { createHandleRoutes, mountHandleRoutes } from "../handleRoutes.js";
 import {

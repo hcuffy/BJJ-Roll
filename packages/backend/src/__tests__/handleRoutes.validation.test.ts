@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
-import { handleMaximumLength, handleMinimumLength, reservedHandles } from "../../../shared/dist/index.js";
+import { handleMaximumLength, handleMinimumLength, reservedHandles } from "@bjj-roll/shared";
 import type { BjjRollDatabase } from "../database/schema.js";
 import { createHandleRoutes, isUniqueHandleConflict, mountHandleRoutes } from "../handleRoutes.js";
 

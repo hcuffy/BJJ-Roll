@@ -3,15 +3,19 @@ import type { DBAdapter, Where } from "better-auth/adapters";
 import type { BetterAuthOptions } from "better-auth/types";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import type { Pool } from "pg";
-import { lookupUserIdByEmailHmacFromPool } from "../database/index.js";
 import { decodeDatabaseRow, encodeCreateData, encodeUpdateData, normalizeModelKey } from "./authCodecTransform.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import {
+  applyScopeSettings,
   applySessionUpdateRules,
   capSessionCreateExpiry,
+  emptyScopeSettings,
+  enterAppRole,
   isSessionPastLifetime,
-  prepareWhereScope,
-  runWithScopedAdapter,
+  lookupUserIdByEmailHmacInTransaction,
+  resolveWhereScope,
+  type AuthTransaction,
+  type ResolvedWhereScope,
 } from "./authSessionScope.js";
 
 export interface CreateEncryptedRlsAuthAdapterOptions {
@@ -19,191 +23,176 @@ export interface CreateEncryptedRlsAuthAdapterOptions {
   readonly codec: AuthCryptoCodec;
 }
 
+type RunInTransaction = <TResult>(work: (transaction: AuthTransaction) => Promise<TResult>) => Promise<TResult>;
+type RowRecord = Record<string, unknown>;
+
+/** Runs operations one at a time on a shared transaction, so one operation's settings never apply to another's query. */
+function serializeOnTransaction(transaction: AuthTransaction): RunInTransaction {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <TResult>(work: (transactionDb: AuthTransaction) => Promise<TResult>): Promise<TResult> => {
+    const next = tail.then(() => work(transaction));
+    tail = next.catch(() => undefined);
+    return next;
+  };
+}
+
+/**
+ * Better Auth adapter over Postgres. Every operation runs in a transaction as bjj_app (NOBYPASSRLS) with
+ * transaction-local settings for RLS; emails are encrypted/HMACed, identifiers and session tokens hashed.
+ */
 export function createEncryptedRlsAuthAdapter(
   adapterContext: CreateEncryptedRlsAuthAdapterOptions,
 ): (options: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
   const { pool, codec } = adapterContext;
-  const kyselyDb = new Kysely<Record<string, unknown>>({
+  const kyselyDb = new Kysely<RowRecord>({
     dialect: new PostgresDialect({ pool }),
     plugins: [new CamelCasePlugin()],
   });
-  const resolveScope = (model: string, where: Where[] | undefined) => prepareWhereScope(model, where, { pool, codec });
+
+  const runInNewTransaction: RunInTransaction = (work) =>
+    kyselyDb.transaction().execute(async (transaction) => {
+      await enterAppRole(transaction);
+      return await work(transaction);
+    });
 
   return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
     const baseAdapter = kyselyAdapter(kyselyDb, { type: "postgres" })(options);
-    const adapterInstance: DBAdapter<BetterAuthOptions> = {
-      id: "bjj-encrypted-rls-kysely",
-      options: baseAdapter.options,
-      createSchema: baseAdapter.createSchema,
-      async transaction(callback) {
-        return await callback(adapterInstance);
-      },
-      async create({ model, data }) {
-        const modelKey = normalizeModelKey(model);
-        const { encoded, emailHmac } = encodeCreateData(model, data, codec);
-        let userId: string | null = null;
-        let useAppRole = false;
-        if (modelKey === "user") {
-          userId = String(encoded.id);
-          useAppRole = true;
-        } else if (modelKey === "session" || modelKey === "account") {
-          userId = typeof encoded.userId === "string" ? encoded.userId : null;
-          useAppRole = userId !== null;
+    const decodeRow = (model: string, row: RowRecord | null, rawSessionToken: string | null): RowRecord | null => {
+      const decoded = decodeDatabaseRow(model, row, codec);
+      if (decoded && rawSessionToken !== null && normalizeModelKey(model) === "session") {
+        return { ...decoded, token: rawSessionToken };
+      }
+      return decoded;
+    };
+
+    const buildAdapter = (run: RunInTransaction, sharedTransaction: AuthTransaction | null): DBAdapter<BetterAuthOptions> => {
+      const scoped = <TResult>(
+        { model, where }: { model: string; where: Where[] | undefined },
+        whenUnmatched: TResult,
+        operation: (adapter: DBAdapter<BetterAuthOptions>, scope: ResolvedWhereScope) => Promise<TResult>,
+      ): Promise<TResult> =>
+        run(async (transaction) => {
+          const scope = await resolveWhereScope(transaction, { model, where }, codec);
+          if (scope.unmatched) {
+            return whenUnmatched;
+          }
+          return await operation(kyselyAdapter(transaction, { type: "postgres" })(options), scope);
+        });
+
+      const adapterInstance: DBAdapter<BetterAuthOptions> = {
+        id: "bjj-encrypted-rls-kysely",
+        options: baseAdapter.options,
+        createSchema: baseAdapter.createSchema,
+        async transaction(callback) {
+          if (sharedTransaction !== null) {
+            return await callback(adapterInstance);
+          }
+          return await kyselyDb.transaction().execute(async (transaction) => {
+            await enterAppRole(transaction);
+            return await callback(buildAdapter(serializeOnTransaction(transaction), transaction));
+          });
+        },
+        async create({ model, data }) {
+          const modelKey = normalizeModelKey(model);
+          const { encoded, emailHmac } = encodeCreateData(model, data, codec);
+          let rawSessionToken: string | null = null;
           if (modelKey === "session") {
             capSessionCreateExpiry(encoded);
-          }
-        } else if (modelKey === "verification" && emailHmac !== null) {
-          userId = await lookupUserIdByEmailHmacFromPool(pool, emailHmac);
-          if (userId !== null) {
-            encoded.userId = userId;
-            useAppRole = true;
-          }
-        } else if (modelKey === "rateLimit") {
-          useAppRole = true;
-        }
-        const created = await runWithScopedAdapter<Record<string, unknown>>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.create({ model, data: encoded, forceAllowId: true }),
-        });
-        return decodeDatabaseRow(model, created, codec) as never;
-      },
-      async findOne({ model, where, join }) {
-        const { modelKey, encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup || ((modelKey === "user" || modelKey === "session") && userId === null)) {
-          return null;
-        }
-        const found = await runWithScopedAdapter<Record<string, unknown> | null>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: async (scoped) => {
-            const row = await scoped.findOne<Record<string, unknown>>({
-              model,
-              where: encodedWhere.clauses ?? [],
-              join,
-            });
-            if (!row || modelKey !== "session") {
-              return row;
+            if (typeof encoded.token === "string") {
+              rawSessionToken = encoded.token;
+              encoded.token = codec.hashSessionToken(rawSessionToken);
             }
-            if (isSessionPastLifetime(row, Date.now())) {
-              await scoped.delete({
-                model,
-                where: [{ field: "id", operator: "eq", value: String(row.id), connector: "AND" }],
-              });
+          }
+          return (await run(async (transaction) => {
+            const settings = emptyScopeSettings();
+            if (modelKey === "user") {
+              settings.userId = String(encoded.id);
+            } else if (modelKey === "session" || modelKey === "account") {
+              settings.userId = typeof encoded.userId === "string" ? encoded.userId : null;
+            } else if (modelKey === "verification") {
+              settings.verificationIdentifier = typeof encoded.identifier === "string" ? encoded.identifier : null;
+              if (emailHmac !== null) {
+                const userId = await lookupUserIdByEmailHmacInTransaction(transaction, emailHmac);
+                if (userId !== null) {
+                  encoded.userId = userId;
+                  settings.userId = userId;
+                }
+              } else if (typeof encoded.userId === "string") {
+                settings.userId = encoded.userId;
+              }
+            }
+            await applyScopeSettings(transaction, settings);
+            const created = await kyselyAdapter(transaction, { type: "postgres" })(options).create<RowRecord, RowRecord>({
+              model,
+              data: encoded,
+              forceAllowId: true,
+            });
+            return decodeRow(model, created, rawSessionToken);
+          })) as never;
+        },
+        async findOne({ model, where, join }) {
+          const modelKey = normalizeModelKey(model);
+          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+            const row = await adapter.findOne<RowRecord>({ model, where: scope.clauses ?? [], join });
+            if (row && modelKey === "session" && isSessionPastLifetime(row, Date.now())) {
+              await adapter.delete({ model, where: [{ field: "id", operator: "eq", value: String(row.id), connector: "AND" }] });
               return null;
             }
-            return row;
-          },
-        });
-        return decodeDatabaseRow(model, found, codec) as never;
-      },
-      async findMany({ model, where, limit, sortBy, offset, join }) {
-        const { modelKey, encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup || ((modelKey === "user" || modelKey === "session") && userId === null && (where?.length ?? 0) > 0)) {
-          return [];
-        }
-        const rows = await runWithScopedAdapter<Record<string, unknown>[]>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.findMany({ model, where: encodedWhere.clauses, limit, sortBy, offset, join }),
-        });
-        const nowMs = Date.now();
-        const filtered = modelKey === "session" ? rows.filter((row) => !isSessionPastLifetime(row, nowMs)) : rows;
-        return filtered.map((row) => decodeDatabaseRow(model, row, codec)) as never;
-      },
-      async update({ model, where, update }) {
-        const { modelKey, encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup || ((modelKey === "user" || modelKey === "session") && userId === null)) {
-          return null;
-        }
-        const encodedUpdate = encodeUpdateData(model, update as Record<string, unknown>, codec);
-        const updated = await runWithScopedAdapter<Record<string, unknown> | null>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: async (scoped) => {
-            const clauses = encodedWhere.clauses ?? [];
-            if (modelKey === "session") {
-              return await applySessionUpdateRules(scoped, { model, clauses, encodedUpdate });
-            }
-            return await scoped.update<Record<string, unknown>>({
-              model,
-              where: clauses,
-              update: encodedUpdate,
-            });
-          },
-        });
-        return decodeDatabaseRow(model, updated, codec) as never;
-      },
-      async updateMany({ model, where, update }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return 0;
-        }
-        const encodedUpdate = encodeUpdateData(model, update, codec);
-        return await runWithScopedAdapter(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.updateMany({ model, where: encodedWhere.clauses ?? [], update: encodedUpdate }),
-        });
-      },
-      async delete({ model, where }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return;
-        }
-        await runWithScopedAdapter(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.delete({ model, where: encodedWhere.clauses ?? [] }),
-        });
-      },
-      async deleteMany({ model, where }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return 0;
-        }
-        return await runWithScopedAdapter(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.deleteMany({ model, where: encodedWhere.clauses ?? [] }),
-        });
-      },
-      async count({ model, where }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return 0;
-        }
-        return await runWithScopedAdapter(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.count({ model, where: encodedWhere.clauses }),
-        });
-      },
-      async consumeOne({ model, where }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return null;
-        }
-        const consumed = await runWithScopedAdapter<Record<string, unknown> | null>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.consumeOne({ model, where: encodedWhere.clauses ?? [] }),
-        });
-        return decodeDatabaseRow(model, consumed, codec) as never;
-      },
-      async incrementOne({ model, where, increment, set }) {
-        const { encodedWhere, userId, useAppRole } = await resolveScope(model, where);
-        if (encodedWhere.unmatchedEmailLookup) {
-          return null;
-        }
-        const incremented = await runWithScopedAdapter<Record<string, unknown> | null>(kyselyDb, options, {
-          userId,
-          useAppRole,
-          operation: (scoped) => scoped.incrementOne({ model, where: encodedWhere.clauses ?? [], increment, set }),
-        });
-        return decodeDatabaseRow(model, incremented, codec) as never;
-      },
+            return decodeRow(model, row, scope.rawSessionToken);
+          })) as never;
+        },
+        async findMany({ model, where, limit, sortBy, offset, join }) {
+          const modelKey = normalizeModelKey(model);
+          return (await scoped<RowRecord[]>({ model, where }, [], async (adapter, scope) => {
+            const rows = await adapter.findMany<RowRecord>({ model, where: scope.clauses, limit, sortBy, offset, join });
+            const nowMs = Date.now();
+            const live = modelKey === "session" ? rows.filter((row) => !isSessionPastLifetime(row, nowMs)) : rows;
+            return live.map((row) => decodeRow(model, row, scope.rawSessionToken) as RowRecord);
+          })) as never;
+        },
+        async update({ model, where, update }) {
+          const modelKey = normalizeModelKey(model);
+          const encodedUpdate = encodeUpdateData(model, update as RowRecord, codec);
+          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+            const clauses = scope.clauses ?? [];
+            const updated =
+              modelKey === "session"
+                ? await applySessionUpdateRules(adapter, { model, clauses, encodedUpdate })
+                : await adapter.update<RowRecord>({ model, where: clauses, update: encodedUpdate });
+            return decodeRow(model, updated, scope.rawSessionToken);
+          })) as never;
+        },
+        async updateMany({ model, where, update }) {
+          const encodedUpdate = encodeUpdateData(model, update, codec);
+          return await scoped({ model, where }, 0, (adapter, scope) =>
+            adapter.updateMany({ model, where: scope.clauses ?? [], update: encodedUpdate }),
+          );
+        },
+        async delete({ model, where }) {
+          await scoped({ model, where }, undefined, (adapter, scope) => adapter.delete({ model, where: scope.clauses ?? [] }));
+        },
+        async deleteMany({ model, where }) {
+          return await scoped({ model, where }, 0, (adapter, scope) => adapter.deleteMany({ model, where: scope.clauses ?? [] }));
+        },
+        async count({ model, where }) {
+          return await scoped({ model, where }, 0, (adapter, scope) => adapter.count({ model, where: scope.clauses }));
+        },
+        async consumeOne({ model, where }) {
+          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+            const consumed = await adapter.consumeOne<RowRecord>({ model, where: scope.clauses ?? [] });
+            return decodeRow(model, consumed, scope.rawSessionToken);
+          })) as never;
+        },
+        async incrementOne({ model, where, increment, set }) {
+          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+            const incremented = await adapter.incrementOne<RowRecord>({ model, where: scope.clauses ?? [], increment, set });
+            return decodeRow(model, incremented, scope.rawSessionToken);
+          })) as never;
+        },
+      };
+      return adapterInstance;
     };
-    return adapterInstance;
+
+    return buildAdapter(runInNewTransaction, null);
   };
 }
