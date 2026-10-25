@@ -1,18 +1,24 @@
 import { expect } from "vitest";
 import type { FakeSentOneTimeCodeMessage } from "../email/index.js";
-import { extractSessionCookie, postAuthJson, testBaseUrl, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { extractSessionCookie, postAuthJson, socketEnvironment, testBaseUrl, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 
 export interface SignedInUser {
   readonly email: string;
   readonly cookie: string;
   readonly userId: string;
+  /** The client IP the user signed in from; their account requests come from it too. */
+  readonly ipAddress: string;
 }
 
 export interface AccountRequestOptions {
   cookie?: string;
   headers?: Record<string, string>;
   body?: unknown;
+  /** Socket address of the request. Default: the shared test address. */
+  ipAddress?: string;
 }
+
+const defaultAccountClientIp = "198.51.100.99";
 
 /** Sign-in, delete-code and account requests shared by the HEN-65 Postgres suites. */
 export function createAccountTestFlow(current: () => StartedAuthTestEnvironment) {
@@ -42,7 +48,7 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
     const response = await postAuthJson(current().app, "/sign-in/email-otp", { body: { email, otp: latestCodeFor(email, "sign_in") }, ipAddress });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { user: { id: string } };
-    return { email, cookie: extractSessionCookie(response), userId: body.user.id };
+    return { email, cookie: extractSessionCookie(response), userId: body.user.id, ipAddress };
   };
 
   const accountRequest = (method: "GET" | "POST" | "DELETE", path: string, options: AccountRequestOptions = {}) => {
@@ -53,16 +59,16 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
     if (options.body !== undefined) {
       headers["content-type"] = "application/json";
     }
-    return current().app.request(`${testBaseUrl}${path}`, {
-      method,
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+    return current().app.request(
+      `${testBaseUrl}${path}`,
+      { method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body) },
+      socketEnvironment(options.ipAddress ?? defaultAccountClientIp),
+    );
   };
 
   /** POST /account/delete-code, then the code from the email it sent. */
   const requestDeleteCode = async (user: SignedInUser): Promise<string> => {
-    const response = await accountRequest("POST", "/account/delete-code", { cookie: user.cookie });
+    const response = await accountRequest("POST", "/account/delete-code", { cookie: user.cookie, ipAddress: user.ipAddress });
     expect(response.status).toBe(200);
     return latestCodeFor(user.email, "account_deletion");
   };
@@ -70,7 +76,7 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
   /** The full fresh-code delete: request a code, then DELETE /account with it. */
   const deleteAccount = async (user: SignedInUser): Promise<Response> => {
     const code = await requestDeleteCode(user);
-    return accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code } });
+    return accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code }, ipAddress: user.ipAddress });
   };
 
   return { latestCodeFor, sendOtp, signIn, accountRequest, requestDeleteCode, deleteAccount };

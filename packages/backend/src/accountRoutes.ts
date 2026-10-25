@@ -2,6 +2,7 @@ import { accountExportSchema, type AccountExport } from "@bjj-roll/shared";
 import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { handleDeleteAccount, handleSendAccountDeletionCode } from "./accountDeletion.js";
+import type { AccountDeletionAttempts } from "./auth/accountDeletionAttempts.js";
 import type { AccountDeletionCodes } from "./auth/accountDeletionCodes.js";
 import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
@@ -19,6 +20,9 @@ export interface AccountRoutesOptions {
   resolveAuthenticatedUserId: AuthenticatedUserIdResolver;
   decryptUserEmail: (emailCiphertext: string, keyVersion: number) => string;
   accountDeletionCodes: AccountDeletionCodes;
+  /** Counted before every code check, so parallel guesses cannot outrun the attempt limit. */
+  accountDeletionAttempts: AccountDeletionAttempts;
+  resolveClientIp: (context: Context) => string;
   emailSender: Pick<EmailSender, "sendAccountDeletedNotice">;
   logAccountEvent: AccountEventLogger;
 }

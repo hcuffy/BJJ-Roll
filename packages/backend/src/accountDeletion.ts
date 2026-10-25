@@ -41,6 +41,7 @@ export async function handleSendAccountDeletionCode(context: Context, options: A
     }
     throw error;
   }
+  await options.accountDeletionAttempts.resetForNewCode(userId);
   const response: AccountDeletionCodeResponse = { sent: true };
   return context.json(response, 200);
 }
@@ -58,6 +59,9 @@ export async function handleDeleteAccount(context: Context, options: AccountRout
   const parsed = accountDeletionRequestSchema.safeParse(await readJsonBody(context));
   if (!parsed.success) {
     return context.json({ error: "A 6-digit code is required" }, 400);
+  }
+  if ((await options.accountDeletionAttempts.take(userId, options.resolveClientIp(context))) === "rate_limited") {
+    return context.json({ error: "Too many tries. Ask for a new code, or try again later." }, 429);
   }
   const capturedEmail = await readOwnEmail(options, userId);
   if (capturedEmail === null) {

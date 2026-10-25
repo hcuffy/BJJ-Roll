@@ -123,6 +123,21 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
     expect(screen.text()).toContain("Enter the code we emailed you");
   });
 
+  it("a failed resend shows why, never 'We sent a new code', and clears an earlier sent notice", async () => {
+    const screen = await harness.renderAtCodeStep();
+    await screen.press("Send a new code");
+    expect(screen.text()).toContain("We sent a new code to your email.");
+
+    state.codeResult = Promise.resolve<AccountCodeResult>({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    await screen.press("Send a new code");
+
+    expect(state.codeRequests).toBe(3);
+    expect(screen.text()).not.toContain("We sent a new code");
+    expect(screen.queryByText(`We could not send the code. ${FAILURE_MESSAGES.rateLimited}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.text()).toContain("Enter the code we emailed you");
+    expect(state.deletedCalls).toBe(0);
+  });
+
   it("a11y: the code step moves focus to its heading; Cancel returns to Delete account without deleting", async () => {
     const screen = await harness.renderAtCodeStep();
     const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);

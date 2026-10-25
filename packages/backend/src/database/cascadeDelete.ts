@@ -13,6 +13,7 @@ export interface AccountDeletionCascadeStep {
  * Every user-data table in `public` is accounted for when a user deletes their account.
  * `public.rate_limits` is deliberately not in the map: the per-email send counter (key `email:<email_hash>`, hash only) stays
  * until its 15-minute window expires, so deleting the account and signing up again cannot reset the send limit (HEN-65).
+ * The DELETE /account try counters (`account-delete:user:<id>`, `account-delete:ip:<ip>`) age out the same way.
  */
 export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = [
   {
