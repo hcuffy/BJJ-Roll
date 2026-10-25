@@ -2,8 +2,10 @@ import {
   EmailSendError,
   type EmailSender,
   type RenderedEmailMessage,
+  renderAccountDeletedEmail,
   renderMagicLinkEmail,
   renderOneTimeCodeEmail,
+  type SendAccountDeletedNoticeInput,
   type SendMagicLinkInput,
   type SendOneTimeCodeInput,
 } from "./emailSender.js";
@@ -80,6 +82,11 @@ export class LettermintEmailSender implements EmailSender {
 
   async sendMagicLink(input: SendMagicLinkInput): Promise<void> {
     const rendered = renderMagicLinkEmail(input);
+    await this.#postMessage(input.to.trim(), rendered);
+  }
+
+  async sendAccountDeletedNotice(input: SendAccountDeletedNoticeInput): Promise<void> {
+    const rendered = renderAccountDeletedEmail(input);
     await this.#postMessage(input.to.trim(), rendered);
   }
 

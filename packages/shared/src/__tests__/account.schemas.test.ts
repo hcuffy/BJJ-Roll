@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountDeletionResponseSchema, accountExportSchema } from "../index.js";
+import { accountDeletionCodeResponseSchema, accountDeletionRequestSchema, accountDeletionResponseSchema, accountExportSchema } from "../index.js";
 
 const userId = "01964c3a-7f00-7000-8000-000000000001";
 const timestamp = "2026-10-25T08:00:00.000Z";
@@ -30,5 +30,17 @@ describe("account export and deletion schemas (HEN-65)", () => {
     expect(accountDeletionResponseSchema.parse({ deleted: true })).toEqual({ deleted: true });
     expect(accountDeletionResponseSchema.safeParse({ deleted: false }).success).toBe(false);
     expect(accountDeletionResponseSchema.safeParse({ deleted: true, userId }).success).toBe(false);
+  });
+
+  it("accepts a delete request only with a 6-digit email code (Henry, 25 Oct: fresh code before delete)", () => {
+    expect(accountDeletionRequestSchema.parse({ code: "012345" })).toEqual({ code: "012345" });
+    for (const body of [{}, { code: "" }, { code: "12345" }, { code: "1234567" }, { code: "12a456" }, { code: 123456 }, { code: "123456", userId }]) {
+      expect(accountDeletionRequestSchema.safeParse(body).success).toBe(false);
+    }
+  });
+
+  it("accepts only sent: true as the delete-code response", () => {
+    expect(accountDeletionCodeResponseSchema.parse({ sent: true })).toEqual({ sent: true });
+    expect(accountDeletionCodeResponseSchema.safeParse({ sent: true, code: "123456" }).success).toBe(false);
   });
 });

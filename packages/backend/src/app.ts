@@ -10,7 +10,7 @@ import { mountHandleRoutes } from "./handleRoutes.js";
 import { loadServerConfig, type ServerConfig, type ServerEnvironment } from "./serverConfig.js";
 
 export interface CreateAppOptions {
-  readonly auth?: Pick<AuthInstance, "handler" | "resolveSessionUserId" | "codec"> | CreateAuthOptions;
+  readonly auth?: Pick<AuthInstance, "handler" | "resolveSessionUserId" | "codec" | "accountDeletionCodes" | "emailSender"> | CreateAuthOptions;
   /** When set together with auth, mounts the handle and account routes with the auth session as the user resolver. */
   readonly database?: Kysely<BjjRollDatabase>;
 }
@@ -30,6 +30,8 @@ export function createApp(options?: CreateAppOptions): Hono {
         db: options.database,
         resolveAuthenticatedUserId,
         decryptUserEmail: (emailCiphertext, keyVersion) => authInstance.codec.decryptUserEmail(emailCiphertext, keyVersion),
+        accountDeletionCodes: authInstance.accountDeletionCodes,
+        emailSender: authInstance.emailSender,
       });
     }
   }

@@ -35,6 +35,9 @@ function jsonResponse(body: unknown, headers: Record<string, string> = {}, statu
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
+/** The code the fake POST /account/delete-code "emails"; DELETE /account accepts only this one. */
+export const TEST_DELETE_CODE = "654321";
+
 /** What the fake GET /account/export returns for the signed-in fake user. */
 export const TEST_ACCOUNT_EXPORT = {
   exportedAt: "2026-10-25T08:00:00.000Z",
@@ -62,11 +65,18 @@ export function createFakeBackend() {
       return jsonResponse(signedIn ? { user: { id: "user-1" }, session: { id: "session-1", expiresAt: "2099-01-01T00:00:00.000Z" } } : null);
     }
     // Account routes (HEN-65) sit outside /api/auth and need the session cookie.
-    if (pathname === "/account/export" || pathname === "/account") {
+    if (pathname === "/account/export" || pathname === "/account" || pathname === "/account/delete-code") {
       if (!signedIn) {
         return jsonResponse({ error: "Authentication required" }, {}, 401);
       }
-      return jsonResponse(pathname === "/account" ? { deleted: true } : TEST_ACCOUNT_EXPORT);
+      if (pathname === "/account/delete-code") {
+        return jsonResponse({ sent: true });
+      }
+      if (pathname === "/account") {
+        const codeMatches = requests.at(-1)?.body?.code === TEST_DELETE_CODE;
+        return codeMatches ? jsonResponse({ deleted: true }) : jsonResponse({ error: "Invalid or expired code" }, {}, 403);
+      }
+      return jsonResponse(TEST_ACCOUNT_EXPORT);
     }
     return jsonResponse({ status: true });
   };

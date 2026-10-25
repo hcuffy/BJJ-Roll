@@ -24,3 +24,17 @@ export const accountDeletionResponseSchema = z.strictObject({
 });
 
 export type AccountDeletionResponse = z.infer<typeof accountDeletionResponseSchema>;
+
+/** DELETE /account body (HEN-65, Henry 25 Oct): the fresh 6-digit code from the delete-code email, and nothing else. */
+export const accountDeletionRequestSchema = z.strictObject({
+  code: z.string().regex(/^\d{6}$/u),
+});
+
+export type AccountDeletionRequest = z.infer<typeof accountDeletionRequestSchema>;
+
+/** POST /account/delete-code: a deletion code was emailed to the signed-in user's own address. */
+export const accountDeletionCodeResponseSchema = z.strictObject({
+  sent: z.literal(true),
+});
+
+export type AccountDeletionCodeResponse = z.infer<typeof accountDeletionCodeResponseSchema>;

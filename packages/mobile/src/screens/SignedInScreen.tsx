@@ -1,22 +1,26 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
-import type { AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 export interface SignedInScreenProps {
   readonly onSignOut: () => void;
   readonly onExportData: () => Promise<AccountExportResult>;
-  readonly onDeleteAccount: () => Promise<AccountDeletionResult>;
+  /** Emails a fresh code; DELETE /account only succeeds with it (Henry's decision, HEN-65). */
+  readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
+  readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   /** Called once the backend confirmed the deletion and the local session is gone. */
   readonly onAccountDeleted: () => void;
 }
 
-type AccountTask = "export" | "delete";
+type AccountTask = "export" | "code";
+type DeleteStep = "none" | "confirm" | "code";
 
 const styles = StyleSheet.create({
   // 16 margin + the layout's 16 gap = 32 above the section.
@@ -31,11 +35,11 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
 }
 
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
-export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAccountDeleted }: SignedInScreenProps) {
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, onDeleteAccount, onAccountDeleted }: SignedInScreenProps) {
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
@@ -43,14 +47,15 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
   const returnFocusToDeleteEntry = useRef(false);
 
   // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
+  // The code step moves focus to its own heading.
   useEffect(() => {
-    if (isConfirmingDelete) {
+    if (deleteStep === "confirm") {
       moveScreenReaderFocus(confirmHeading.current);
-    } else if (returnFocusToDeleteEntry.current) {
+    } else if (deleteStep === "none" && returnFocusToDeleteEntry.current) {
       returnFocusToDeleteEntry.current = false;
       moveScreenReaderFocus(deleteEntry.current);
     }
-  }, [isConfirmingDelete]);
+  }, [deleteStep]);
 
   const runOnce = async (task: AccountTask, work: () => Promise<void>) => {
     if (inFlight.current) {
@@ -81,16 +86,24 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
       }
     });
 
-  const deleteAccount = () =>
-    runOnce("delete", async () => {
-      setDeleteError(null);
-      const result = await onDeleteAccount();
+  const requestCode = () =>
+    runOnce("code", async () => {
+      setCodeRequestError(null);
+      const result = await onRequestDeleteCode();
       if (result.ok) {
-        onAccountDeleted();
+        setExportError(null);
+        setDeleteStep("code");
       } else {
-        setDeleteError(`Your account was not deleted. ${result.message}`);
+        setCodeRequestError(`We could not send the code. ${result.message}`);
       }
     });
+
+  const cancelDelete = () => {
+    setCodeRequestError(null);
+    setExportError(null);
+    returnFocusToDeleteEntry.current = true;
+    setDeleteStep("none");
+  };
 
   const isBusy = runningTask !== null;
   const exportButtonProps = {
@@ -100,7 +113,18 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
     onPress: () => void exportData(),
   };
 
-  if (isConfirmingDelete) {
+  if (deleteStep === "code") {
+    return (
+      <DeleteAccountCodeStep
+        onRequestDeleteCode={onRequestDeleteCode}
+        onDeleteAccount={onDeleteAccount}
+        onAccountDeleted={onAccountDeleted}
+        onCancel={cancelDelete}
+      />
+    );
+  }
+
+  if (deleteStep === "confirm") {
     return (
       <AuthScreenLayout>
         <Text accessibilityRole="header" style={textStyles.display}>
@@ -111,6 +135,7 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
             Delete your account?
           </Text>
           <Text style={textStyles.body}>This permanently deletes your account, handle and sign-in data now. It can&apos;t be undone.</Text>
+          <Text style={textStyles.body}>If you sign up again later, you get a new, empty account.</Text>
         </View>
         <View style={authStyles.actions}>
           <AuthButton
@@ -120,27 +145,17 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
             accessibilityHint="Opens the share sheet with a copy of your account data. Nothing is deleted."
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
-          <StatusText message={deleteError} style={authStyles.fieldError} />
+          <StatusText message={codeRequestError} style={authStyles.fieldError} />
           <AuthButton
-            title="Delete my account"
-            variant="danger"
+            title="Email me a code"
+            variant="secondary"
             disabled={runningTask === "export"}
-            loading={runningTask === "delete"}
-            loadingTitle="Deleting account…"
-            accessibilityHint="Deletes your account now and signs you out."
-            onPress={() => void deleteAccount()}
+            loading={runningTask === "code"}
+            loadingTitle="Sending code…"
+            accessibilityHint="Emails you a code to confirm. Nothing is deleted yet."
+            onPress={() => void requestCode()}
           />
-          <AuthButton
-            title="Cancel"
-            variant="tertiary"
-            disabled={isBusy}
-            onPress={() => {
-              setDeleteError(null);
-              setExportError(null);
-              returnFocusToDeleteEntry.current = true;
-              setIsConfirmingDelete(false);
-            }}
-          />
+          <AuthButton title="Cancel" variant="tertiary" disabled={isBusy} onPress={cancelDelete} />
         </View>
       </AuthScreenLayout>
     );
@@ -171,7 +186,7 @@ export function SignedInScreen({ onSignOut, onExportData, onDeleteAccount, onAcc
           accessibilityHint="Asks you to confirm before anything is deleted."
           onPress={() => {
             setExportError(null);
-            setIsConfirmingDelete(true);
+            setDeleteStep("confirm");
           }}
         />
       </View>

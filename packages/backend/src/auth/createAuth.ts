@@ -3,13 +3,14 @@ import { expo } from "@better-auth/expo";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { betterAuth } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { emailOTP, magicLink } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Context, Hono } from "hono";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
+import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
 import { ageGateRefusalForNewUser } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
@@ -71,6 +72,9 @@ export interface AuthInstance {
   readonly resolveSessionUserId: (headers: Headers) => Promise<string | null>;
   readonly codec: AuthCryptoCodec;
   readonly keyring: Keyring;
+  /** Fresh email codes for DELETE /account (HEN-65). */
+  readonly accountDeletionCodes: AccountDeletionCodes;
+  readonly emailSender: EmailSender;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
 }
 
@@ -132,6 +136,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         }
         if (middlewareContext.path === "/email-otp/send-verification-otp" || middlewareContext.path === "/sign-in/magic-link") {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
+          // Over HTTP only sign-in codes can be asked for; account-deletion codes come from POST /account/delete-code (server call, no request).
+          if (middlewareContext.path === "/email-otp/send-verification-otp" && middlewareContext.request && body?.type !== "sign-in") {
+            throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" });
+          }
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
           }
@@ -146,7 +154,13 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         allowedAttempts: OTP_MAX_ATTEMPTS,
         generateOTP: () => generateCsprngOtpCode(),
         storeOTP: { hash: (otp) => Promise.resolve(codec.hashOtpCode(otp)) },
-        sendVerificationOTP: ({ email, otp }) => options.emailSender.sendOneTimeCode({ to: email, code: otp, expiresInMinutes: OTP_EXPIRY_MINUTES }),
+        sendVerificationOTP: ({ email, otp, type }) =>
+          options.emailSender.sendOneTimeCode({
+            to: email,
+            code: otp,
+            expiresInMinutes: OTP_EXPIRY_MINUTES,
+            ...(type === "email-verification" ? { purpose: "account_deletion" as const } : {}),
+          }),
       }),
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
@@ -160,6 +174,8 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
   return {
     codec,
     keyring,
+    accountDeletionCodes: createAccountDeletionCodes(betterAuthInstance.api),
+    emailSender: options.emailSender,
     telemetry: betterAuthTelemetryDisabledConfig,
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
       const headers = new Headers(rawRequest.headers);

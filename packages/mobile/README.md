@@ -104,8 +104,10 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 **Account deletion (HEN-65 AC7)**
 
-- [ ] Signed in, tap **Delete account**: the "Delete your account?" confirm step shows and nothing is deleted yet. **Cancel** goes back with the account intact.
-- [ ] Tap **Delete account** again, then **Delete my account**: "Deleting account…" shows, then the "Sign in to BJJ Roll" screen.
+- [ ] Signed in, tap **Delete account**: the "Delete your account?" confirm step shows, says signing up again gives a new, empty account, and nothing is deleted yet. **Cancel** goes back with the account intact.
+- [ ] Tap **Delete account** again, then **Email me a code**: the code step shows and an email "Your BJJ Roll code to delete your account" arrives. A wrong code shows "That code didn't work…" and the account stays.
+- [ ] Enter the emailed code, then tap **Delete my account**: "Deleting account…" shows, then the "Sign in to BJJ Roll" screen with "Your account was deleted. If you sign up again, you get a new, empty account."
+- [ ] An email "Your BJJ Roll account was deleted" arrives at the same address.
 - [ ] Fully close the app and reopen it: still the "Sign in to BJJ Roll" screen (signed out).
 
 **Vera's "needs device screenshot" items (HEN-78 design review)**

@@ -552,6 +552,7 @@ Until HEN-192 is answered, every share path renders masked output (Lydia's recom
 ## 5. Cascade-delete map (D14)
 
 Triggers: **V** = the owner deletes a video. **A** = a user deletes their account (HEN-65). All V rows also run for every video of a deleted account.
+Account deletion needs a fresh emailed code: `POST /account/delete-code`, then `DELETE /account` with `{ code }` (Better Auth email-OTP, shared per-email limits). It deletes at once with no grace period or undo. A notice goes to the address read before the cascade; if that send fails, the delete still stands and only a PII-free log line is written.
 Deletion is one orchestrated `video_delete` job (HEN-95) built on the SillyRabbit `cascadeDelete.ts` pattern, with a test per entity (standing criterion 6).
 
 | Entity                                                                      | Store                         | V                                         | A                                         | Retention conflict                                                                                                                                              |

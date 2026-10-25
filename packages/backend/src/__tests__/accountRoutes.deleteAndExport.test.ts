@@ -3,20 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { accountDeletionCascadeMap, verificationIdentifiersForEmailHash } from "../database/cascadeDelete.js";
 import type { UserDataTableName } from "../database/schema.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import {
-  extractSessionCookie,
-  getAuthPath,
-  postAuthJson,
-  startAuthTestEnvironment,
-  testBaseUrl,
-  type StartedAuthTestEnvironment,
-} from "./authTestHelper.js";
-
-interface SignedInUser {
-  readonly email: string;
-  readonly cookie: string;
-  readonly userId: string;
-}
+import { createAccountTestFlow, type SignedInUser } from "./accountTestFlow.js";
+import { getAuthPath, startAuthTestEnvironment, testBaseUrl, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account and GET /account/export", () => {
   let environment: StartedAuthTestEnvironment | undefined;
@@ -37,52 +25,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     await environment?.stop();
   }, 30_000);
 
-  const latestOtpFor = (email: string): string => {
-    const sent = current()
-      .emailSender.sentMessages.filter((message) => message.kind === "one_time_code" && message.to.toLowerCase() === email)
-      .at(-1);
-    if (sent?.kind !== "one_time_code") {
-      throw new Error(`No OTP sent for ${email}`);
-    }
-    return sent.code;
-  };
-
-  const sendOtp = async (email: string, ipAddress: string): Promise<void> => {
-    const response = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in", ageConfirmed: true },
-      ipAddress,
-    });
-    expect(response.status).toBe(200);
-  };
-
-  const signIn = async (email: string, ipAddress: string): Promise<SignedInUser> => {
-    await sendOtp(email, ipAddress);
-    const response = await postAuthJson(current().app, "/sign-in/email-otp", { body: { email, otp: latestOtpFor(email) }, ipAddress });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { user: { id: string } };
-    return { email, cookie: extractSessionCookie(response), userId: body.user.id };
-  };
-
-  interface AccountRequestOptions {
-    cookie?: string;
-    headers?: Record<string, string>;
-    body?: unknown;
-  }
-
-  const accountRequest = (method: "GET" | "DELETE", path: string, options: AccountRequestOptions = {}) => {
-    const headers: Record<string, string> = { ...options.headers };
-    if (options.cookie) {
-      headers.cookie = options.cookie;
-    }
-    if (options.body !== undefined) {
-      headers["content-type"] = "application/json";
-    }
-    return current().app.request(`${testBaseUrl}${path}`, {
-      method,
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
-  };
+  const { signIn, accountRequest, requestDeleteCode, deleteAccount } = createAccountTestFlow(current);
 
   const setHandle = async (user: SignedInUser, handle: string): Promise<void> => {
     const response = await current().app.request(`${testBaseUrl}/handles`, {
@@ -139,8 +82,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     const secondSession = await signIn("delete.alpha@example.com", ipAddress);
     expect(secondSession.userId).toBe(firstSession.userId);
     await setHandle(firstSession, "delete_alpha");
-    // An unused code leaves a pending verification row behind for the cascade to remove.
-    await sendOtp("delete.alpha@example.com", ipAddress);
+    // The pending delete code is a verification row the cascade must remove too (two sign-ins + this code = 3 sends, the per-email limit).
+    const deleteCode = await requestDeleteCode(firstSession);
     const bystander = await signIn("delete.bystander@example.com", ipAddress);
 
     const alphaHash = codec.computeEmailHmac("delete.alpha@example.com");
@@ -151,7 +94,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     expect(before.verifications).toBeGreaterThan(0);
     const bystanderBefore = await remainingRowCounts(bystander.userId, bystanderHash);
 
-    const response = await accountRequest("DELETE", "/account", { cookie: firstSession.cookie });
+    const response = await accountRequest("DELETE", "/account", { cookie: firstSession.cookie, body: { code: deleteCode } });
     expect(response.status).toBe(200);
     expect(accountDeletionResponseSchema.parse(await response.json())).toEqual({ deleted: true });
 
@@ -206,7 +149,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     expect(exported.user.id).toBe(bravo.userId);
     expect(exported.user.email).toBe("owner.bravo@example.com");
 
-    const deleteResponse = await accountRequest("DELETE", `/account?userId=${alpha.userId}`, { ...spoofed, body: { userId: alpha.userId } });
+    const code = await requestDeleteCode(bravo);
+    // Naming a user in the body is refused outright; the body carries the code and nothing else.
+    expect((await accountRequest("DELETE", "/account", { ...spoofed, body: { code, userId: alpha.userId } })).status).toBe(400);
+    const deleteResponse = await accountRequest("DELETE", `/account?userId=${alpha.userId}`, { ...spoofed, body: { code } });
     expect(deleteResponse.status).toBe(200);
 
     const alphaRows = await current().pool.query("SELECT id FROM public.users WHERE id = $1", [alpha.userId]);
@@ -220,7 +166,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     const ipAddress = "198.51.100.104";
     const original = await signIn("fresh.start@example.com", ipAddress);
     await setHandle(original, "fresh_start");
-    expect((await accountRequest("DELETE", "/account", { cookie: original.cookie })).status).toBe(200);
+    expect((await deleteAccount(original)).status).toBe(200);
 
     const returning = await signIn("fresh.start@example.com", ipAddress);
     expect(returning.userId).not.toBe(original.userId);
@@ -247,7 +193,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     });
     try {
       expect((await accountRequest("GET", "/account/export", { cookie: user.cookie })).status).toBe(200);
-      expect((await accountRequest("DELETE", "/account", { cookie: user.cookie })).status).toBe(200);
+      expect((await deleteAccount(user)).status).toBe(200);
     } finally {
       stdoutSpy.mockRestore();
       for (const spy of consoleSpies) {

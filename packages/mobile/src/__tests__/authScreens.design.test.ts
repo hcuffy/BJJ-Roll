@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { CodeEntryScreen } from "../screens/CodeEntryScreen";
+import { DeleteAccountCodeStep } from "../screens/DeleteAccountCodeStep";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { colours, radius, sizes } from "../theme/tokens";
@@ -23,13 +24,22 @@ const signedIn = () =>
   createElement(SignedInScreen, {
     onSignOut: () => undefined,
     onExportData: () => Promise.resolve({ ok: true, json: "{}" } as const),
+    onRequestDeleteCode: () => Promise.resolve({ ok: true } as const),
     onDeleteAccount: () => Promise.resolve({ ok: true } as const),
     onAccountDeleted: () => undefined,
+  });
+const deleteCodeStep = () =>
+  createElement(DeleteAccountCodeStep, {
+    onRequestDeleteCode: () => Promise.resolve({ ok: true } as const),
+    onDeleteAccount: () => Promise.resolve({ ok: true } as const),
+    onAccountDeleted: () => undefined,
+    onCancel: () => undefined,
   });
 const screens: [string, () => ReactElement][] = [
   ["email entry", emailEntry],
   ["code entry", codeEntry],
   ["signed in", signedIn],
+  ["delete code step", deleteCodeStep],
 ];
 
 const renderReadyEmailEntry = async () => {
