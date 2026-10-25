@@ -16,7 +16,11 @@ vi.mock("react-native", () => ({
   KeyboardAvoidingView: "KeyboardAvoidingView",
   ScrollView: "ScrollView",
   StatusBar: "StatusBar",
-  SafeAreaView: "SafeAreaView",
+}));
+// The safe-area library's view gets its own host name so tests can tell it apart from RN's deprecated built-in.
+vi.mock("react-native-safe-area-context", () => ({
+  SafeAreaProvider: "SafeAreaProvider",
+  SafeAreaView: "SafeAreaContextView",
 }));
 vi.mock("react", async (importOriginal) => {
   const { harnessUseEffect, harnessUseState } = await import("./screenHarness");

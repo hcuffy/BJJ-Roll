@@ -78,6 +78,15 @@ describe.each(screens)("%s screen design", (_name, build) => {
     expect(content.justifyContent).toBeUndefined();
   });
 
+  it("keeps content inside the safe-area-context SafeAreaView on both platforms, not RN's deprecated built-in", async () => {
+    const screen = await renderScreen(build());
+    const [safeArea, ...extra] = screen.findAllByType("SafeAreaContextView");
+    expect(extra).toHaveLength(0);
+    expect(flattenStyle(safeArea?.props.style)).toMatchObject({ flex: 1, backgroundColor: colours.background });
+    expect(safeArea?.props.edges).toBeUndefined();
+    expect(screen.findAllByType("SafeAreaView")).toHaveLength(0);
+  });
+
   it("gives pressed buttons visible feedback (scale 0.98)", async () => {
     const screen = await renderScreen(build());
     for (const pressable of screen.pressables().filter((node) => node.props.accessibilityRole === "button")) {

@@ -1,6 +1,7 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, StatusBar, Text, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { appAuthClient, appSecureStore } from "./auth/appAuthClient";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
@@ -40,21 +41,24 @@ export function App() {
   };
 
   return (
-    <>
+    // One provider at the root measures the real insets (status bar, notch, home indicator) on iOS and Android.
+    <SafeAreaProvider>
       {/* Dark app: light status bar icons on the background colour. */}
       <StatusBar barStyle="light-content" backgroundColor={colours.background} />
       {renderScreen()}
-    </>
+    </SafeAreaProvider>
   );
 
   function renderScreen(): ReactNode {
     switch (screen.name) {
       case "loading": {
         return (
-          <View style={authStyles.centred}>
-            <ActivityIndicator size="large" color={colours.primary} accessibilityLabel="Loading" />
-            <Text style={textStyles.bodyMuted}>Loading</Text>
-          </View>
+          <SafeAreaView style={authStyles.safeArea}>
+            <View style={authStyles.centred}>
+              <ActivityIndicator size="large" color={colours.primary} accessibilityLabel="Loading" />
+              <Text style={textStyles.bodyMuted}>Loading</Text>
+            </View>
+          </SafeAreaView>
         );
       }
       case "signedIn": {

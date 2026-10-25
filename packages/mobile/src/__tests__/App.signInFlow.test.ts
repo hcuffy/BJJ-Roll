@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { colours } from "../theme/tokens";
-import { deepLinkState, flattenStyle, renderScreen, textOf } from "./screenHarness";
+import { deepLinkState, flattenStyle, type HostNode, renderScreen, textOf } from "./screenHarness";
 
 // The app's real client reads Expo config and SecureStore; here it talks to a fake backend and an in-memory store.
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -110,5 +110,15 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(spinner?.props.color).toBe(colours.primary);
     expect(screen.findAllByType("StatusBar")[0]?.props).toMatchObject({ barStyle: "light-content", backgroundColor: colours.background });
     expect(flattenStyle(screen.findAllByType("View")[0]?.props.style).backgroundColor).toBe(colours.background);
+  });
+
+  it("wraps the whole app in one SafeAreaProvider so every screen gets real insets", async () => {
+    backend.fetchImplementation.mockImplementation(() => new Promise<Response>(() => undefined));
+    const screen = await startApp();
+
+    const [provider, ...extra] = screen.findAllByType("SafeAreaProvider");
+    expect(extra).toHaveLength(0);
+    expect(textOf(provider as HostNode)).toContain("Loading");
+    expect(screen.findAllByType("SafeAreaContextView")).toHaveLength(1);
   });
 });
