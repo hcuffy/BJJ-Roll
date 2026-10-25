@@ -1,5 +1,6 @@
+import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
-import { AGE_CONFIRMATION_LABEL, AGE_REQUIRED_MESSAGE, canContinue } from "../auth/ageConfirmation";
+import { AGE_CONFIRMATION_LABEL, canContinue } from "../auth/ageConfirmation";
 import { createMobileAuthClient } from "../auth/authClient";
 import { sendEmailCode, sendMagicLink } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
@@ -27,8 +28,8 @@ describe("age confirmation gate", () => {
     const codeResult = await sendEmailCode(client, { email: "member@example.test", ageConfirmed: false });
     const linkResult = await sendMagicLink(client, { email: "member@example.test", ageConfirmed: false });
 
-    expect(codeResult).toEqual({ ok: false, message: AGE_REQUIRED_MESSAGE });
-    expect(linkResult).toEqual({ ok: false, message: AGE_REQUIRED_MESSAGE });
+    expect(codeResult).toEqual({ ok: false, message: AGE_GATE_REFUSAL_MESSAGE });
+    expect(linkResult).toEqual({ ok: false, message: AGE_GATE_REFUSAL_MESSAGE });
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 });

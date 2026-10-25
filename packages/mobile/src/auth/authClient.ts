@@ -17,7 +17,8 @@ export interface MobileAuthClientOptions {
 export function createMobileAuthClient(options: MobileAuthClientOptions) {
   return createAuthClient({
     baseURL: options.backendUrl,
-    plugins: [expoClient({ scheme: DEEP_LINK_SCHEME, storagePrefix: SESSION_STORAGE_PREFIX, storage: options.storage })],
+    // disableCache: no cached session data in SecureStore, only the session cookie (sign-out deletes it).
+    plugins: [expoClient({ scheme: DEEP_LINK_SCHEME, storagePrefix: SESSION_STORAGE_PREFIX, storage: options.storage, disableCache: true })],
     fetchOptions: options.fetchImplementation ? { customFetchImpl: options.fetchImplementation } : {},
   });
 }

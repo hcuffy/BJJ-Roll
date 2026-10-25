@@ -10,7 +10,7 @@ export interface RecordedRequest {
   readonly body: Record<string, unknown> | null;
 }
 
-/** In-memory stand-in for expo-secure-store with the methods the Expo client uses. */
+/** In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use. */
 export function createMemorySecureStore() {
   const items = new Map<string, string>();
   return {
@@ -24,6 +24,10 @@ export function createMemorySecureStore() {
       items.set(key, value);
       return Promise.resolve();
     },
+    deleteItemAsync: vi.fn((key: string) => {
+      items.delete(key);
+      return Promise.resolve();
+    }),
   };
 }
 
