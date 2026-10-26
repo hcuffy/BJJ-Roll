@@ -4,7 +4,7 @@ import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
-import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
+import { completeMagicLink, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -29,7 +29,9 @@ export function App() {
   }, [screen.name]);
 
   useEffect(() => {
-    void readSignedInUserId(appAuthClient)
+    // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
+    void finishPendingSignOut(appAuthClient, appSecureStore)
+      .then(async (signOutPending) => (signOutPending ? null : await readSignedInUserId(appAuthClient)))
       .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
@@ -61,7 +63,7 @@ export function App() {
   const handleSignOut = () => {
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    // signOut already clears the local session when the server is down; an unexpected rejection still ends on sign-in.
+    // signOut clears the local session when the server is down and finishes a failed one on the next launch.
     void signOut(appAuthClient, appSecureStore)
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
@@ -97,6 +99,8 @@ export function App() {
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
             onAccountDeleted={() => {
+              // A note from a link that failed while signed in must not sit next to the deleted card.
+              setServerUnreachable(false);
               setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
               setScreen({ name: "email" });
             }}

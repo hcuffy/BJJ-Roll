@@ -155,14 +155,48 @@ export const SESSION_STORAGE_KEYS = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESS
 
 export interface SessionKeyStore {
   readonly deleteItemAsync: (key: string) => Promise<void>;
+  readonly getItemAsync: (key: string) => Promise<string | null>;
+  readonly setItemAsync: (key: string, value: string) => Promise<void>;
 }
 
-/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). */
-export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+/** Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286). */
+export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
+
+async function signOutOnServer(client: MobileAuthClient): Promise<boolean> {
   try {
-    await client.signOut();
+    const { error } = await client.signOut();
+    return !error;
   } catch {
-    // Offline or server error: the local session is still removed below, so the user is signed out on this phone.
+    // Offline or the backend cannot be reached.
+    return false;
   }
-  await Promise.all(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+}
+
+/** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  const serverSignedOut = await signOutOnServer(client);
+  const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+  if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
+    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+  }
+}
+
+/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). Never rejects. */
+export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
+  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, "1").catch(() => undefined);
+  await finishSignOut(client, secureStore);
+}
+
+/**
+ * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
+ * so the user stays signed out on this launch even if the retry fails again.
+ */
+export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<boolean> {
+  const pending = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
+  if (pending === null) {
+    return false;
+  }
+  await finishSignOut(client, secureStore);
+  return true;
 }
