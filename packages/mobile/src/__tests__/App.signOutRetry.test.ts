@@ -221,6 +221,21 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
       expect(signOutRequestCount()).toBe(signOutsBefore);
     });
 
+    it("cold start from a sign-in link: the link waits for the unfinished sign-out, then the user stays signed in", async () => {
+      await signOutLeftUnfinished();
+
+      // The app is closed; the user opens a sign-in link, which starts the app.
+      deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+      const coldStart = await launchApp();
+      deepLinkState.url = null;
+
+      expect(coldStart.text()).toContain(SIGNED_IN_SCREEN);
+      const signInAt = backend.requests.findLastIndex((request) => request.url.endsWith("/magic-link/exchange"));
+      expect(signInAt).toBeGreaterThanOrEqual(0);
+      expect(backend.requests.slice(signInAt).filter((request) => request.url.endsWith("/sign-out"))).toEqual([]);
+      expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
+    });
+
     it("sign-in is not blocked when the unfinished sign-out cannot be cancelled", async () => {
       const screen = await signOutLeftUnfinished();
       secureStore.failingKeys.add("bjjroll_pending_sign_out");
