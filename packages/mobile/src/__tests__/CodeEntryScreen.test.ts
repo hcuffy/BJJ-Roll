@@ -1,3 +1,4 @@
+import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
@@ -32,11 +33,12 @@ describe("CodeEntryScreen", () => {
     Platform.OS = "android";
   });
 
-  const renderCodeEntry = () =>
+  const renderCodeEntry = (age18Confirmed = false) =>
     renderScreen(
       createElement(CodeEntryScreen, {
         client,
         email: "member@example.test",
+        age18Confirmed,
         onSignedIn: () => (signedIn += 1),
         onBack: () => (backPresses += 1),
       }),
@@ -65,7 +67,7 @@ describe("CodeEntryScreen", () => {
     expect(Number(backendMinutes)).toBe(OTP_EXPIRY_MINUTES);
   });
 
-  it("signs in automatically once the 6th digit is typed, exactly once, with ageConfirmed true", async () => {
+  it("signs in automatically once the 6th digit is typed, exactly once, with age16Confirmed true", async () => {
     const screen = await renderCodeEntry();
     await screen.changeText("6-digit code", "12345");
     expect(screen.isDisabled("Sign in")).toBe(true);
@@ -74,7 +76,7 @@ describe("CodeEntryScreen", () => {
     await screen.changeText("6-digit code", "123456");
 
     expect(signInRequests()).toHaveLength(1);
-    expect(signInRequests()[0]?.body).toEqual({ email: "member@example.test", otp: "123456", ageConfirmed: true });
+    expect(signInRequests()[0]?.body).toEqual({ email: "member@example.test", otp: "123456", age16Confirmed: true });
     expect(signedIn).toBe(1);
   });
 
@@ -152,12 +154,38 @@ describe("CodeEntryScreen", () => {
     await screen.press("Resend code");
 
     expect(sendRequests()).toHaveLength(1);
-    expect(sendRequests()[0]?.body).toEqual({ email: "member@example.test", type: "sign-in", ageConfirmed: true });
+    expect(sendRequests()[0]?.body).toEqual({ email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false });
     const notice = "We sent a new code to member@example.test.";
     expect(screen.queryByText(notice)?.props.accessibilityLiveRegion).toBe("polite");
     // A muted confirmation line, not plain white body text and not an error.
     expect(flattenStyle(screen.queryByText(notice)?.props.style).color).toBe(colours.textSecondary);
     expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
+  });
+
+  it("Resend code repeats the 18+ answer from the email screen, so the latest send keeps it (HEN-263)", async () => {
+    vi.useFakeTimers();
+    const screen = await renderCodeEntry(true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await screen.rerender();
+
+    await screen.press("Resend code");
+
+    expect(sendRequests().map((request) => request.body)).toEqual([
+      { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: true },
+    ]);
+  });
+
+  it("shows the 16+ refusal as a form error when the backend refuses the new account at sign-in (HEN-263)", async () => {
+    backend.fetchImplementation.mockImplementationOnce(() =>
+      Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: "server wording" }, { status: 400 })),
+    );
+    const screen = await renderCodeEntry();
+
+    await screen.changeText("6-digit code", "123456");
+
+    expect(screen.queryByText(AGE_GATE_REFUSAL_MESSAGE)).not.toBeNull();
+    expect(screen.text()).not.toContain("server wording");
+    expect(signedIn).toBe(0);
   });
 
   it("sends one request when the 6th digit and the Done key arrive in the same tick (same render's handlers)", async () => {

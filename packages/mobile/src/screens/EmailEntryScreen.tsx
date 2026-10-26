@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
+import { AGE_ADULT_CONFIRMATION_LABEL, AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
@@ -11,11 +11,11 @@ import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
-export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
+export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 16 or older.";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
-  readonly onCodeSent: (email: string) => void;
+  readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
   readonly onClearLinkError?: () => void;
@@ -26,15 +26,43 @@ export interface EmailEntryScreenProps {
 
 type Sending = "code" | "link" | null;
 
+interface AgeCheckboxProps {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly hint?: string;
+  readonly onPress: () => void;
+}
+
+function AgeCheckbox({ label, checked, hint, onPress }: AgeCheckboxProps) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked }}
+      accessibilityHint={hint}
+      style={authStyles.checkboxRow}
+      onPress={onPress}>
+      <View style={[authStyles.checkbox, checked && authStyles.checkboxTicked]}>
+        {checked ? (
+          <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
+            ✓
+          </Text>
+        ) : null}
+      </View>
+      <Text style={authStyles.checkboxLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
-function missingHint(emailValid: boolean, ageConfirmed: boolean): string | undefined {
-  if (!emailValid && !ageConfirmed) {
-    return "Enter your email and tick the 17 or older box first.";
+function missingHint(emailValid: boolean, age16Confirmed: boolean): string | undefined {
+  if (!emailValid && !age16Confirmed) {
+    return "Enter your email and tick the 16 or older box first.";
   }
   if (!emailValid) {
     return "Enter your email first.";
   }
-  return ageConfirmed ? undefined : "Tick the 17 or older box first.";
+  return age16Confirmed ? undefined : "Tick the 16 or older box first.";
 }
 
 export function EmailEntryScreen({
@@ -46,7 +74,8 @@ export function EmailEntryScreen({
   onClearAccountNotice,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [age16Confirmed, setAge16Confirmed] = useState(false);
+  const [age18Confirmed, setAge18Confirmed] = useState(false);
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
@@ -54,8 +83,8 @@ export function EmailEntryScreen({
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
-  const ready = ageConfirmed && isEmailAddress(email);
-  const sendHint = missingHint(isEmailAddress(email), ageConfirmed);
+  const ready = age16Confirmed && isEmailAddress(email);
+  const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -78,8 +107,8 @@ export function EmailEntryScreen({
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
     setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
-    setAgeError(ageConfirmed ? null : TICK_AGE_BOX_MESSAGE);
-    return emailValid && ageConfirmed;
+    setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
+    return emailValid && age16Confirmed;
   };
 
   const send = async (kind: "code" | "link") => {
@@ -89,12 +118,12 @@ export function EmailEntryScreen({
     }
     setSending(kind);
     const action = kind === "code" ? sendEmailCode : sendMagicLink;
-    const result = await action(client, { email, ageConfirmed });
+    const result = await action(client, { email, age16Confirmed, age18Confirmed });
     setSending(null);
     if (!result.ok) {
       showFailure(result);
     } else if (kind === "code") {
-      onCodeSent(email.trim());
+      onCodeSent(email.trim(), age18Confirmed);
     } else if (linkSentTo === null) {
       setLinkSentTo(email.trim());
       linkCooldown.restart();
@@ -188,28 +217,26 @@ export function EmailEntryScreen({
         onSubmitEditing={() => void send("code")}
       />
       <View>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityLabel={AGE_CONFIRMATION_LABEL}
-          accessibilityState={{ checked: ageConfirmed }}
-          accessibilityHint={ageError ?? undefined}
-          style={authStyles.checkboxRow}
+        <AgeCheckbox
+          label={AGE_CONFIRMATION_LABEL}
+          checked={age16Confirmed}
+          hint={ageError ?? undefined}
           onPress={() => {
             startAction();
-            setAgeConfirmed(!ageConfirmed);
+            setAge16Confirmed(!age16Confirmed);
             setAgeError(null);
-          }}>
-          <View style={[authStyles.checkbox, ageConfirmed && authStyles.checkboxTicked]}>
-            {ageConfirmed ? (
-              <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
-                ✓
-              </Text>
-            ) : null}
-          </View>
-          <Text style={authStyles.checkboxLabel}>{AGE_CONFIRMATION_LABEL}</Text>
-        </Pressable>
+          }}
+        />
         <StatusText message={ageError} style={authStyles.fieldError} />
       </View>
+      <AgeCheckbox
+        label={AGE_ADULT_CONFIRMATION_LABEL}
+        checked={age18Confirmed}
+        onPress={() => {
+          startAction();
+          setAge18Confirmed(!age18Confirmed);
+        }}
+      />
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton

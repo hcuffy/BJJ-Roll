@@ -15,11 +15,13 @@ const CODE_LENGTH = 6;
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
   readonly email: string;
+  /** The optional 18+ tick from the email screen; Resend sends it again so the latest send keeps it (HEN-263). */
+  readonly age18Confirmed?: boolean;
   readonly onSignedIn: () => void;
   readonly onBack: () => void;
 }
 
-export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntryScreenProps) {
+export function CodeEntryScreen({ client, email, age18Confirmed = false, onSignedIn, onBack }: CodeEntryScreenProps) {
   const [code, setCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -41,8 +43,8 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
     setCodeError(null);
     setFormError(null);
     setNotice(null);
-    // The user ticked the 17+ box on the email screen; it is required to get here.
-    const result = await verifyEmailCode(client, { email, code: candidate, ageConfirmed: true });
+    // The user ticked the 16+ box on the email screen; it is required to get here.
+    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true });
     inFlight.current = false;
     setIsVerifying(false);
     if (result.ok) {
@@ -59,7 +61,7 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
     setCodeError(null);
     setFormError(null);
     setNotice(null);
-    const result = await sendEmailCode(client, { email, ageConfirmed: true });
+    const result = await sendEmailCode(client, { email, age16Confirmed: true, age18Confirmed });
     setIsResending(false);
     if (result.ok) {
       setNotice(`We sent a new code to ${email}.`);

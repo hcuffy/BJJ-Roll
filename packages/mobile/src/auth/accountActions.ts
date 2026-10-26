@@ -1,4 +1,10 @@
-import { accountDeletionCodeResponseSchema, accountDeletionResponseSchema, accountExportSchema } from "@bjj-roll/shared";
+import {
+  accountDeletionCodeResponseSchema,
+  accountDeletionResponseSchema,
+  accountExportSchema,
+  ageConfirmationStatusSchema,
+  type AgeConfirmationStatus,
+} from "@bjj-roll/shared";
 import type { MobileAuthClient } from "./authClient";
 import { FAILURE_MESSAGES, SESSION_STORAGE_KEYS, type SessionKeyStore } from "./signInActions";
 
@@ -18,6 +24,7 @@ interface AccountFailure {
 export type AccountCodeResult = { readonly ok: true } | AccountFailure;
 export type AccountDeletionResult = { readonly ok: true } | AccountFailure;
 export type AccountExportResult = { readonly ok: true; readonly json: string } | AccountFailure;
+export type AgeConfirmationResult = { readonly ok: true; readonly status: AgeConfirmationStatus } | AccountFailure;
 
 function failure(reason: AccountFailure["reason"]): AccountFailure {
   return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
@@ -39,7 +46,7 @@ function failureForStatus(status: number | undefined): AccountFailure {
 interface AccountRequest {
   readonly method: "GET" | "POST" | "DELETE";
   readonly path: string;
-  readonly body?: Record<string, string>;
+  readonly body?: Record<string, string | boolean>;
 }
 
 async function requestAccount(session: AccountSession, { method, path, body }: AccountRequest): Promise<AccountResponse> {
@@ -68,6 +75,24 @@ export async function exportAccountData(session: AccountSession): Promise<Accoun
   }
   const parsed = accountExportSchema.safeParse(response.data);
   return parsed.success ? { ok: true, json: JSON.stringify(parsed.data, null, 2) } : failure("unknown");
+}
+
+function parseAgeStatus(response: AccountResponse): AgeConfirmationResult {
+  if (!response.ok) {
+    return response;
+  }
+  const parsed = ageConfirmationStatusSchema.safeParse(response.data);
+  return parsed.success ? { ok: true, status: parsed.data } : failure("unknown");
+}
+
+/** GET /account/age-confirmation: whether the account confirmed 16+ and 18+, and so whether it can buy (HEN-263). */
+export async function readAgeConfirmation(session: AccountSession): Promise<AgeConfirmationResult> {
+  return parseAgeStatus(await requestAccount(session, { method: "GET", path: "/account/age-confirmation" }));
+}
+
+/** POST /account/age-confirmation: records a new 18+ confirmation. Only deleting the account undoes it. */
+export async function confirmAdult(session: AccountSession): Promise<AgeConfirmationResult> {
+  return parseAgeStatus(await requestAccount(session, { method: "POST", path: "/account/age-confirmation", body: { age18Confirmed: true } }));
 }
 
 /** POST /account/delete-code: the backend emails a fresh 6-digit code to the signed-in user's own address. */

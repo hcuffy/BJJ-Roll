@@ -13,7 +13,7 @@ import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
-import { ageGateRefusalForNewUser } from "./ageGate.js";
+import { assertPendingAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationForNewUser } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
@@ -131,15 +131,22 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       database: { generateId: () => randomUUID() },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send.
+          before: async (user) => {
+            await assertPendingAgeConfirmation(options.pool, codec, user.email);
+          },
+          after: async (user) => {
+            await storeAgeConfirmationForNewUser(options.pool, codec, user);
+          },
+        },
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
-        const ageGateRefusal = await ageGateRefusalForNewUser(middlewareContext.path, middlewareContext.body, (email) =>
-          middlewareContext.context.internalAdapter.findUserByEmail(email),
-        );
-        if (ageGateRefusal) {
-          return ageGateRefusal;
-        }
         // Over HTTP, check-verification-otp may only test sign-in codes: a public check of a delete code would be a guessing oracle
         // outside the DELETE /account try budget.
         if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
@@ -156,6 +163,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           }
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
+          }
+          // HEN-263: no refusal here. Every email gets the same answer; the 16+ check runs when the account is created.
+          if (isAccountCreatingSend(middlewareContext.path, body) && middlewareContext.request) {
+            await recordPendingAgeAnswers(options.pool, codec, body);
           }
         }
       }),

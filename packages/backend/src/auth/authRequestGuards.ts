@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
@@ -103,6 +104,11 @@ export async function prepareMagicLinkRequest(request: Request): Promise<Request
 }
 
 /** Strips cookies/tokens from the magic-link redirect and never lets a non-deep-link Location out. */
+function magicLinkVerifyErrorMessage(errorCode: string): string {
+  // HEN-263: a new account refused at link time for a missing 16+ tick says so; every other failure keeps the generic text.
+  return errorCode === "AGE_CONFIRMATION_REQUIRED" ? AGE_GATE_REFUSAL_MESSAGE : "Magic link token is invalid, expired, or has already been used";
+}
+
 export function normalizeMagicLinkVerifyResponse(request: Request, response: Response): Response {
   if (new URL(request.url).pathname !== MAGIC_LINK_VERIFY_PATH) {
     return response;
@@ -124,10 +130,10 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
   const errorCode = redirectUrl.searchParams.get("error");
   if (errorCode !== null) {
     headers.set("content-type", "application/json");
-    return new Response(
-      JSON.stringify({ code: errorCode, error: errorCode, message: "Magic link token is invalid, expired, or has already been used" }),
-      { status: 400, headers },
-    );
+    return new Response(JSON.stringify({ code: errorCode, error: errorCode, message: magicLinkVerifyErrorMessage(errorCode) }), {
+      status: 400,
+      headers,
+    });
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

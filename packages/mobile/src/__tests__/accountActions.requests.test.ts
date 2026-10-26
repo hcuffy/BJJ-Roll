@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteAccount, exportAccountData, requestAccountDeletionCode } from "../auth/accountActions";
+import { confirmAdult, deleteAccount, exportAccountData, readAgeConfirmation, requestAccountDeletionCode } from "../auth/accountActions";
 import { createMobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, verifyEmailCode } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_ACCOUNT_EXPORT, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
@@ -8,7 +8,7 @@ async function createSignedInSession() {
   const backend = createFakeBackend();
   const secureStore = createMemorySecureStore();
   const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation: backend.fetchImplementation });
-  expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", ageConfirmed: true })).toEqual({ ok: true });
+  expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true })).toEqual({ ok: true });
   backend.requests.length = 0;
   return { backend, secureStore, session: { client, secureStore, backendUrl: TEST_BACKEND_URL } };
 }
@@ -80,6 +80,30 @@ describe("account requests (HEN-65)", () => {
     expect(await deleteAccount(session, TEST_DELETE_CODE)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     expect(await exportAccountData(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     expect(secureStore.items.get("bjjroll_cookie")).toContain("signed-session-value");
+  });
+
+  it("reads the age status with GET /account/age-confirmation and confirms 18+ with a POST (HEN-263)", async () => {
+    const { backend, session } = await createSignedInSession();
+
+    expect(await readAgeConfirmation(session)).toEqual({ ok: true, status: { age16Confirmed: true, age18Confirmed: false, canPurchase: false } });
+    expect(await confirmAdult(session)).toEqual({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
+
+    expect(backend.requests.map((request) => [request.method, request.url, request.body])).toEqual([
+      ["GET", `${TEST_BACKEND_URL}/account/age-confirmation`, null],
+      ["POST", `${TEST_BACKEND_URL}/account/age-confirmation`, { age18Confirmed: true }],
+    ]);
+    expect(backend.requests.every((request) => request.cookie?.includes("signed-session-value"))).toBe(true);
+  });
+
+  it("an age status that does not match the shared schema, or a failed request, is a plain failure (HEN-263)", async () => {
+    const { backend, session } = await createSignedInSession();
+    backend.fetchImplementation.mockImplementationOnce(() =>
+      Promise.resolve(new Response(JSON.stringify({ canPurchase: true }), { status: 200, headers: { "content-type": "application/json" } })),
+    );
+    expect(await readAgeConfirmation(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+
+    backend.fetchImplementation.mockRejectedValueOnce(new TypeError("Network request failed"));
+    expect(await confirmAdult(session)).toEqual({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
   });
 
   it("treats an export that does not match the shared schema as a failure", async () => {

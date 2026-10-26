@@ -14,6 +14,7 @@ describe("EmailEntryScreen", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let client: ReturnType<typeof createMobileAuthClient>;
   let sentTo: string[];
+  let sentAdult: boolean[];
 
   beforeEach(() => {
     backend = createFakeBackend();
@@ -23,6 +24,7 @@ describe("EmailEntryScreen", () => {
       fetchImplementation: backend.fetchImplementation,
     });
     sentTo = [];
+    sentAdult = [];
     vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
   });
 
@@ -31,14 +33,23 @@ describe("EmailEntryScreen", () => {
     Platform.OS = "android";
   });
 
-  const renderEmailEntry = () => renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: (email) => sentTo.push(email) }));
+  const renderEmailEntry = () =>
+    renderScreen(
+      createElement(EmailEntryScreen, {
+        client,
+        onCodeSent: (email, age18Confirmed) => {
+          sentTo.push(email);
+          sentAdult.push(age18Confirmed);
+        },
+      }),
+    );
 
-  it("shows the 17+ checkbox unticked and an email field without a password field", async () => {
+  it("shows the 16+ checkbox unticked and an email field without a password field", async () => {
     const screen = await renderEmailEntry();
 
     expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false });
     expect(screen.findAllByType("Text").map(textOf)).toContain("Email");
-    expect(screen.queryByText("I am 17 or older")).not.toBeNull();
+    expect(screen.queryByText("I am 16 or older")).not.toBeNull();
     expect(screen.findAllByType("TextInput").map((input) => input.props.accessibilityLabel)).toEqual(["Email"]);
     expect(screen.findAllByType("TextInput").some((input) => input.props.secureTextEntry === true)).toBe(false);
   });
@@ -52,10 +63,10 @@ describe("EmailEntryScreen", () => {
     // Dimmed, but still pressable, so it must not tell screen readers it is disabled; the hint explains what is missing.
     expect(screen.getPressable("Continue").props.disabled).toBe(false);
     expect(screen.getPressable("Continue").props.accessibilityState).toMatchObject({ disabled: false });
-    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Tick the 17 or older box first.");
+    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Tick the 16 or older box first.");
     await screen.press("Continue");
-    expect(screen.text()).toContain("Tick the box to confirm you are 17 or older.");
-    expect(screen.getByRole("checkbox").props.accessibilityHint).toBe("Tick the box to confirm you are 17 or older.");
+    expect(screen.text()).toContain("Tick the box to confirm you are 16 or older.");
+    expect(screen.getByRole("checkbox").props.accessibilityHint).toBe("Tick the box to confirm you are 16 or older.");
     await screen.press("Email me a sign-in link instead");
 
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
@@ -72,10 +83,10 @@ describe("EmailEntryScreen", () => {
       screen.getPressable("Email me a sign-in link instead").props.accessibilityHint,
     ];
     const screen = await renderEmailEntry();
-    expect(hints(screen)).toEqual(Array(2).fill("Enter your email and tick the 17 or older box first."));
+    expect(hints(screen)).toEqual(Array(2).fill("Enter your email and tick the 16 or older box first."));
 
     await screen.changeText("Email", "member@example.test");
-    expect(hints(screen)).toEqual(Array(2).fill("Tick the 17 or older box first."));
+    expect(hints(screen)).toEqual(Array(2).fill("Tick the 16 or older box first."));
 
     await screen.pressRole("checkbox");
     expect(hints(screen)).toEqual([undefined, undefined]);
@@ -147,7 +158,7 @@ describe("EmailEntryScreen", () => {
     await screen.rerender();
     expect(sentTo).toEqual(["member@example.test"]);
   });
-  it("sends the code request with ageConfirmed true once ticked, then hands over the email", async () => {
+  it("sends the code request with age16Confirmed true once ticked, then hands over the email", async () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", " member@example.test ");
     await screen.pressRole("checkbox");
@@ -156,12 +167,48 @@ describe("EmailEntryScreen", () => {
     await screen.press("Continue");
 
     expect(backend.requests.map((request) => [new URL(request.url).pathname, request.body])).toEqual([
-      ["/api/auth/email-otp/send-verification-otp", { email: "member@example.test", type: "sign-in", ageConfirmed: true }],
+      ["/api/auth/email-otp/send-verification-otp", { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false }],
     ]);
     expect(sentTo).toEqual(["member@example.test"]);
+    expect(sentAdult).toEqual([false]);
   });
 
-  it("shows the shared 17+ refusal message when the backend refuses with AGE_CONFIRMATION_REQUIRED", async () => {
+  it("offers an optional 'I am 18 or older' box, unticked by default, that alone does not unlock sending (HEN-263)", async () => {
+    const screen = await renderEmailEntry();
+    const adultBox = () => screen.getByLabelText("I am 18 or older");
+
+    expect(adultBox().props.accessibilityRole).toBe("checkbox");
+    expect(adultBox().props.accessibilityState).toEqual({ checked: false });
+    expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 16 or older");
+
+    await screen.changeText("Email", "member@example.test");
+    (adultBox().props.onPress as () => void)();
+    await screen.rerender();
+    expect(adultBox().props.accessibilityState).toEqual({ checked: true });
+    expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false });
+    await screen.press("Continue");
+    expect(backend.fetchImplementation).not.toHaveBeenCalled();
+    expect(screen.text()).toContain("Tick the box to confirm you are 16 or older.");
+  });
+
+  it("sends age18Confirmed true with the code and the link when the 18+ box is ticked, and hands it over with the email", async () => {
+    const screen = await renderEmailEntry();
+    await screen.changeText("Email", "member@example.test");
+    await screen.pressRole("checkbox");
+    (screen.getByLabelText("I am 18 or older").props.onPress as () => void)();
+    await screen.rerender();
+    await screen.press("Email me a sign-in link instead");
+    await screen.press("Use a different email");
+    await screen.press("Continue");
+
+    expect(backend.requests.map((request) => request.body)).toEqual([
+      { email: "member@example.test", callbackURL: "bjjroll://auth", age16Confirmed: true, age18Confirmed: true },
+      { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: true },
+    ]);
+    expect(sentAdult).toEqual([true]);
+  });
+
+  it("shows the shared 16+ refusal message when the backend refuses with AGE_CONFIRMATION_REQUIRED", async () => {
     const serverWording = "Server wording for the age gate";
     backend.fetchImplementation.mockImplementationOnce(() =>
       Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: serverWording }, { status: 400 })),
@@ -230,6 +277,6 @@ describe("EmailEntryScreen", () => {
     await screen.press("Use a different email");
     expect(screen.getByLabelText("Email").props.value).toBe("member@example.test");
     expect(screen.getByRole("checkbox").props.accessibilityState).toMatchObject({ checked: true });
-    expect(textOf(screen.getByRole("checkbox"))).toContain("I am 17 or older");
+    expect(textOf(screen.getByRole("checkbox"))).toContain("I am 16 or older");
   });
 });

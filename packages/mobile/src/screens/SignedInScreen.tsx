@@ -1,6 +1,6 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
-import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
@@ -17,9 +17,13 @@ export interface SignedInScreenProps {
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   /** Called once the backend confirmed the deletion and the local session is gone. */
   readonly onAccountDeleted: () => void;
+  /** Reads whether the account confirmed 18+ (HEN-263). */
+  readonly onReadAgeConfirmation: () => Promise<AgeConfirmationResult>;
+  /** Records a new 18+ confirmation; only deleting the account undoes it. */
+  readonly onConfirmAdult: () => Promise<AgeConfirmationResult>;
 }
 
-type AccountTask = "export" | "code";
+type AccountTask = "export" | "code" | "adult";
 type DeleteStep = "none" | "confirm" | "code";
 
 const styles = StyleSheet.create({
@@ -35,11 +39,22 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
 }
 
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
-export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, onDeleteAccount, onAccountDeleted }: SignedInScreenProps) {
+export function SignedInScreen({
+  onSignOut,
+  onExportData,
+  onRequestDeleteCode,
+  onDeleteAccount,
+  onAccountDeleted,
+  onReadAgeConfirmation,
+  onConfirmAdult,
+}: SignedInScreenProps) {
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
+  // null until read (or when the read failed): then neither the 18+ button nor the confirmed line shows.
+  const [age18Confirmed, setAge18Confirmed] = useState<boolean | null>(null);
+  const [adultError, setAdultError] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
@@ -56,6 +71,20 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
       moveScreenReaderFocus(deleteEntry.current);
     }
   }, [deleteStep]);
+
+  // Read once per visit to this screen; the parent passes a fresh callback on every render.
+  const readAgeConfirmation = useRef(onReadAgeConfirmation);
+  useEffect(() => {
+    let active = true;
+    void readAgeConfirmation.current().then((result) => {
+      if (active && result.ok) {
+        setAge18Confirmed(result.status.age18Confirmed);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const runOnce = async (task: AccountTask, work: () => Promise<void>) => {
     if (inFlight.current) {
@@ -83,6 +112,17 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
         await Share.share({ title: "BJJ Roll data export", message: result.json });
       } catch {
         setExportError(`Export failed. ${FAILURE_MESSAGES.unknown}`);
+      }
+    });
+
+  const confirmAdultAge = () =>
+    runOnce("adult", async () => {
+      setAdultError(null);
+      const result = await onConfirmAdult();
+      if (result.ok) {
+        setAge18Confirmed(result.status.age18Confirmed);
+      } else {
+        setAdultError(`We could not save that. ${result.message}`);
       }
     });
 
@@ -178,6 +218,19 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
           accessibilityHint="Opens the share sheet with a copy of your account data."
         />
         <StatusText message={exportError} style={authStyles.fieldError} />
+        {age18Confirmed === true ? <Text style={textStyles.bodyMuted}>You confirmed you are 18 or older.</Text> : null}
+        {age18Confirmed === false ? (
+          <AuthButton
+            title="Confirm I am 18 or older"
+            variant="secondary"
+            disabled={isBusy && runningTask !== "adult"}
+            loading={runningTask === "adult"}
+            loadingTitle="Saving…"
+            accessibilityHint="Records that you are 18 or older so you can buy in the app. Only deleting your account undoes this."
+            onPress={() => void confirmAdultAge()}
+          />
+        ) : null}
+        <StatusText message={adultError} style={authStyles.fieldError} />
         <AuthButton
           ref={deleteEntry}
           title="Delete account"

@@ -60,15 +60,16 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 
 1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue** looks dimmed but still responds.
 2. Tap **Continue** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
-3. Type your email and tap **I am 17 or older**. The box shows ✓ and **Continue** turns lime.
+3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue** turns lime.
 4. Tap **Continue** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
+8. Optional (HEN-263): **I am 18 or older** sits under the 16+ box, unticked. Ticking it alone keeps **Continue** dimmed. Signed in without it, the Account section shows **Confirm I am 18 or older**; after a tap it reads "You confirmed you are 18 or older."
 
 ### 5. Magic-link path (AC2, development build)
 
-1. On the start screen, tap **I am 17 or older**, type your email, and tap **Email me a sign-in link instead**.
+1. On the start screen, tap **I am 16 or older**, type your email, and tap **Email me a sign-in link instead**.
 2. Expect the "Check your email" card: "We sent a sign-in link to <your email>. Open it on this phone." with **Resend link** and **Use a different email**.
 3. Open the link on the same device, either from the mail app or with `adb shell am start -a android.intent.action.VIEW -d "<link from the email>"`.
 4. The browser hands over to the app (`bjjroll://auth?code=…`). Expect "You are signed in".
@@ -99,7 +100,7 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 - [ ] A wrong code, an invalid email, the "tick the box" hint, a network error and the expired-link card are each read out once, without moving focus there by hand (Android live region, iOS announcement).
 - [ ] The busy buttons ("Sending code…", "Signing in…") are read as busy/disabled.
-- [ ] The 17+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
+- [ ] The 16+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
 - [ ] Field labels are read once, and the field's error is read as its hint.
 
 **Account deletion (HEN-65 AC7)**

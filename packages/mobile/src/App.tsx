@@ -2,7 +2,14 @@ import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
+import {
+  confirmAdult,
+  deleteAccount,
+  exportAccountData,
+  readAgeConfirmation,
+  requestAccountDeletionCode,
+  type AccountSession,
+} from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
@@ -12,7 +19,10 @@ import { authStyles } from "./screens/authStyles";
 import { colours, textStyles } from "./theme/tokens";
 
 type AuthScreen =
-  { readonly name: "loading" } | { readonly name: "email" } | { readonly name: "code"; readonly email: string } | { readonly name: "signedIn" };
+  | { readonly name: "loading" }
+  | { readonly name: "email" }
+  | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
+  | { readonly name: "signedIn" };
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
@@ -73,6 +83,8 @@ export function App() {
             onExportData={() => exportAccountData(accountSession())}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+            onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
+            onConfirmAdult={() => confirmAdult(accountSession())}
             onAccountDeleted={() => {
               setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
               setScreen({ name: "email" });
@@ -85,6 +97,7 @@ export function App() {
           <CodeEntryScreen
             client={appAuthClient}
             email={screen.email}
+            age18Confirmed={screen.age18Confirmed}
             onSignedIn={() => setScreen({ name: "signedIn" })}
             onBack={() => setScreen({ name: "email" })}
           />
@@ -98,7 +111,7 @@ export function App() {
             onClearLinkError={() => setLinkError(null)}
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}
-            onCodeSent={(email) => setScreen({ name: "code", email })}
+            onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
           />
         );
       }

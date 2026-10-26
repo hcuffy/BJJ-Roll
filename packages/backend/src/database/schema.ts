@@ -51,14 +51,27 @@ export interface VerificationsTable {
   updatedAt: Generated<Date>;
 }
 
+/** HEN-263: append-only for the app (SELECT and INSERT only); rows go with the user via ON DELETE CASCADE. */
+export interface ConsentRecordsTable {
+  id: string;
+  userId: string;
+  consentType: "age_confirmation";
+  textVersionId: string;
+  age16Confirmed: boolean;
+  age18Confirmed: boolean;
+  acceptedAt: TimestampColumn;
+  withdrawnAt: TimestampColumn | null;
+}
+
 export interface BjjRollDatabase {
   users: UsersTable;
   sessions: SessionsTable;
   accounts: AccountsTable;
   verifications: VerificationsTable;
+  consentRecords: ConsentRecordsTable;
 }
 
 export type DatabaseSchema = BjjRollDatabase;
 
-export const userDataTables = ["users", "sessions", "accounts", "verifications"] as const;
+export const userDataTables = ["users", "sessions", "accounts", "verifications", "consent_records"] as const;
 export type UserDataTableName = (typeof userDataTables)[number];

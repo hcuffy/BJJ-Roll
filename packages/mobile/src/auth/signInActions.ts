@@ -25,7 +25,7 @@ export const FAILURE_MESSAGES = {
 } as const;
 const INVALID_CODE_ERRORS = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]);
 const HTTP_TOO_MANY_REQUESTS = 429;
-/** Error code of the backend's 400 when a new account is requested without `ageConfirmed: true` (HEN-77). */
+/** Error code of the backend's refusal when a new account's latest send had no `age16Confirmed: true` (HEN-77, HEN-263). */
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 const OTP_PATTERN = /^\d{6}$/u;
 
@@ -78,7 +78,7 @@ async function postAuth(client: MobileAuthClient, { path, body, clientErrorReaso
   return failure("unknown");
 }
 
-/** Emails a 6-digit sign-in code. No request is sent unless the 17+ box is ticked. */
+/** Emails a 6-digit sign-in code. No request is sent unless the 16+ box is ticked. */
 export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -86,11 +86,11 @@ export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/email-otp/send-verification-otp",
-    body: { email: entry.email.trim(), type: "sign-in", ageConfirmed: true },
+    body: { email: entry.email.trim(), type: "sign-in", age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
   });
 }
 
-/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 17+ box is ticked. */
+/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 16+ box is ticked. */
 export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -98,7 +98,7 @@ export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/sign-in/magic-link",
-    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ageConfirmed: true },
+    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
   });
 }
 
@@ -118,7 +118,7 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
   }
   return await postAuth(client, {
     path: "/sign-in/email-otp",
-    body: { email: entry.email.trim(), otp: code, ageConfirmed: true },
+    body: { email: entry.email.trim(), otp: code, age16Confirmed: true },
     clientErrorReason: "invalidCode",
   });
 }
@@ -133,6 +133,10 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   }
   if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth") {
     return { ok: false, reason: "ignored", message: null };
+  }
+  // The backend refuses a new account at link verification when the send had no 16+ tick (HEN-263).
+  if (parsed.searchParams.get("error") === AGE_CONFIRMATION_REQUIRED_CODE) {
+    return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
   if (parsed.searchParams.has("error")) {
     return failure("invalidLink");

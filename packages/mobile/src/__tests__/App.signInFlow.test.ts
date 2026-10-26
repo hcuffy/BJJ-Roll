@@ -33,8 +33,11 @@ describe("App sign-in flow (Android, fake backend)", () => {
     });
     return await renderScreen(createElement(App));
   };
-  // better-auth refetches get-session after each sign-in; only the sign-in requests matter here.
-  const signInPaths = () => backend.requests.map((request) => new URL(request.url).pathname).filter((path) => !path.endsWith("/get-session"));
+  // better-auth refetches get-session after each sign-in, and the signed-in screen reads the 18+ status; only the sign-in requests matter here.
+  const signInPaths = () =>
+    backend.requests
+      .map((request) => new URL(request.url).pathname)
+      .filter((path) => !path.endsWith("/get-session") && path !== "/account/age-confirmation");
   const lastBodyFor = (path: string) => backend.requests.findLast((request) => request.url.endsWith(path))?.body;
 
   beforeEach(() => {
@@ -43,7 +46,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     deepLinkState.url = null;
   });
 
-  it("new user: ticks 17+, enters email, enters the 6-digit code, lands signed in; sign-out and restart show sign-in", async () => {
+  it("new user: ticks 16+, enters email, enters the 6-digit code, lands signed in; sign-out and restart show sign-in", async () => {
     const screen = await startApp();
     expect(screen.text()).toContain("Sign in to BJJ Roll");
 
@@ -70,6 +73,39 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(restartedAfterSignOut.text()).toContain("Sign in to BJJ Roll");
   });
 
+  it("18+ (HEN-263): the optional tick goes with the first code and with Resend code", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const screen = await startApp();
+      await screen.pressRole("checkbox");
+      await screen.press("I am 18 or older");
+      await screen.changeText("Email", "new.member@example.test");
+      await screen.press("Continue");
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.rerender();
+      await screen.press("Resend code");
+
+      const sends = backend.requests.filter((request) => request.url.endsWith("/send-verification-otp"));
+      expect(sends.map((request) => request.body?.age18Confirmed)).toEqual([true, true]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("18+ (HEN-263): signed in without the 18+ tick, the Account section confirms it later and then says so", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "new.member@example.test");
+    await screen.press("Continue");
+    await screen.changeText("6-digit code", "123456");
+    expect(screen.text()).toContain("You are signed in");
+
+    await screen.press("Confirm I am 18 or older");
+    expect(lastBodyFor("/account/age-confirmation")).toEqual({ age18Confirmed: true });
+    expect(screen.text()).toContain("You confirmed you are 18 or older.");
+    expect(screen.queryByText("Confirm I am 18 or older")).toBeNull();
+  });
+
   it("delete account (HEN-65): confirm, email a code, DELETE /account with code and cookie, then signed-out, also after a restart", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
@@ -87,6 +123,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     const accountRequests = backend.requests.filter((request) => new URL(request.url).pathname.startsWith("/account"));
     expect(accountRequests.map((request) => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "GET /account/age-confirmation",
       "POST /account/delete-code",
       "DELETE /account",
     ]);
@@ -134,7 +171,12 @@ describe("App sign-in flow (Android, fake backend)", () => {
     await screen.press("Email me a sign-in link instead");
 
     expect(screen.text()).toContain("We sent a sign-in link to member@example.test. Open it on this phone.");
-    expect(lastBodyFor("/sign-in/magic-link")).toEqual({ email: "member@example.test", callbackURL: "bjjroll://auth", ageConfirmed: true });
+    expect(lastBodyFor("/sign-in/magic-link")).toEqual({
+      email: "member@example.test",
+      callbackURL: "bjjroll://auth",
+      age16Confirmed: true,
+      age18Confirmed: false,
+    });
 
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     await screen.rerender();

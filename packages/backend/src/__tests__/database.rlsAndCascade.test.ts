@@ -210,7 +210,7 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
   it("AC 2: deleting a user cascades and removes their sessions, accounts, and OTP/verification rows", async () => {
     const { db, pool } = requireHarness();
 
-    expect(accountDeletionCascadeMap.map((entry) => entry.table)).toEqual(["verifications", "sessions", "accounts", "users"]);
+    expect(accountDeletionCascadeMap.map((entry) => entry.table)).toEqual(["verifications", "sessions", "accounts", "consent_records", "users"]);
     expect(new Set(accountDeletionCascadeMap.map((entry) => entry.table))).toEqual(new Set(userDataTables));
 
     await withUserContext(db, userAlpha.id, async (transaction) => {
