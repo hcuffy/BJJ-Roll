@@ -9,7 +9,8 @@ export const AGE_CONFIRMATION_LABEL = AGE16_CONFIRMATION_LABEL;
  * the statement the user confirms stays the shared AGE18_CONFIRMATION_LABEL that the consent record's text version names.
  */
 export const AGE_ADULT_CONFIRMATION_LABEL = `${AGE18_CONFIRMATION_LABEL} (optional)`;
-export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. You can also confirm this in Account.";
+/** Muted note under the 18+ box. Sign-up only reads it for new accounts, so say so (Vera item 3, Henry Q3). */
+export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. For new accounts. Already signed up? Confirm in Account.";
 /** Hint for the 18+ box while it is disabled: it can only be ticked after the 16+ box (Vera item 2). */
 export const AGE_ADULT_NEEDS_16_HINT = "Tick I am 16 or older first.";
 /** Second line of the link error card after an age refusal: the link is used up, so say what to do next (Vera delta item 2). */

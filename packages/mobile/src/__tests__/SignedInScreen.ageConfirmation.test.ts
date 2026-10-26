@@ -28,6 +28,8 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     });
     const text = screen.text();
     expect(text.indexOf(CANT_UNDO)).toBeGreaterThan(text.indexOf(CONFIRM));
+    // Henry Q3: the "for new accounts" note is sign-up only; the Account box keeps its own copy.
+    expect(text).not.toContain("For new accounts.");
     expect(flattenStyle(screen.queryByText(CANT_UNDO)?.props.style).color).toBe(colours.textSecondary);
 
     await screen.press(CONFIRM);

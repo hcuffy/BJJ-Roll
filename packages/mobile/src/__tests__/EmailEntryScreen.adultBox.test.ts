@@ -10,7 +10,8 @@ import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./
 import { flattenStyle, renderScreen, textOf } from "./screenHarness";
 
 const ADULT = "I am 18 or older (optional)";
-const NOTE = "Only needed to buy things later. You can also confirm this in Account.";
+const NEW_ACCOUNTS_ONLY = "For new accounts. Already signed up? Confirm in Account.";
+const NOTE = `Only needed to buy things later. ${NEW_ACCOUNTS_ONLY}`;
 
 const LINK_NEXT_STEP = "Tick I am 16 or older and send a new link.";
 
@@ -50,6 +51,14 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(textOf(indented ?? "")).toContain(NOTE);
     expect(textOf(indented ?? "")).not.toContain("I am 16 or older");
     expect(flattenStyle(screen.queryByText(NOTE)?.props.style)).toMatchObject({ color: colours.textSecondary, fontSize: 15, lineHeight: 22 });
+  });
+
+  it("Henry Q3 / Vera item 3: the sign-up 18+ box says it is for new accounts and points signed-up users to Account", async () => {
+    const screen = await render();
+    const indented = screen.findAllByType("View").find((view) => flattenStyle(view.props.style).marginLeft === 36);
+    expect(textOf(indented ?? "")).toContain(ADULT);
+    expect(textOf(indented ?? "")).toContain(NEW_ACCOUNTS_ONLY);
+    expect(screen.text().indexOf(NEW_ACCOUNTS_ONLY)).toBeGreaterThan(screen.text().indexOf(ADULT));
   });
 
   it("keeps 18+ disabled and dimmed until 16+ is ticked; unticking 16+ unticks 18+; 18+ never ticks 16+", async () => {
