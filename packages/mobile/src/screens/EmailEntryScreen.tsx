@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { signInWithProvider, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { textStyles } from "../theme/tokens";
+import { AgeCheckbox } from "./AgeCheckbox";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { SocialSignInButtons } from "./SocialSignInButtons";
@@ -15,6 +16,8 @@ import { missingHint } from "./missingHint";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
+/** Calm note when the backend could not be reached (copy per Vera, HEN-285). Cleared by the next submit attempt. */
+export const SERVER_UNREACHABLE_NOTE = "Can't reach the server right now. Check your connection and try again.";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
@@ -29,6 +32,9 @@ export interface EmailEntryScreenProps {
   readonly socialProviders?: readonly SocialProvider[];
   readonly socialSignIn?: SocialSignInDependencies;
   readonly onSignedIn?: () => void;
+  /** The backend could not be reached (startup or sign-in link); shows a muted note under the email field. */
+  readonly serverUnreachable?: boolean;
+  readonly onClearServerUnreachable?: () => void;
 }
 
 type Sending = "code" | "link" | SocialProvider | null;
@@ -43,6 +49,8 @@ export function EmailEntryScreen({
   socialProviders = [],
   socialSignIn,
   onSignedIn,
+  serverUnreachable = false,
+  onClearServerUnreachable,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -83,6 +91,7 @@ export function EmailEntryScreen({
 
   const send = async (kind: "code" | "link") => {
     startAction();
+    onClearServerUnreachable?.();
     if (sending !== null || !validate()) {
       return;
     }
@@ -208,27 +217,18 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
+      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} announce="polite" />
       <View>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityLabel={AGE_CONFIRMATION_LABEL}
-          accessibilityState={{ checked: ageConfirmed }}
-          accessibilityHint={ageError ?? undefined}
-          style={authStyles.checkboxRow}
+        <AgeCheckbox
+          label={AGE_CONFIRMATION_LABEL}
+          checked={ageConfirmed}
+          hint={ageError ?? undefined}
           onPress={() => {
             startAction();
             setAgeConfirmed(!ageConfirmed);
             setAgeError(null);
-          }}>
-          <View style={[authStyles.checkbox, ageConfirmed && authStyles.checkboxTicked]}>
-            {ageConfirmed ? (
-              <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
-                ✓
-              </Text>
-            ) : null}
-          </View>
-          <Text style={authStyles.checkboxLabel}>{AGE_CONFIRMATION_LABEL}</Text>
-        </Pressable>
+          }}
+        />
         <StatusText message={ageError} style={authStyles.fieldError} />
       </View>
       <StatusText message={formError} style={authStyles.fieldError} />
