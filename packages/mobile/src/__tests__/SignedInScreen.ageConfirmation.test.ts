@@ -1,6 +1,7 @@
 import { AccessibilityInfo, Platform } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
+import { AGE_ADULT_CONFIRMATION_NOTE } from "../auth/ageConfirmation";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { flattenStyle, textOf } from "./screenHarness";
@@ -28,8 +29,8 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     });
     const text = screen.text();
     expect(text.indexOf(CANT_UNDO)).toBeGreaterThan(text.indexOf(CONFIRM));
-    // Henry Q3: the "for new accounts" note is sign-up only; the Account box keeps its own copy.
-    expect(text).not.toContain("For new accounts.");
+    // Henry Q3: the sign-up note stays on sign-up; the Account box keeps its own copy.
+    expect(text).not.toContain(AGE_ADULT_CONFIRMATION_NOTE);
     expect(flattenStyle(screen.queryByText(CANT_UNDO)?.props.style).color).toBe(colours.textSecondary);
 
     await screen.press(CONFIRM);
