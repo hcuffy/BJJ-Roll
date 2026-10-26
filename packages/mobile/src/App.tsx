@@ -40,8 +40,10 @@ export function App() {
       });
   }, []);
 
+  // A link that started the app waits for the startup step, so a pending sign-out cannot end the session the link creates.
+  const startupDone = screen.name !== "loading";
   useEffect(() => {
-    if (!deepLinkUrl) {
+    if (!deepLinkUrl || !startupDone) {
       return;
     }
     void completeMagicLink(appAuthClient, deepLinkUrl)
@@ -56,7 +58,7 @@ export function App() {
         }
       })
       .catch(() => setServerUnreachable(true));
-  }, [deepLinkUrl]);
+  }, [deepLinkUrl, startupDone]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
