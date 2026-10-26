@@ -240,7 +240,11 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     });
 
     /** Screens shown from launch until the first "You are signed in". */
-    const screensBeforeSignedIn = () => renderedScreens.slice(0, renderedScreens.findIndex((text) => text.includes(SIGNED_IN_SCREEN)));
+    const screensBeforeSignedIn = () =>
+      renderedScreens.slice(
+        0,
+        renderedScreens.findIndex((text) => text.includes(SIGNED_IN_SCREEN)),
+      );
 
     it("cold start from a sign-in link with a pending sign-out: Loading until signed in, never the sign-in screen", async () => {
       await signOutLeftUnfinished();

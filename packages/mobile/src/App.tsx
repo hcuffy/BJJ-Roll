@@ -19,6 +19,8 @@ export function App() {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const [serverUnreachable, setServerUnreachable] = useState(false);
+  // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
+  const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
 
   // Signing in proves the server is reachable, so a note set earlier must not reappear later.
@@ -32,18 +34,23 @@ export function App() {
     // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
     void finishPendingSignOut(appAuthClient, appSecureStore)
       .then(async (signOutPending) => (signOutPending ? null : await readSignedInUserId(appAuthClient)))
-      .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
+      .then((userId) => setStartupScreen(userId ? { name: "signedIn" } : { name: "email" }))
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
         setServerUnreachable(true);
-        setScreen({ name: "email" });
+        setStartupScreen({ name: "email" });
       });
   }, []);
 
   // A link that started the app waits for the startup step, so a pending sign-out cannot end the session the link creates.
-  const startupDone = screen.name !== "loading";
   useEffect(() => {
-    if (!deepLinkUrl || !startupDone) {
+    if (!startupScreen) {
+      return;
+    }
+    // Leaves Loading only once; a link opened later in the running app does not move the user.
+    const showStartupScreen = () => setScreen((current) => (current.name === "loading" ? startupScreen : current));
+    if (!deepLinkUrl) {
+      showStartupScreen();
       return;
     }
     void completeMagicLink(appAuthClient, deepLinkUrl)
@@ -51,14 +58,20 @@ export function App() {
         if (result.ok) {
           setLinkError(null);
           handleSignedIn();
-        } else if (result.reason === "network") {
+          return;
+        }
+        if (result.reason === "network") {
           setServerUnreachable(true);
         } else if (result.message) {
           setLinkError(result.message);
         }
+        showStartupScreen();
       })
-      .catch(() => setServerUnreachable(true));
-  }, [deepLinkUrl, startupDone]);
+      .catch(() => {
+        setServerUnreachable(true);
+        showStartupScreen();
+      });
+  }, [deepLinkUrl, startupScreen]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
