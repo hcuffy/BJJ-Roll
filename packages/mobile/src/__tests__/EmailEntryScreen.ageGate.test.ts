@@ -47,7 +47,7 @@ describe("EmailEntryScreen", () => {
   it("shows the 16+ checkbox unticked and an email field without a password field", async () => {
     const screen = await renderEmailEntry();
 
-    expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false });
+    expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false, disabled: false });
     expect(screen.findAllByType("Text").map(textOf)).toContain("Email");
     expect(screen.queryByText("I am 16 or older")).not.toBeNull();
     expect(screen.findAllByType("TextInput").map((input) => input.props.accessibilityLabel)).toEqual(["Email"]);
@@ -173,29 +173,11 @@ describe("EmailEntryScreen", () => {
     expect(sentAdult).toEqual([false]);
   });
 
-  it("offers an optional 'I am 18 or older' box, unticked by default, that alone does not unlock sending (HEN-263)", async () => {
-    const screen = await renderEmailEntry();
-    const adultBox = () => screen.getByLabelText("I am 18 or older");
-
-    expect(adultBox().props.accessibilityRole).toBe("checkbox");
-    expect(adultBox().props.accessibilityState).toEqual({ checked: false });
-    expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 16 or older");
-
-    await screen.changeText("Email", "member@example.test");
-    (adultBox().props.onPress as () => void)();
-    await screen.rerender();
-    expect(adultBox().props.accessibilityState).toEqual({ checked: true });
-    expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false });
-    await screen.press("Continue");
-    expect(backend.fetchImplementation).not.toHaveBeenCalled();
-    expect(screen.text()).toContain("Tick the box to confirm you are 16 or older.");
-  });
-
   it("sends age18Confirmed true with the code and the link when the 18+ box is ticked, and hands it over with the email", async () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
     await screen.pressRole("checkbox");
-    (screen.getByLabelText("I am 18 or older").props.onPress as () => void)();
+    (screen.getByLabelText("I am 18 or older (optional)").props.onPress as () => void)();
     await screen.rerender();
     await screen.press("Email me a sign-in link instead");
     await screen.press("Use a different email");

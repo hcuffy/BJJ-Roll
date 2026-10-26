@@ -4,8 +4,14 @@ import { AGE16_CONFIRMATION_LABEL, AGE18_CONFIRMATION_LABEL, age16ConfirmedSchem
 // send carried `age16Confirmed: true` (HEN-77, HEN-263); the rule, labels and refusal message come from @bjj-roll/shared.
 export { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 export const AGE_CONFIRMATION_LABEL = AGE16_CONFIRMATION_LABEL;
-/** Optional, unticked by default; only 18+ accounts can buy (canPurchase). */
-export const AGE_ADULT_CONFIRMATION_LABEL = AGE18_CONFIRMATION_LABEL;
+/**
+ * Optional, unticked by default; only 18+ accounts can buy (canPurchase). The on-screen name adds "(optional)" (Vera item 1);
+ * the statement the user confirms stays the shared AGE18_CONFIRMATION_LABEL that the consent record's text version names.
+ */
+export const AGE_ADULT_CONFIRMATION_LABEL = `${AGE18_CONFIRMATION_LABEL} (optional)`;
+export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. You can also confirm this in Account.";
+/** Hint for the 18+ box while it is disabled: it can only be ticked after the 16+ box (Vera item 2). */
+export const AGE_ADULT_NEEDS_16_HINT = "Tick I am 16 or older first.";
 
 export interface EmailEntry {
   readonly email: string;

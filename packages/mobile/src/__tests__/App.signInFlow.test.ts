@@ -78,7 +78,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     try {
       const screen = await startApp();
       await screen.pressRole("checkbox");
-      await screen.press("I am 18 or older");
+      await screen.press("I am 18 or older (optional)");
       await screen.changeText("Email", "new.member@example.test");
       await screen.press("Continue");
       await vi.advanceTimersByTimeAsync(30_000);
@@ -102,7 +102,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     await screen.press("Confirm I am 18 or older");
     expect(lastBodyFor("/account/age-confirmation")).toEqual({ age18Confirmed: true });
-    expect(screen.text()).toContain("You confirmed you are 18 or older.");
+    expect(screen.text()).toContain("18 or older: confirmed");
     expect(screen.queryByText("Confirm I am 18 or older")).toBeNull();
   });
 

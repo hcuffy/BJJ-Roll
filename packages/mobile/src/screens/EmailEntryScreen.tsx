@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { AGE_ADULT_CONFIRMATION_LABEL, AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
+import { Text, View } from "react-native";
+import {
+  AGE_ADULT_CONFIRMATION_LABEL,
+  AGE_ADULT_CONFIRMATION_NOTE,
+  AGE_ADULT_NEEDS_16_HINT,
+  AGE_CONFIRMATION_LABEL,
+  isEmailAddress,
+} from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
+import { AgeCheckbox } from "./AgeCheckbox";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { StatusText } from "./StatusText";
@@ -25,34 +32,6 @@ export interface EmailEntryScreenProps {
 }
 
 type Sending = "code" | "link" | null;
-
-interface AgeCheckboxProps {
-  readonly label: string;
-  readonly checked: boolean;
-  readonly hint?: string;
-  readonly onPress: () => void;
-}
-
-function AgeCheckbox({ label, checked, hint, onPress }: AgeCheckboxProps) {
-  return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityLabel={label}
-      accessibilityState={{ checked }}
-      accessibilityHint={hint}
-      style={authStyles.checkboxRow}
-      onPress={onPress}>
-      <View style={[authStyles.checkbox, checked && authStyles.checkboxTicked]}>
-        {checked ? (
-          <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
-            ✓
-          </Text>
-        ) : null}
-      </View>
-      <Text style={authStyles.checkboxLabel}>{label}</Text>
-    </Pressable>
-  );
-}
 
 /** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
 function missingHint(emailValid: boolean, age16Confirmed: boolean): string | undefined {
@@ -216,27 +195,39 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <View>
-        <AgeCheckbox
-          label={AGE_CONFIRMATION_LABEL}
-          checked={age16Confirmed}
-          hint={ageError ?? undefined}
-          onPress={() => {
-            startAction();
-            setAge16Confirmed(!age16Confirmed);
-            setAgeError(null);
-          }}
-        />
-        <StatusText message={ageError} style={authStyles.fieldError} />
+      <View style={authStyles.ageGroup}>
+        <View>
+          <AgeCheckbox
+            label={AGE_CONFIRMATION_LABEL}
+            checked={age16Confirmed}
+            hint={ageError ?? undefined}
+            onPress={() => {
+              startAction();
+              // Unticking 16+ also unticks 18+; ticking 18+ never ticks 16+ for the user (Vera item 2).
+              if (age16Confirmed) {
+                setAge18Confirmed(false);
+              }
+              setAge16Confirmed(!age16Confirmed);
+              setAgeError(null);
+            }}
+          />
+          {/* After an empty submit the email error is read first; this one stays visible but is not announced over it. */}
+          <StatusText message={ageError} style={authStyles.fieldError} announce={emailError === null} />
+        </View>
+        <View style={authStyles.ageOptional}>
+          <AgeCheckbox
+            label={AGE_ADULT_CONFIRMATION_LABEL}
+            checked={age18Confirmed}
+            disabled={!age16Confirmed}
+            hint={age16Confirmed ? undefined : AGE_ADULT_NEEDS_16_HINT}
+            onPress={() => {
+              startAction();
+              setAge18Confirmed(!age18Confirmed);
+            }}
+          />
+          <Text style={textStyles.bodyMuted}>{AGE_ADULT_CONFIRMATION_NOTE}</Text>
+        </View>
       </View>
-      <AgeCheckbox
-        label={AGE_ADULT_CONFIRMATION_LABEL}
-        checked={age18Confirmed}
-        onPress={() => {
-          startAction();
-          setAge18Confirmed(!age18Confirmed);
-        }}
-      />
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton

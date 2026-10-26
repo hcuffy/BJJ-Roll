@@ -8,8 +8,8 @@ import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./
 describe("age confirmation gate", () => {
   it("labels the required checkbox for 16 or older, and the optional one from the shared 18+ label (HEN-263)", () => {
     expect(AGE_CONFIRMATION_LABEL).toBe("I am 16 or older");
-    expect(AGE_ADULT_CONFIRMATION_LABEL).toBe("I am 18 or older");
-    expect(AGE_ADULT_CONFIRMATION_LABEL).toBe(AGE18_CONFIRMATION_LABEL);
+    expect(AGE_ADULT_CONFIRMATION_LABEL).toBe("I am 18 or older (optional)");
+    expect(AGE_ADULT_CONFIRMATION_LABEL).toBe(`${AGE18_CONFIRMATION_LABEL} (optional)`);
   });
 
   it("keeps Continue disabled until the box is ticked and an email is entered", () => {
