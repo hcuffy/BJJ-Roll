@@ -34,3 +34,8 @@ vi.mock("expo-linking", async () => {
   const { deepLinkState } = await import("./screenHarness");
   return { createURL: (path: string) => `bjjroll://${path}`, useURL: () => deepLinkState.url };
 });
+vi.mock("expo-web-browser", () => ({ openAuthSessionAsync: vi.fn(() => Promise.resolve({ type: "cancel" })), dismissAuthSession: vi.fn() }));
+vi.mock("expo-apple-authentication", () => ({
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+  signInAsync: vi.fn(() => Promise.reject(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }))),
+}));

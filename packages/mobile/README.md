@@ -32,6 +32,18 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
    | `LETTERMINT_API_KEY`, `EMAIL_FROM_ADDRESS` | The email sender. `server.js` always sends real email through Lettermint, so use an inbox you can open                   |
    | `PORT` (optional)                          | Defaults to `3000`                                                                                                       |
 
+   Apple and Google sign-in (HEN-239) also read these. The server refuses to start without the Google pair, and Apple is on only when all five Apple variables are set (a partial set fails at startup with the missing name):
+
+   | Variable                                   | What it is                                                                                          |
+   | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client; its redirect URI is `<AUTH_BASE_URL>/api/auth/callback/google`             |
+   | `APPLE_SERVICE_ID`                         | Apple Services ID for the browser flow; its return URL is `<AUTH_BASE_URL>/api/auth/callback/apple` |
+   | `APPLE_APP_BUNDLE_IDENTIFIER`              | The iOS bundle id (`com.bjj.roll`), the audience of native Sign in with Apple tokens                |
+   | `APPLE_TEAM_ID`, `APPLE_KEY_ID`            | Apple developer team id and the id of the Sign in with Apple key                                    |
+   | `APPLE_PRIVATE_KEY`                        | That key's PKCS#8 PEM; `\n` escapes are accepted for one-line values                                |
+
+   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple.
+
 3. Build, run the migrations once, then start the server:
 
    ```sh

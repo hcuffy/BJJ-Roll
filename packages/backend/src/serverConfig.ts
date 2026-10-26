@@ -1,4 +1,5 @@
 import type { Keyring } from "@bjj-roll/shared/encryption";
+import { loadSocialProviderConfig, type SocialProviderConfig } from "./auth/socialProviders.js";
 import { loadAuthKeyringFromEnvironment, TRUSTABLE_PROXY_IP_HEADERS, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
 
 export const DATABASE_URL_ENV = "DATABASE_URL";
@@ -18,6 +19,8 @@ export interface ServerConfig {
   readonly emailFromAddress: string;
   readonly trustedProxyIpHeaders: readonly TrustableProxyIpHeader[];
   readonly port: number;
+  /** HEN-239: Google is required; Apple stays off until all its variables are set (Henry's Apple developer account). */
+  readonly socialProviders: SocialProviderConfig;
 }
 
 /** Errors name the variable only; values are never echoed. */
@@ -57,6 +60,7 @@ export function loadServerConfig(env: ServerEnvironment): ServerConfig {
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
     throw new Error(`${PORT_ENV} must be an integer between 1 and 65535`);
   }
+  const socialProviders = loadSocialProviderConfig(env, { requireGoogle: true });
   return {
     databaseUrl: requireVariable(env, DATABASE_URL_ENV),
     authBaseUrl,
@@ -65,5 +69,6 @@ export function loadServerConfig(env: ServerEnvironment): ServerConfig {
     emailFromAddress: requireVariable(env, EMAIL_FROM_ADDRESS_ENV),
     trustedProxyIpHeaders: parseTrustedProxyIpHeaders(env[AUTH_TRUSTED_PROXY_IP_HEADERS_ENV]),
     port,
+    socialProviders,
   };
 }

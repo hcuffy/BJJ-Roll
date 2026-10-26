@@ -47,6 +47,26 @@ export async function handleSendAccountDeletionCode(context: Context, options: A
 }
 
 /**
+ * HEN-239: before the purge, revoke the stored Apple refresh token (App Store rule 5.1.1(v)). A failed revoke never blocks the
+ * delete: it is logged with the user id only, never the token or email.
+ */
+async function revokeAppleSignIn(options: AccountRoutesOptions, userId: string): Promise<void> {
+  const rows = await withUserContext(options.db, userId, (transaction) =>
+    transaction.selectFrom("accounts").select(["refreshToken"]).where("userId", "=", userId).where("providerId", "=", "apple").execute(),
+  );
+  for (const row of rows) {
+    try {
+      if (!row.refreshToken || !options.revokeAppleRefreshToken) {
+        throw new Error("No Apple refresh token to revoke");
+      }
+      await options.revokeAppleRefreshToken(row.refreshToken);
+    } catch {
+      options.logAccountEvent("account_apple_revoke_failed", userId);
+    }
+  }
+}
+
+/**
  * DELETE /account with body { code }: hard delete, now, only with a valid fresh code (Henry, 25 Oct).
  * The address is captured before the purge; the deleted notice goes out after the delete commits, so it is never sent
  * for a delete that did not happen. A failed send does not undo or fail the delete: it is logged with the user id and reason only.
@@ -70,6 +90,7 @@ export async function handleDeleteAccount(context: Context, options: AccountRout
   if ((await options.accountDeletionCodes.check(capturedEmail, parsed.data.code)) !== "valid") {
     return context.json({ error: "Invalid or expired code" }, 403);
   }
+  await revokeAppleSignIn(options, userId);
   // The user row and every row in the ARCHITECTURE.md §5 map, sessions and this code included, in one transaction.
   const result = await cascadeDeleteUserAccount(options.db, userId);
   if (result.deletedUserCount === 0) {

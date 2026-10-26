@@ -10,9 +10,20 @@
       "backgroundColor": "#111313"
     },
     "scheme": "bjjroll",
-    "plugins": ["expo-secure-store", "expo-web-browser"],
+    "ios": {
+      "bundleIdentifier": "com.bjj.roll",
+      "usesAppleSignIn": true
+    },
+    "android": {
+      "package": "com.bjj.roll"
+    },
+    "plugins": ["expo-secure-store", "expo-web-browser", "expo-apple-authentication"],
     "extra": {
-      "backendUrl": "http://10.0.2.2:3000"
+      "backendUrl": "http://10.0.2.2:3000",
+      "socialSignIn": {
+        "appleEnabled": false,
+        "googleEnabled": true
+      }
     }
   }
 }

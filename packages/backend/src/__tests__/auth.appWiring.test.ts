@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
-import { AUTH_DATA_ENCRYPTION_KEY_ENV, AUTH_EMAIL_HMAC_KEY_ENV, generateTestAuthSecrets, isAllowedDeepLinkCallbackUrl } from "../auth/index.js";
+import {
+  APPLE_KEY_ID_ENV,
+  APPLE_SERVICE_ID_ENV,
+  AUTH_DATA_ENCRYPTION_KEY_ENV,
+  AUTH_EMAIL_HMAC_KEY_ENV,
+  generateTestAuthSecrets,
+  GOOGLE_CLIENT_ID_ENV,
+  GOOGLE_CLIENT_SECRET_ENV,
+  isAllowedDeepLinkCallbackUrl,
+} from "../auth/index.js";
 import {
   AUTH_BASE_URL_ENV,
   AUTH_TRUSTED_PROXY_IP_HEADERS_ENV,
@@ -25,6 +34,8 @@ const validEnvironment = (): Record<string, string> => ({
   [DATABASE_URL_ENV]: "postgres://app@db.example.test/bjj",
   [LETTERMINT_API_KEY_ENV]: "lm-test-value-not-a-secret",
   [EMAIL_FROM_ADDRESS_ENV]: "login@example.test",
+  [GOOGLE_CLIENT_ID_ENV]: "test-google-client.apps.example.test",
+  [GOOGLE_CLIENT_SECRET_ENV]: "test-google-secret-not-real",
 });
 
 describe("HEN-71 startup config check", () => {
@@ -50,6 +61,10 @@ describe("HEN-71 startup config check", () => {
       [LETTERMINT_API_KEY_ENV, { [LETTERMINT_API_KEY_ENV]: "" }],
       [EMAIL_FROM_ADDRESS_ENV, { [EMAIL_FROM_ADDRESS_ENV]: undefined }],
       [AUTH_TRUSTED_PROXY_IP_HEADERS_ENV, { [AUTH_TRUSTED_PROXY_IP_HEADERS_ENV]: "x-evil-header-value" }],
+      [GOOGLE_CLIENT_ID_ENV, { [GOOGLE_CLIENT_ID_ENV]: undefined }],
+      [GOOGLE_CLIENT_SECRET_ENV, { [GOOGLE_CLIENT_SECRET_ENV]: "" }],
+      // Apple is off until every Apple variable is set; a half-set Apple config fails fast instead of signing in half-configured.
+      [APPLE_SERVICE_ID_ENV, { [APPLE_KEY_ID_ENV]: "TESTKEY001" }],
     ];
     for (const [expectedName, override] of cases) {
       const environment = { ...base, ...override };

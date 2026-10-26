@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, sealAppleRefreshToken } from "./appleTokens.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
 const IDENTIFIER_EMAIL_PREFIXES = ["sign-in-otp-", "email-verification-otp-", "forget-password-otp-", "change-email-confirmation-"] as const;
@@ -68,6 +69,24 @@ export function extractEmailFromVerificationValue(rawValue: string): string | nu
   }
 }
 
+const DROPPED_ACCOUNT_TOKEN_FIELDS = ["accessToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope"] as const;
+
+/**
+ * HEN-239: provider tokens are not stored. The one exception is Apple's refresh token, kept encrypted so account deletion can
+ * revoke it. Anything else (or a refresh token on a write that does not say it is Apple's) is dropped.
+ */
+function encodeAccountTokens(encoded: Record<string, unknown>, codec: AuthCryptoCodec): void {
+  for (const field of DROPPED_ACCOUNT_TOKEN_FIELDS) {
+    delete encoded[field];
+  }
+  const refreshToken = encoded.refreshToken;
+  if (typeof refreshToken !== "string" || refreshToken === "" || encoded.providerId !== "apple") {
+    delete encoded.refreshToken;
+  } else if (!refreshToken.startsWith(APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX)) {
+    encoded.refreshToken = sealAppleRefreshToken(codec, { refreshToken, clientId: null });
+  }
+}
+
 export function encodeCreateData(
   model: string,
   data: Record<string, unknown>,
@@ -102,6 +121,8 @@ export function encodeCreateData(
       }
       encoded.value = codec.encryptVerificationPayload(encoded.value);
     }
+  } else if (modelKey === "account") {
+    encodeAccountTokens(encoded, codec);
   }
   return { encoded, emailHmac };
 }
@@ -126,6 +147,8 @@ export function encodeUpdateData(model: string, update: Record<string, unknown>,
     if (typeof encoded.value === "string") {
       encoded.value = codec.encryptVerificationPayload(encoded.value);
     }
+  } else if (modelKey === "account") {
+    encodeAccountTokens(encoded, codec);
   }
   return encoded;
 }

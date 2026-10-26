@@ -3,12 +3,15 @@ import { Pressable, Text, View } from "react-native";
 import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { signInWithProvider, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
+import { missingHint } from "./missingHint";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
@@ -22,20 +25,13 @@ export interface EmailEntryScreenProps {
   /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
   readonly onClearAccountNotice?: () => void;
+  /** Apple and Google buttons to show (HEN-239); none when empty. */
+  readonly socialProviders?: readonly SocialProvider[];
+  readonly socialSignIn?: SocialSignInDependencies;
+  readonly onSignedIn?: () => void;
 }
 
-type Sending = "code" | "link" | null;
-
-/** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
-function missingHint(emailValid: boolean, ageConfirmed: boolean): string | undefined {
-  if (!emailValid && !ageConfirmed) {
-    return "Enter your email and tick the 17 or older box first.";
-  }
-  if (!emailValid) {
-    return "Enter your email first.";
-  }
-  return ageConfirmed ? undefined : "Tick the 17 or older box first.";
-}
+type Sending = "code" | "link" | SocialProvider | null;
 
 export function EmailEntryScreen({
   client,
@@ -44,6 +40,9 @@ export function EmailEntryScreen({
   onClearLinkError,
   accountNotice = null,
   onClearAccountNotice,
+  socialProviders = [],
+  socialSignIn,
+  onSignedIn,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -101,6 +100,28 @@ export function EmailEntryScreen({
     } else {
       setNotice(`We sent a new link to ${email.trim()}.`);
       linkCooldown.restart();
+    }
+  };
+
+  /** Apple or Google: only the 17+ box is needed (the provider supplies the email). */
+  const signInWithSocial = async (provider: SocialProvider) => {
+    startAction();
+    setEmailError(null);
+    if (sending !== null || !socialSignIn) {
+      return;
+    }
+    if (!ageConfirmed) {
+      setAgeError(TICK_AGE_BOX_MESSAGE);
+      return;
+    }
+    setAgeError(null);
+    setSending(provider);
+    const result = await signInWithProvider(socialSignIn, provider, ageConfirmed);
+    setSending(null);
+    if (result.ok) {
+      onSignedIn?.();
+    } else if (result.message !== null) {
+      showFailure(result);
     }
   };
 
@@ -218,7 +239,7 @@ export function EmailEntryScreen({
           accessibilityHint={sendHint}
           loading={sending === "code"}
           loadingTitle="Sending code…"
-          disabled={sending === "link"}
+          disabled={sending !== null && sending !== "code"}
           onPress={() => void send("code")}
         />
         <AuthButton
@@ -228,9 +249,17 @@ export function EmailEntryScreen({
           accessibilityHint={sendHint}
           loading={sending === "link"}
           loadingTitle="Sending link…"
-          disabled={sending === "code"}
+          disabled={sending !== null && sending !== "link"}
           onPress={() => void send("link")}
         />
+        {socialSignIn ? (
+          <SocialSignInButtons
+            providers={socialProviders}
+            ageConfirmed={ageConfirmed}
+            sending={sending}
+            onPress={(provider) => void signInWithSocial(provider)}
+          />
+        ) : null}
       </View>
     </AuthScreenLayout>
   );

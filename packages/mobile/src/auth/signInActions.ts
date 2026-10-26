@@ -4,7 +4,8 @@ import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 
 /** Why an action failed; screens use it to place the message next to the field it is about. */
-export type FailureReason = "ageRequired" | "invalidEmail" | "invalidCode" | "invalidLink" | "network" | "rateLimited" | "unknown" | "ignored";
+export type FailureReason =
+  "ageRequired" | "invalidEmail" | "invalidCode" | "invalidLink" | "accountNotLinked" | "network" | "rateLimited" | "unknown" | "ignored";
 
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly reason: FailureReason; readonly message: string | null };
 
@@ -19,6 +20,7 @@ export const FAILURE_MESSAGES = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
   invalidLink: "This sign-in link is invalid or has expired. Request a new one.",
+  accountNotLinked: "This email already has a BJJ Roll account. Sign in with your email, then try again.",
   network: "No connection. Check your internet and try again.",
   rateLimited: "Too many tries. Wait a minute and try again.",
   unknown: "Something went wrong. Please try again.",
@@ -29,7 +31,7 @@ const HTTP_TOO_MANY_REQUESTS = 429;
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 const OTP_PATTERN = /^\d{6}$/u;
 
-function failure(reason: Exclude<FailureReason, "ageRequired" | "ignored">): ActionResult {
+export function failure(reason: Exclude<FailureReason, "ageRequired" | "ignored">): ActionResult {
   return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
 }
 
@@ -45,14 +47,14 @@ function checkEntry(entry: EmailEntry): ActionResult | null {
 
 type ClientErrorReason = "invalidCode" | "invalidLink";
 
-interface AuthRequest {
+export interface AuthRequest {
   readonly path: string;
   readonly body: Record<string, unknown>;
   /** How to read a 4xx that is not the age refusal or a rate limit. */
   readonly clientErrorReason?: ClientErrorReason;
 }
 
-async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason }: AuthRequest): Promise<ActionResult> {
+export async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason }: AuthRequest): Promise<ActionResult> {
   let error: { readonly status: number; readonly code?: unknown } | null;
   try {
     ({ error } = await client.$fetch(path, { method: "POST", body }));
@@ -123,6 +125,9 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
   });
 }
 
+/** Apple and Google sign-in return here; the browser session hands that URL to socialSignIn.ts, so the deep-link handler skips it. */
+export const SOCIAL_SIGN_IN_CALLBACK_PATH = "/social";
+
 /** Handles a bjjroll://auth deep link: swaps its one-time code for a session. Other URLs are ignored (message null). */
 export async function completeMagicLink(client: MobileAuthClient, url: string): Promise<ActionResult> {
   let parsed: URL;
@@ -131,7 +136,8 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   } catch {
     return { ok: false, reason: "ignored", message: null };
   }
-  if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth") {
+  // Android can also deliver the Apple or Google return as a deep link; its one-time code is already being exchanged by socialSignIn.ts.
+  if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth" || parsed.pathname === SOCIAL_SIGN_IN_CALLBACK_PATH) {
     return { ok: false, reason: "ignored", message: null };
   }
   if (parsed.searchParams.has("error")) {

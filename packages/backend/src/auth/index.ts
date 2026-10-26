@@ -39,8 +39,34 @@ export {
   resolveClientIpAddress,
   TRUSTABLE_PROXY_IP_HEADERS,
   type AuthConnectionInfo,
+  type AuthEventLogger,
+  type AuthEventName,
   type AuthInstance,
   type CreateAuthOptions,
   type TrustableProxyIpHeader,
 } from "./createAuth.js";
 export { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl, MAGIC_LINK_REDIRECT_PARAMETERS } from "./deepLinkCallback.js";
+export {
+  APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX,
+  APPLE_REVOKE_ENDPOINT,
+  APPLE_TOKEN_ENDPOINT,
+  openAppleRefreshToken,
+  sealAppleRefreshToken,
+} from "./appleTokens.js";
+export {
+  APPLE_APP_BUNDLE_IDENTIFIER_ENV,
+  APPLE_ENVIRONMENT_NAMES,
+  APPLE_KEY_ID_ENV,
+  APPLE_PRIVATE_KEY_ENV,
+  APPLE_SERVICE_ID_ENV,
+  APPLE_TEAM_ID_ENV,
+  buildSocialProviders,
+  createAppleClientSecret,
+  GOOGLE_CLIENT_ID_ENV,
+  GOOGLE_CLIENT_SECRET_ENV,
+  GOOGLE_ENVIRONMENT_NAMES,
+  loadSocialProviderConfig,
+  type AppleProviderConfig,
+  type GoogleProviderConfig,
+  type SocialProviderConfig,
+} from "./socialProviders.js";

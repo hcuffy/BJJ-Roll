@@ -13,7 +13,14 @@ export interface CreateAppOptions {
   readonly auth?:
     | Pick<
         AuthInstance,
-        "handler" | "resolveSessionUserId" | "codec" | "accountDeletionCodes" | "accountDeletionAttempts" | "resolveClientIp" | "emailSender"
+        | "handler"
+        | "resolveSessionUserId"
+        | "codec"
+        | "accountDeletionCodes"
+        | "accountDeletionAttempts"
+        | "resolveClientIp"
+        | "emailSender"
+        | "revokeAppleRefreshToken"
       >
     | CreateAuthOptions;
   /** When set together with auth, mounts the handle and account routes with the auth session as the user resolver. */
@@ -39,6 +46,7 @@ export function createApp(options?: CreateAppOptions): Hono {
         accountDeletionAttempts: authInstance.accountDeletionAttempts,
         resolveClientIp: (context) => authInstance.resolveClientIp(context.req.raw.headers, { remoteAddress: readSocketAddress(context) }),
         emailSender: authInstance.emailSender,
+        revokeAppleRefreshToken: (sealedRefreshToken) => authInstance.revokeAppleRefreshToken(sealedRefreshToken),
       });
     }
   }
@@ -62,6 +70,7 @@ export function createAppFromEnvironment(env: ServerEnvironment = process.env): 
       keyring: config.keyring,
       baseURL: config.authBaseUrl,
       trustedProxyIpHeaders: config.trustedProxyIpHeaders,
+      socialProviders: config.socialProviders,
       emailSender: new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress }),
     },
     database: createDatabase(pool),

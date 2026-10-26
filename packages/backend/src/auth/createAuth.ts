@@ -47,6 +47,16 @@ import {
   TRUSTABLE_PROXY_IP_HEADERS,
   type TrustableProxyIpHeader,
 } from "./authRequestGuards.js";
+import { buildSocialProviders, type SocialProviderConfig } from "./socialProviders.js";
+import {
+  captureAppleRefreshToken,
+  createAppleSignInCapture,
+  requireSocialSignUpAgeConfirmation,
+  revokeSealedAppleRefreshToken,
+  type AuthEventLogger,
+} from "./socialSignInHooks.js";
+
+export type { AuthEventLogger, AuthEventName } from "./socialSignInHooks.js";
 
 export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
@@ -61,6 +71,10 @@ export interface CreateAuthOptions {
   readonly trustedProxyIpHeaders?: readonly TrustableProxyIpHeader[];
   /** Better Auth logger config. Default: disabled. */
   readonly logger?: BetterAuthOptions["logger"];
+  /** Apple and Google sign-in (HEN-239). A provider is offered only when it is configured here. Default: none. */
+  readonly socialProviders?: SocialProviderConfig;
+  /** One line per social sign-in event: the event and the user id, never a token or email. Default: JSON on stdout. */
+  readonly logAuthEvent?: AuthEventLogger;
 }
 
 export interface AuthConnectionInfo {
@@ -82,6 +96,11 @@ export interface AuthInstance {
   readonly resolveClientIp: (headers: Headers, connection?: AuthConnectionInfo) => string;
   readonly emailSender: EmailSender;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
+  /**
+   * Revokes a stored, sealed Apple refresh token (HEN-239, App Store rule 5.1.1(v)). Throws when Apple is not configured, the value
+   * cannot be opened, or Apple refuses; the caller logs the failure and still deletes the account.
+   */
+  readonly revokeAppleRefreshToken: (sealedRefreshToken: string) => Promise<void>;
 }
 
 export function createAuth(options: CreateAuthOptions): AuthInstance {
@@ -89,6 +108,8 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
   const codec = createAuthCryptoCodec(keyring);
   const baseURL = options.baseURL;
   const trustedProxyIpHeaders = options.trustedProxyIpHeaders ?? [];
+  const socialProviderConfig = options.socialProviders ?? {};
+  const appleSignIn = createAppleSignInCapture(socialProviderConfig.apple, codec, options.logAuthEvent);
 
   const betterAuthInstance = betterAuth({
     baseURL,
@@ -112,7 +133,17 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       expiresIn: SESSION_SLIDING_EXPIRY_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
     },
-    account: { modelName: "accounts" },
+    account: {
+      modelName: "accounts",
+      // Link an Apple or Google sign-in to an existing user only when the provider says the email is verified (no trusted-provider bypass).
+      // HEN-239: provider tokens are not kept (only Apple's refresh token, sealed, for revoke on delete), so sign-in never rewrites them.
+      updateAccountOnSignIn: false,
+      accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: false },
+    },
+    socialProviders: buildSocialProviders(socialProviderConfig, appleSignIn.appleTokenClient?.clientSecretFor),
+    // Provider tokens are not stored (see authCodecTransform), so the endpoints that hand them out or refresh them stay off.
+    disabledPaths: ["/refresh-token", "/get-access-token", "/account-info"],
+    databaseHooks: { user: { create: { before: async (_user, hookContext) => await requireSocialSignUpAgeConfirmation(hookContext) } } },
     verification: {
       modelName: "verifications",
       additionalFields: {
@@ -159,6 +190,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           }
         }
       }),
+      after: createAuthMiddleware(async (middlewareContext) => await captureAppleRefreshToken(middlewareContext, appleSignIn)),
     },
     plugins: [
       expo(),
@@ -193,6 +225,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
     telemetry: betterAuthTelemetryDisabledConfig,
+    revokeAppleRefreshToken: async (sealedRefreshToken) => await revokeSealedAppleRefreshToken(appleSignIn, sealedRefreshToken),
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
       const headers = new Headers(rawRequest.headers);
       const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);

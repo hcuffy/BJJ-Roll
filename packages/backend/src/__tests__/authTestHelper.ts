@@ -32,7 +32,9 @@ export interface StartedAuthTestEnvironment {
 }
 
 export async function startAuthTestEnvironment(
-  overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger">> & { emailSender?: FakeEmailSender },
+  overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger" | "socialProviders" | "logAuthEvent">> & {
+    emailSender?: FakeEmailSender;
+  },
 ): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
   const appLogin = await createAppRoleLoginPool(database);

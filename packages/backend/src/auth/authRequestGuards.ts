@@ -134,7 +134,7 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
 
 /** Better Auth before-hook check (defense in depth: the handler already rejected these). */
 export function assertMagicLinkRedirectParameters(path: string, body: unknown, query: unknown): void {
-  const sourceByPath: Record<string, unknown> = { "/sign-in/magic-link": body, "/magic-link/verify": query };
+  const sourceByPath: Record<string, unknown> = { "/sign-in/magic-link": body, "/magic-link/verify": query, "/sign-in/social": body };
   const source = sourceByPath[path];
   if (typeof source !== "object" || source === null) {
     return;
@@ -143,7 +143,7 @@ export function assertMagicLinkRedirectParameters(path: string, body: unknown, q
   if (findInvalidRedirectParameters((name) => record[name]).length > 0) {
     throw new APIError("BAD_REQUEST", {
       code: "INVALID_CALLBACK_URL",
-      message: "Magic link redirect URLs must be bjjroll:// deep links in M2",
+      message: "Sign-in redirect URLs must be bjjroll:// deep links in M2",
     });
   }
 }

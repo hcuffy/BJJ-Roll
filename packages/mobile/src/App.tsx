@@ -4,6 +4,7 @@ import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
+import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -99,6 +100,9 @@ export function App() {
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}
             onCodeSent={(email) => setScreen({ name: "code", email })}
+            socialProviders={appSocialProviders}
+            socialSignIn={appSocialSignIn}
+            onSignedIn={() => setScreen({ name: "signedIn" })}
           />
         );
       }

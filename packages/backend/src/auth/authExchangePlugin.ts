@@ -178,7 +178,8 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
       after: [
         {
           matcher(hookContext) {
-            return Boolean(hookContext.path?.startsWith("/magic-link/verify"));
+            // HEN-239: the Apple and Google browser callbacks end on the same deep link, so they get the same one-time code.
+            return Boolean(hookContext.path?.startsWith("/magic-link/verify") || hookContext.path?.startsWith("/callback/"));
           },
           handler: createAuthMiddleware(async (middlewareContext) => {
             const responseHeaders = middlewareContext.context.responseHeaders;
