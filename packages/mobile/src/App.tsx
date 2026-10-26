@@ -21,6 +21,13 @@ export function App() {
   const [serverUnreachable, setServerUnreachable] = useState(false);
   const deepLinkUrl = Linking.useURL();
 
+  // Signing in proves the server is reachable, so a note set earlier must not reappear later.
+  useEffect(() => {
+    if (screen.name === "signedIn") {
+      setServerUnreachable(false);
+    }
+  }, [screen.name]);
+
   useEffect(() => {
     void readSignedInUserId(appAuthClient)
       .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
@@ -52,6 +59,8 @@ export function App() {
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignOut = () => {
+    // A note from a link that failed while signed in is stale on the sign-in screen.
+    setServerUnreachable(false);
     // signOut already clears the local session when the server is down; an unexpected rejection still ends on sign-in.
     void signOut(appAuthClient, appSecureStore)
       .catch(() => undefined)

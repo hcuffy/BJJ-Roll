@@ -195,7 +195,7 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} />
+      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} announce="polite" />
       <View>
         <Pressable
           accessibilityRole="checkbox"
