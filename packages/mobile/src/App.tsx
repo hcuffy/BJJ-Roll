@@ -18,30 +18,44 @@ export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
   const [linkError, setLinkError] = useState<string | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
+  const [serverUnreachable, setServerUnreachable] = useState(false);
   const deepLinkUrl = Linking.useURL();
 
   useEffect(() => {
-    void readSignedInUserId(appAuthClient).then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }));
+    void readSignedInUserId(appAuthClient)
+      .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
+      .catch(() => {
+        // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
+        setServerUnreachable(true);
+        setScreen({ name: "email" });
+      });
   }, []);
 
   useEffect(() => {
     if (!deepLinkUrl) {
       return;
     }
-    void completeMagicLink(appAuthClient, deepLinkUrl).then((result) => {
-      if (result.ok) {
-        setLinkError(null);
-        setScreen({ name: "signedIn" });
-      } else if (result.message) {
-        setLinkError(result.message);
-      }
-    });
+    void completeMagicLink(appAuthClient, deepLinkUrl)
+      .then((result) => {
+        if (result.ok) {
+          setLinkError(null);
+          setScreen({ name: "signedIn" });
+        } else if (result.reason === "network") {
+          setServerUnreachable(true);
+        } else if (result.message) {
+          setLinkError(result.message);
+        }
+      })
+      .catch(() => setServerUnreachable(true));
   }, [deepLinkUrl]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignOut = () => {
-    void signOut(appAuthClient, appSecureStore).finally(() => setScreen({ name: "email" }));
+    // signOut already clears the local session when the server is down; an unexpected rejection still ends on sign-in.
+    void signOut(appAuthClient, appSecureStore)
+      .catch(() => undefined)
+      .finally(() => setScreen({ name: "email" }));
   };
 
   return (
@@ -98,6 +112,8 @@ export function App() {
             onClearLinkError={() => setLinkError(null)}
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}
+            serverUnreachable={serverUnreachable}
+            onClearServerUnreachable={() => setServerUnreachable(false)}
             onCodeSent={(email) => setScreen({ name: "code", email })}
           />
         );
