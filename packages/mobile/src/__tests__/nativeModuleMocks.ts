@@ -39,3 +39,13 @@ vi.mock("expo-apple-authentication", () => ({
   AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
   signInAsync: vi.fn(() => Promise.reject(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }))),
 }));
+// expo-crypto backed by Node's crypto, so nonces are really random and hashes really SHA-256.
+vi.mock("expo-crypto", async () => {
+  const { createHash, randomBytes } = await import("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    getRandomBytes: (byteCount: number) => new Uint8Array(randomBytes(byteCount)),
+    digestStringAsync: (algorithm: string, data: string) =>
+      Promise.resolve(algorithm === "SHA-256" ? createHash("sha256").update(data).digest("hex") : Promise.reject(new Error("unsupported"))),
+  };
+});

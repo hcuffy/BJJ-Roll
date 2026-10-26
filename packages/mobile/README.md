@@ -43,6 +43,7 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
    | `APPLE_PRIVATE_KEY`                        | That key's PKCS#8 PEM; `\n` escapes are accepted for one-line values                                |
 
    The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple.
+   The server accepts a provider email only when the provider marks it verified; otherwise it refuses with the same answer for every email. Native Apple sign-in sends Apple SHA-256 of a one-time random nonce, and the server refuses a nonce it has seen.
 
 3. Build, run the migrations once, then start the server:
 

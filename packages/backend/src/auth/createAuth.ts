@@ -47,9 +47,10 @@ import {
   TRUSTABLE_PROXY_IP_HEADERS,
   type TrustableProxyIpHeader,
 } from "./authRequestGuards.js";
+import { refuseUnsafeAppleIdToken, refuseUnverifiedProviderEmail } from "./socialSignInSafety.js";
 import { buildSocialProviders, type SocialProviderConfig } from "./socialProviders.js";
 import {
-  captureAppleRefreshToken,
+  afterAuthRequest,
   createAppleSignInCapture,
   requireSocialSignUpAgeConfirmation,
   revokeSealedAppleRefreshToken,
@@ -127,6 +128,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         keyVersion: { type: "number", required: false, input: false },
         handle: { type: "string", required: false, input: false },
       },
+      validateUserInfo: refuseUnverifiedProviderEmail,
     },
     session: {
       modelName: "sessions",
@@ -165,6 +167,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
+        await refuseUnsafeAppleIdToken(middlewareContext, options.pool);
         const ageGateRefusal = await ageGateRefusalForNewUser(middlewareContext.path, middlewareContext.body, (email) =>
           middlewareContext.context.internalAdapter.findUserByEmail(email),
         );
@@ -190,7 +193,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           }
         }
       }),
-      after: createAuthMiddleware(async (middlewareContext) => await captureAppleRefreshToken(middlewareContext, appleSignIn)),
+      after: createAuthMiddleware(async (middlewareContext) => await afterAuthRequest(middlewareContext, appleSignIn)),
     },
     plugins: [
       expo(),

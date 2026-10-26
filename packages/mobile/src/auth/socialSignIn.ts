@@ -4,6 +4,7 @@ import type { ExpoConfigWithExtra } from "./authConfig";
 import {
   AGE_CONFIRMATION_REQUIRED_CODE,
   failure,
+  FAILURE_MESSAGES,
   MAGIC_LINK_CALLBACK_URL,
   postAuth,
   SOCIAL_SIGN_IN_CALLBACK_PATH,
@@ -15,8 +16,9 @@ export type SocialProvider = "apple" | "google";
 /** Where the backend sends the browser back with a one-time code (or an error). Must stay a bjjroll://auth deep link. */
 export const SOCIAL_SIGN_IN_CALLBACK_URL = `${MAGIC_LINK_CALLBACK_URL}${SOCIAL_SIGN_IN_CALLBACK_PATH}`;
 
-/** Better Auth's error code when the email already belongs to an account the provider could not prove it owns. */
+/** The backend's error code when the provider did not verify the email. Sent whether or not an account has that email. */
 export const ACCOUNT_NOT_LINKED_ERROR = "account_not_linked";
+const GOOGLE_NOT_LINKED_MESSAGE = "We couldn't sign you in with Google. Sign in with your email instead.";
 /** expo-apple-authentication's rejection code when the user closes the Apple sheet. */
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 
@@ -43,9 +45,18 @@ export interface AuthBrowser {
   readonly openAuthSessionAsync: (url: string, redirectUrl: string) => Promise<{ readonly type: string; readonly url?: string }>;
 }
 
-/** expo-apple-authentication, narrowed to what sign-in uses (iOS only). */
+/** expo-apple-authentication (iOS only) and expo-crypto, narrowed to what sign-in uses. */
 export interface AppleNativeSignIn {
-  readonly signInAsync: () => Promise<{ readonly identityToken: string | null; readonly authorizationCode: string | null }>;
+  /** Opens Apple's sheet; Apple puts `hashedNonce` in the identity token's nonce claim. */
+  readonly signInAsync: (hashedNonce: string) => Promise<{ readonly identityToken: string | null; readonly authorizationCode: string | null }>;
+  /** A fresh random nonce for each sign-in. */
+  readonly createNonce: () => string;
+  readonly sha256Hex: (value: string) => Promise<string>;
+}
+
+/** Neutral refusal copy (Sara, HEN-239): names Google for Google, otherwise general; never says whether an email is signed up. */
+export function socialNotLinked(provider: SocialProvider | null): ActionResult {
+  return { ok: false, reason: "accountNotLinked", message: provider === "google" ? GOOGLE_NOT_LINKED_MESSAGE : FAILURE_MESSAGES.accountNotLinked };
 }
 
 export interface SocialSignInDependencies {
@@ -75,9 +86,11 @@ export async function signInWithProvider(
 }
 
 async function signInWithAppleNative(client: MobileAuthClient, appleNative: AppleNativeSignIn): Promise<ActionResult> {
+  // Apple gets SHA-256(nonce); the backend gets the raw nonce, checks the hash and refuses a nonce it has seen before.
+  const nonce = appleNative.createNonce();
   let credential: Awaited<ReturnType<AppleNativeSignIn["signInAsync"]>>;
   try {
-    credential = await appleNative.signInAsync();
+    credential = await appleNative.signInAsync(await appleNative.sha256Hex(nonce));
   } catch (error) {
     return (error as { code?: unknown } | null)?.code === APPLE_CANCELED_CODE ? ignored : failure("unknown");
   }
@@ -89,7 +102,7 @@ async function signInWithAppleNative(client: MobileAuthClient, appleNative: Appl
     path: "/sign-in/social",
     body: {
       provider: "apple",
-      idToken: { token: credential.identityToken },
+      idToken: { token: credential.identityToken, nonce },
       additionalData: { ageConfirmed: true, ...(credential.authorizationCode ? { appleAuthorizationCode: credential.authorizationCode } : {}) },
     },
   });
@@ -126,11 +139,11 @@ async function signInWithBrowser(dependencies: SocialSignInDependencies, provide
   if (result.type !== "success" || !result.url) {
     return ignored;
   }
-  return await completeSocialSignIn(dependencies.client, result.url);
+  return await completeSocialSignIn(dependencies.client, result.url, provider);
 }
 
 /** Reads the browser's return URL: a one-time code becomes a session; a backend error becomes plain copy. */
-export async function completeSocialSignIn(client: MobileAuthClient, url: string): Promise<ActionResult> {
+export async function completeSocialSignIn(client: MobileAuthClient, url: string, provider: SocialProvider | null = null): Promise<ActionResult> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -145,7 +158,7 @@ export async function completeSocialSignIn(client: MobileAuthClient, url: string
     return ageRequired;
   }
   if (error === ACCOUNT_NOT_LINKED_ERROR) {
-    return failure("accountNotLinked");
+    return socialNotLinked(provider);
   }
   const code = parsed.searchParams.get("code");
   if (error || !code) {

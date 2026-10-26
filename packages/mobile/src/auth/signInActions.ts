@@ -20,12 +20,15 @@ export const FAILURE_MESSAGES = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
   invalidLink: "This sign-in link is invalid or has expired. Request a new one.",
-  accountNotLinked: "This email already has a BJJ Roll account. Sign in with your email, then try again.",
+  // HEN-239 (Sara): neutral, so the answer never says whether an email has an account.
+  accountNotLinked: "We couldn't sign you in this way. Sign in with your email instead.",
   network: "No connection. Check your internet and try again.",
   rateLimited: "Too many tries. Wait a minute and try again.",
   unknown: "Something went wrong. Please try again.",
 } as const;
 const INVALID_CODE_ERRORS = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]);
+/** The backend's refusal of a social sign-in whose email the provider did not verify (one answer for every email). */
+const OAUTH_LINK_ERROR_CODE = "OAUTH_LINK_ERROR";
 const HTTP_TOO_MANY_REQUESTS = 429;
 /** Error code of the backend's 400 when a new account is requested without `ageConfirmed: true` (HEN-77). */
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
@@ -70,6 +73,9 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
   }
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return failure("rateLimited");
+  }
+  if (error.code === OAUTH_LINK_ERROR_CODE) {
+    return failure("accountNotLinked");
   }
   if (clientErrorReason === "invalidCode" && typeof error.code === "string" && INVALID_CODE_ERRORS.has(error.code)) {
     return failure("invalidCode");

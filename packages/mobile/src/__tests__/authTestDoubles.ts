@@ -54,7 +54,8 @@ export const TEST_ACCOUNT_EXPORT = {
 export const TEST_PROVIDER_AUTHORIZATION_URL = "https://provider.example.test/authorize?state=fake-state";
 
 /** Fake backend: sign-in endpoints set a session cookie; get-session answers only when that cookie is sent. */
-export function createFakeBackend() {
+/** `nativeSignInRefusal`: how the backend answers a native (id token) social sign-in instead of signing in. */
+export function createFakeBackend(options: { nativeSignInRefusal?: { status: number; body: unknown } } = {}) {
   const requests: RecordedRequest[] = [];
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
@@ -70,6 +71,9 @@ export function createFakeBackend() {
       const body = requests.at(-1)?.body;
       // Native Apple sign-in posts an identity token and gets the session cookie; the browser flow gets the provider URL.
       if (body?.idToken !== undefined) {
+        if (options.nativeSignInRefusal) {
+          return jsonResponse(options.nativeSignInRefusal.body, {}, options.nativeSignInRefusal.status);
+        }
         return jsonResponse({ redirect: false, token: "raw-session-token", user: { id: "user-1" } }, { "set-cookie": TEST_SESSION_COOKIE });
       }
       return jsonResponse({ url: `${TEST_PROVIDER_AUTHORIZATION_URL}&provider=${String(body?.provider)}`, redirect: false });

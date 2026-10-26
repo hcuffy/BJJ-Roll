@@ -72,7 +72,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     expect(signedIn).toBe(1);
   });
 
-  it("shows plain copy when the email already has an account the provider could not prove", async () => {
+  it("shows neutral copy pointing to email sign-in when the provider's email cannot be used", async () => {
     socialSignIn.browser.openAuthSessionAsync.mockResolvedValueOnce({
       type: "success",
       url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=account_not_linked`,
@@ -82,7 +82,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     await screen.pressRole("checkbox");
     await screen.press("Continue with Google");
 
-    expect(screen.text()).toContain("This email already has a BJJ Roll account. Sign in with your email, then try again.");
+    expect(screen.text()).toContain("We couldn't sign you in with Google. Sign in with your email instead.");
     expect(screen.text()).not.toContain("account_not_linked");
     expect(signedIn).toBe(0);
   });

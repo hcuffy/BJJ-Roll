@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, APPLE_REVOKE_ENDPOINT, APPLE_TOKEN_ENDPOINT, openAppleRefreshToken } from "../auth/index.js";
@@ -42,13 +42,15 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     return result.rows[0]?.count ?? 0;
   };
 
-  const identityToken = (subject: string, email: string): string =>
+  // The app's raw nonce goes to the backend; Apple only ever sees (and signs) its SHA-256. Each sign-in gets a fresh one.
+  const identityToken = (subject: string, email: string, rawNonce: string): string =>
     signer.signIdentityToken({
       iss: "https://appleid.apple.com",
       aud: apple.appBundleIdentifier,
       sub: subject,
       email,
       email_verified: "true",
+      nonce: createHash("sha256").update(rawNonce).digest("hex"),
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 600,
     });
@@ -60,11 +62,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     readonly ipAddress: string;
   }
 
-  const signInWithApple = ({ subject, email, additionalData, ipAddress }: AppleSignInAttempt): Promise<Response> =>
-    postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken: { token: identityToken(subject, email) }, additionalData },
+  const signInWithApple = ({ subject, email, additionalData, ipAddress }: AppleSignInAttempt): Promise<Response> => {
+    const nonce = randomBytes(32).toString("base64url");
+    return postAuthJson(current().app, "/sign-in/social", {
+      body: { provider: "apple", idToken: { token: identityToken(subject, email, nonce), nonce }, additionalData },
       ipAddress,
     });
+  };
 
   const signUpWithApple = async (email: string, ipAddress: string): Promise<SignedInUser> => {
     const response = await signInWithApple({
@@ -162,11 +166,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
   });
 
   it("rejects an identity token not signed by Apple's key", async () => {
-    const unsignedPart = identityToken("apple-sub-forged", "forged.apple@example.com").split(".").slice(0, 2).join(".");
+    const nonce = randomBytes(32).toString("base64url");
+    const unsignedPart = identityToken("apple-sub-forged", "forged.apple@example.com", nonce).split(".").slice(0, 2).join(".");
     const forged = `${unsignedPart}.${Buffer.from("forged").toString("base64url")}`;
     const usersBefore = await countRows("users");
     const response = await postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken: { token: forged }, additionalData: { ageConfirmed: true } },
+      body: { provider: "apple", idToken: { token: forged, nonce }, additionalData: { ageConfirmed: true } },
       ipAddress: "198.51.100.212",
     });
     expect(response.status).toBe(401);
