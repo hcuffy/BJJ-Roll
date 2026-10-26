@@ -10,21 +10,35 @@ export interface RecordedRequest {
   readonly body: Record<string, unknown> | null;
 }
 
-/** In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use. */
+/**
+ * In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use.
+ * Keys in `failingKeys` can still be read, but async writes and deletes reject, as a locked or broken keystore would.
+ */
 export function createMemorySecureStore() {
   const items = new Map<string, string>();
+  const failingKeys = new Set<string>();
+  const failIfBroken = (key: string) => (failingKeys.has(key) ? Promise.reject(new Error("SecureStore write failed")) : null);
   return {
     items,
+    failingKeys,
     getItem: (key: string) => items.get(key) ?? null,
     getItemAsync: (key: string) => Promise.resolve(items.get(key) ?? null),
     setItem: (key: string, value: string) => {
       items.set(key, value);
     },
     setItemAsync: (key: string, value: string) => {
+      const broken = failIfBroken(key);
+      if (broken) {
+        return broken;
+      }
       items.set(key, value);
       return Promise.resolve();
     },
     deleteItemAsync: vi.fn((key: string) => {
+      const broken = failIfBroken(key);
+      if (broken) {
+        return broken;
+      }
       items.delete(key);
       return Promise.resolve();
     }),

@@ -201,6 +201,39 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
+  it("account deleted after a link failed while signed in: the deleted card shows without the server note", async () => {
+    serverDown = false;
+    const screen = await startSignedIn();
+    const backendUp = backend.fetchImplementation.getMockImplementation();
+    backend.fetchImplementation.mockImplementation((input, init) =>
+      new Request(input, init).url.endsWith("/magic-link/exchange")
+        ? Promise.reject(new TypeError("fetch failed"))
+        : (backendUp?.(input, init) ?? Promise.reject(new Error("no backend"))),
+    );
+    deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    await screen.rerender();
+    expect(screen.text()).toContain("You are signed in");
+
+    await screen.press("Delete account");
+    await screen.press("Email me a code");
+    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Your account was deleted.");
+    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
+  });
+
+  it("Continue with an invalid email shows the field errors and drops the note at the same time", async () => {
+    const screen = await startApp();
+    expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
+
+    await screen.changeText("Email", "not-an-email");
+    await screen.press("Continue");
+
+    expect(screen.text()).toContain("Enter a valid email address.");
+    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
+  });
+
   it("sign-out that rejects outright still lands on the sign-in screen, no hang", async () => {
     serverDown = false;
     const screen = await startSignedIn();
