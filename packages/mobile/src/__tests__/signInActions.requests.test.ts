@@ -1,7 +1,7 @@
 import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
-import { completeMagicLink, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
+import { completeMagicLink, FAILURE_MESSAGES, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 
 function createTestClient() {
@@ -69,13 +69,33 @@ describe("sign-in requests", () => {
     expect(backend.requests.map((request) => request.body?.age18Confirmed)).toEqual([true, true]);
   });
 
-  it("shows the 16+ refusal, not the invalid-link copy, when a link comes back refused for the age gate (HEN-263)", async () => {
+  it("shows the 16+ refusal, not the invalid-link copy, when a link comes back with r=age_refused (HEN-263)", async () => {
     const { client } = createTestClient();
-    expect(await completeMagicLink(client, "bjjroll://auth?error=AGE_CONFIRMATION_REQUIRED")).toEqual({
+    expect(await completeMagicLink(client, "bjjroll://auth?r=age_refused")).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
     });
+  });
+
+  it("maps r=link_invalid to the app's invalid-link copy (HEN-263)", async () => {
+    const { client } = createTestClient();
+    expect(await completeMagicLink(client, "bjjroll://auth?r=link_invalid")).toEqual({
+      ok: false,
+      reason: "invalidLink",
+      message: FAILURE_MESSAGES.invalidLink,
+    });
+  });
+
+  it.each([
+    "bjjroll://auth?r=something_new",
+    "bjjroll://auth?r=age_refused%20extra",
+    "bjjroll://auth?error=AGE_CONFIRMATION_REQUIRED&error_description=You%20must%20be%2016",
+  ])("shows only the generic error for an unknown reason code or a legacy error param, never URL text: %s", async (url) => {
+    const { backend, client } = createTestClient();
+    const result = await completeMagicLink(client, url);
+    expect(result).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 
   it("exchanges the code from a bjjroll://auth deep link for a session", async () => {
@@ -94,7 +114,7 @@ describe("sign-in requests", () => {
     expect(await completeMagicLink(client, "https://evil.test/auth?code=exchange-code-1")).toEqual({ ok: false, reason: "ignored", message: null });
     expect(await completeMagicLink(client, "bjjroll://other?code=exchange-code-1")).toEqual({ ok: false, reason: "ignored", message: null });
     expect(await completeMagicLink(client, "bjjroll://auth")).toEqual({ ok: false, reason: "ignored", message: null });
-    expect((await completeMagicLink(client, "bjjroll://auth?error=INVALID_TOKEN")).ok).toBe(false);
+    expect((await completeMagicLink(client, "bjjroll://auth?r=link_invalid")).ok).toBe(false);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 

@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { AGE_CONFIRMATION_TEXT_VERSION_ID, AGE_GATE_REFUSAL_MESSAGE, age16ConfirmedSchema } from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
+import { sql } from "kysely";
 import type { Pool, PoolClient } from "pg";
 import { MAGIC_LINK_EXPIRY_SECONDS, OTP_EXPIRY_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
+import { applyScopeSettings, emptyScopeSettings, type AuthTransaction } from "./authSessionScope.js";
 
 /**
  * HEN-263 (replaces the HEN-77 send-time refusal): every sign-in send gets the same answer, so a send never tells whether an
@@ -73,19 +75,18 @@ async function withAppRole<Result>(
 }
 
 /**
- * Same work for every email: drop any earlier pending answer, then store this send's answer when the 16+ box was ticked.
- * The latest send wins, so an unticked resend withdraws an earlier tick. Known emails get the row too (linked to the user
- * so it goes with the account); it is never read for them and expires with the code.
+ * Same work for every email: drop any earlier pending answer, then store this send's answer, ticked or not, so a send that will
+ * be refused runs the same SQL as one that will not. The latest send wins, so an unticked resend withdraws an earlier tick.
+ * Known emails get the row too (linked to the user so it goes with the account); it is never read for them and expires with the code.
  */
 export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec, body: Record<string, unknown> & { email: string }): Promise<void> {
   const identifier = pendingIdentifier(codec, body.email);
-  const age16Confirmed = age16ConfirmedSchema.safeParse(body.age16Confirmed).success;
-  const answers: PendingAgeAnswers = { age16Confirmed: true, age18Confirmed: body.age18Confirmed === true };
+  const answers = {
+    age16Confirmed: age16ConfirmedSchema.safeParse(body.age16Confirmed).success,
+    age18Confirmed: body.age18Confirmed === true,
+  };
   await withAppRole(pool, { verificationIdentifier: identifier }, async (client) => {
     await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
-    if (!age16Confirmed) {
-      return;
-    }
     const now = new Date();
     await client.query(
       `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
@@ -102,16 +103,16 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
   });
 }
 
+function decodePendingAgeAnswers(codec: AuthCryptoCodec, value: string | undefined): PendingAgeAnswers | null {
+  return value === undefined ? null : parsePendingAgeAnswers(JSON.parse(codec.decryptVerificationPayload(value)));
+}
+
 async function selectPendingAgeAnswers(client: PoolClient, codec: AuthCryptoCodec, identifier: string): Promise<PendingAgeAnswers | null> {
   const result = await client.query<{ value: string }>("SELECT value FROM public.verifications WHERE identifier = $1 AND expires_at > $2", [
     identifier,
     new Date(), // the app clock, like Better Auth's own expiry checks
   ]);
-  const value = result.rows[0]?.value;
-  if (value === undefined) {
-    return null;
-  }
-  return parsePendingAgeAnswers(JSON.parse(codec.decryptVerificationPayload(value)));
+  return decodePendingAgeAnswers(codec, result.rows[0]?.value);
 }
 
 /** Before the user row is written: refuse unless this email's latest send carried the 16+ tick. */
@@ -123,19 +124,27 @@ export async function assertPendingAgeConfirmation(pool: Pool, codec: AuthCrypto
   }
 }
 
-/** After the user row is committed: move the pending answers onto the user's age_confirmation consent record. */
-export async function storeAgeConfirmationForNewUser(pool: Pool, codec: AuthCryptoCodec, user: { id: string; email: string }): Promise<void> {
+/**
+ * Inside the transaction that inserts the user row (Sara, 26 Oct): move the pending answers onto the user's age_confirmation
+ * consent record. If anything here fails, the user row rolls back with it, so there is never an account without its record.
+ */
+export async function storeAgeConfirmationInUserTransaction(
+  transaction: AuthTransaction,
+  codec: AuthCryptoCodec,
+  user: { id: string; email: string },
+): Promise<void> {
   const identifier = pendingIdentifier(codec, user.email);
-  await withAppRole(pool, { verificationIdentifier: identifier, userId: user.id }, async (client) => {
-    const answers = await selectPendingAgeAnswers(client, codec, identifier);
-    await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
-    if (!answers) {
-      throw ageConfirmationRequiredError();
-    }
-    await client.query(
-      `INSERT INTO public.consent_records (id, user_id, consent_type, text_version_id, age16_confirmed, age18_confirmed)
-       VALUES ($1, $2, 'age_confirmation', $3, $4, $5)`,
-      [randomUUID(), user.id, AGE_CONFIRMATION_TEXT_VERSION_ID, answers.age16Confirmed, answers.age18Confirmed],
-    );
-  });
+  await applyScopeSettings(transaction, { ...emptyScopeSettings(), userId: user.id, verificationIdentifier: identifier });
+  const pending = await sql<{ value: string }>`SELECT value FROM public.verifications
+    WHERE identifier = ${identifier} AND expires_at > ${new Date()}`.execute(transaction);
+  const answers = decodePendingAgeAnswers(codec, pending.rows[0]?.value);
+  await sql`DELETE FROM public.verifications WHERE identifier = ${identifier}`.execute(transaction);
+  if (!answers) {
+    throw ageConfirmationRequiredError();
+  }
+  const { age16Confirmed, age18Confirmed } = answers;
+  await sql`INSERT INTO public.consent_records (id, user_id, consent_type, text_version_id, age16_confirmed, age18_confirmed)
+    VALUES (${randomUUID()}, ${user.id}, 'age_confirmation', ${AGE_CONFIRMATION_TEXT_VERSION_ID}, ${age16Confirmed}, ${age18Confirmed})`.execute(
+    transaction,
+  );
 }

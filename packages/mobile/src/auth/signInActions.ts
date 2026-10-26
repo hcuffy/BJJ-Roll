@@ -1,3 +1,4 @@
+import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, type EmailEntry } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 
@@ -134,12 +135,17 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth") {
     return { ok: false, reason: "ignored", message: null };
   }
-  // The backend refuses a new account at link verification when the send had no 16+ tick (HEN-263).
-  if (parsed.searchParams.get("error") === AGE_CONFIRMATION_REQUIRED_CODE) {
+  // A failed link carries a reason code only (HEN-263); the copy is the app's own. Any other code or a legacy
+  // `error` param gets the generic message, so nothing from the URL is ever shown.
+  const reason = parsed.searchParams.get(MAGIC_LINK_REASON_PARAM);
+  if (reason === MAGIC_LINK_REASONS.ageRefused) {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
-  if (parsed.searchParams.has("error")) {
+  if (reason === MAGIC_LINK_REASONS.linkInvalid) {
     return failure("invalidLink");
+  }
+  if (reason !== null || parsed.searchParams.has("error")) {
+    return failure("unknown");
   }
   const code = parsed.searchParams.get("code");
   if (!code) {

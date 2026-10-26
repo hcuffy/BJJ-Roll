@@ -10,6 +10,11 @@ export const AGE18_CONFIRMATION_LABEL = "I am 18 or older";
 /** Names the wording above; bump it whenever either label changes so each record points at the text the user saw. */
 export const AGE_CONFIRMATION_TEXT_VERSION_ID = "age-confirmation-v1";
 
+/** HEN-263: a failed magic link opens `bjjroll://auth?r=<reason>` with a fixed code only; the app shows its own copy for each code. */
+export const MAGIC_LINK_REASON_PARAM = "r";
+export const MAGIC_LINK_REASONS = { ageRefused: "age_refused", linkInvalid: "link_invalid" } as const;
+export type MagicLinkReason = (typeof MAGIC_LINK_REASONS)[keyof typeof MAGIC_LINK_REASONS];
+
 export const age16ConfirmedSchema = z.literal(true, { error: AGE_GATE_REFUSAL_MESSAGE });
 
 export const signUpRequestSchema = z.object({

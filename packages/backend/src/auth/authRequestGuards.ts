@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, type MagicLinkReason } from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
@@ -109,6 +109,18 @@ function magicLinkVerifyErrorMessage(errorCode: string): string {
   return errorCode === "AGE_CONFIRMATION_REQUIRED" ? AGE_GATE_REFUSAL_MESSAGE : "Magic link token is invalid, expired, or has already been used";
 }
 
+function magicLinkReason(errorCode: string): MagicLinkReason {
+  return errorCode === "AGE_CONFIRMATION_REQUIRED" ? MAGIC_LINK_REASONS.ageRefused : MAGIC_LINK_REASONS.linkInvalid;
+}
+
+function reasonOnlyLocation(redirectUrl: URL, reason: MagicLinkReason): string {
+  const reasonUrl = new URL(redirectUrl.toString());
+  reasonUrl.search = "";
+  reasonUrl.hash = "";
+  reasonUrl.searchParams.set(MAGIC_LINK_REASON_PARAM, reason);
+  return reasonUrl.toString();
+}
+
 export function normalizeMagicLinkVerifyResponse(request: Request, response: Response): Response {
   if (new URL(request.url).pathname !== MAGIC_LINK_VERIFY_PATH) {
     return response;
@@ -129,6 +141,8 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
   headers.set("location", redirectUrl.toString());
   const errorCode = redirectUrl.searchParams.get("error");
   if (errorCode !== null) {
+    // Sara, 26 Oct: the deep link carries a fixed reason code only, never Better Auth's code or error_description text.
+    headers.set("location", reasonOnlyLocation(redirectUrl, magicLinkReason(errorCode)));
     headers.set("content-type", "application/json");
     return new Response(JSON.stringify({ code: errorCode, error: errorCode, message: magicLinkVerifyErrorMessage(errorCode) }), {
       status: 400,
