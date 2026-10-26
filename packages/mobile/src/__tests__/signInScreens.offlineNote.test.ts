@@ -105,6 +105,26 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
+  it("'Check your email': after a failed resend, 'Use a different email' drops the note, with no repeat announcement", async () => {
+    vi.useFakeTimers();
+    Platform.OS = "ios";
+    serverDown = false;
+    const screen = await renderEmailEntry();
+    await fillEmailForm(screen);
+    await screen.press("Email me a sign-in link instead");
+    await vi.advanceTimersByTimeAsync(30_000);
+    await screen.rerender();
+    serverDown = true;
+    await screen.press("Resend link");
+    expectCalmNote(screen);
+
+    vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
+    await screen.press("Use a different email");
+    expect(screen.text()).toContain("Sign in to BJJ Roll");
+    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
+    expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalledWith(SERVER_UNREACHABLE_NOTE);
+  });
+
   it("code screen: signing in offline shows the calm note, announced on iOS; once back, the code signs in", async () => {
     Platform.OS = "ios";
     const screen = await renderCodeEntry();

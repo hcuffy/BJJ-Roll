@@ -148,6 +148,24 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).not.toContain("No connection.");
   });
 
+  it("magic link: a link that fails offline while on 'Check your email' shows the note there (HEN-287)", async () => {
+    serverDown = false;
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Email me a sign-in link instead");
+    expect(screen.text()).toContain("Check your email");
+
+    serverDown = true;
+    deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    await screen.rerender();
+
+    expect(screen.text()).toContain("Check your email");
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.accessibilityRole).toBeUndefined();
+    expect(flattenStyle(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.style).color).toBe(colours.textSecondary);
+  });
+
   it("sign-out with the server down clears the local session and shows the sign-in screen", async () => {
     serverDown = false;
     const screen = await startSignedIn();
