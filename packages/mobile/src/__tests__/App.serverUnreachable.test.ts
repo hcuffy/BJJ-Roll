@@ -110,14 +110,16 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
-  it("the note clears on the next submit attempt, even if that attempt fails too", async () => {
+  it("a retry that also fails on the network shows the same calm note again, not red (HEN-287)", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue");
 
-    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
     expect(screen.text()).toContain("Sign in to BJJ Roll");
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.accessibilityRole).toBeUndefined();
+    expect(flattenStyle(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.style).color).toBe(colours.textSecondary);
+    expect(screen.text()).not.toContain("No connection.");
   });
 
   it("magic link: a rejected link exchange lands on the sign-in screen with the same note, no hang", async () => {
