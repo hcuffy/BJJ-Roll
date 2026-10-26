@@ -75,6 +75,17 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
     return await googleRedirectBack(started, stateQuery(started));
   };
 
+  /** The whole refusal as the app sees it: status, redirect and body. */
+  const googleRefusal = async (googleUser: FakeGoogleUser): Promise<{ status: number; location: string | null; body: string }> => {
+    const started = await startGoogleSignIn(true);
+    nextGoogleUser = googleUser;
+    const response = await getAuthPath(current().app, `/callback/google?${stateQuery(started)}`, {
+      ipAddress: started.ipAddress,
+      cookie: started.cookie,
+    });
+    return { status: response.status, location: response.headers.get("location"), body: await response.text() };
+  };
+
   const exchangeForUserId = async (code: string): Promise<string> => {
     const response = await postAuthJson(current().app, "/magic-link/exchange", { body: { code }, ipAddress: "198.51.100.9" });
     expect(response.status).toBe(200);
@@ -156,27 +167,31 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
   it.each([
     { name: "no email_verified claim", emailVerified: undefined },
     { name: "email_verified false", emailVerified: false },
-  ])("refuses a new Google account with $name, with the same redirect as when the email already has an account", async ({ emailVerified }) => {
-    const takenEmail = `taken.${String(emailVerified)}.google@example.com`;
-    const ownerCode = (
-      await signInWithGoogle({ subject: `google-sub-owner-${String(emailVerified)}`, email: takenEmail, emailVerified: true })
-    ).searchParams.get("code");
-    const ownerId = await exchangeForUserId(ownerCode ?? "");
-    const before = await countRows();
+  ])(
+    "refuses a new Google account with $name, with the same status, redirect and body as when the email has an account",
+    async ({ emailVerified }) => {
+      const takenEmail = `taken.${String(emailVerified)}.google@example.com`;
+      const ownerCode = (
+        await signInWithGoogle({ subject: `google-sub-owner-${String(emailVerified)}`, email: takenEmail, emailVerified: true })
+      ).searchParams.get("code");
+      const ownerId = await exchangeForUserId(ownerCode ?? "");
+      const before = await countRows();
 
-    const freshEmail = await signInWithGoogle({
-      subject: `google-sub-new-${String(emailVerified)}`,
-      email: `fresh.${String(emailVerified)}.google@example.com`,
-      emailVerified,
-    });
-    const takenEmailAttempt = await signInWithGoogle({ subject: `google-sub-intruder-${String(emailVerified)}`, email: takenEmail, emailVerified });
+      const freshEmail = await googleRefusal({
+        subject: `google-sub-new-${String(emailVerified)}`,
+        email: `fresh.${String(emailVerified)}.google@example.com`,
+        emailVerified,
+      });
+      const takenEmailAttempt = await googleRefusal({ subject: `google-sub-intruder-${String(emailVerified)}`, email: takenEmail, emailVerified });
 
-    expectAccountNotLinked(freshEmail);
-    expect(takenEmailAttempt.href).toBe(freshEmail.href);
-    expect(await countRows()).toEqual(before);
-    const owned = await current().pool.query<{ account_id: string }>("SELECT account_id FROM public.accounts WHERE user_id = $1", [ownerId]);
-    expect(owned.rows.map((row) => row.account_id)).toEqual([`google-sub-owner-${String(emailVerified)}`]);
-  });
+      expect(freshEmail.status).toBe(302);
+      expectAccountNotLinked(new URL(freshEmail.location ?? ""));
+      expect(takenEmailAttempt).toEqual(freshEmail);
+      expect(await countRows()).toEqual(before);
+      const owned = await current().pool.query<{ account_id: string }>("SELECT account_id FROM public.accounts WHERE user_id = $1", [ownerId]);
+      expect(owned.rows.map((row) => row.account_id)).toEqual([`google-sub-owner-${String(emailVerified)}`]);
+    },
+  );
 
   it("refuses a returning Google user whose id token suddenly has no email_verified claim", async () => {
     const googleUser = { subject: "google-sub-claim-returning", email: "returning.claim.google@example.com", emailVerified: true };

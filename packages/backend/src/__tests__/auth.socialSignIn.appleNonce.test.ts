@@ -124,7 +124,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Apple native sig
 
   it("records a nonce claim exactly once when many requests claim it at the same moment", async () => {
     const claim = sha256Hex(freshNonce());
-    const claimed = await Promise.all(Array.from({ length: 20 }, async () => await claimNonceOnce(current().pool, claim)));
+    const claimed = await Promise.all(Array.from({ length: 20 }, async () => await claimNonceOnce(current().appLogin.pool, claim)));
     expect(claimed.filter(Boolean)).toHaveLength(1);
   });
 

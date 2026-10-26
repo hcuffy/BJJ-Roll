@@ -28,7 +28,11 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     expect(secondRunResults).toEqual([]);
 
     const migrationRows = await pool.query<{ name: string }>("SELECT name FROM public.kysely_migration ORDER BY name");
-    expect(migrationRows.rows).toEqual([{ name: "001_users_sessions_handles_rls" }, { name: "002_auth_rate_limits_and_rls" }]);
+    expect(migrationRows.rows).toEqual([
+      { name: "001_users_sessions_handles_rls" },
+      { name: "002_auth_rate_limits_and_rls" },
+      { name: "003_apple_nonce_cleanup" },
+    ]);
     expect(betterAuthTelemetryDisabledConfig).toEqual({ enabled: false });
   });
 
