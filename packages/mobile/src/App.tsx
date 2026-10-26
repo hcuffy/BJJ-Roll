@@ -29,30 +29,53 @@ export function App() {
   // The reason travels with the message so the card can key extra guidance on it, not on the copy (Vera round 4 item 4).
   const [linkError, setLinkError] = useState<{ readonly message: string; readonly reason: FailureReason } | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
+  const [serverUnreachable, setServerUnreachable] = useState(false);
   const deepLinkUrl = Linking.useURL();
 
+  // Signing in proves the server is reachable, so a note set earlier must not reappear later.
   useEffect(() => {
-    void readSignedInUserId(appAuthClient).then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }));
+    if (screen.name === "signedIn") {
+      setServerUnreachable(false);
+    }
+  }, [screen.name]);
+
+  useEffect(() => {
+    void readSignedInUserId(appAuthClient)
+      .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
+      .catch(() => {
+        // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
+        setServerUnreachable(true);
+        setScreen({ name: "email" });
+      });
   }, []);
 
   useEffect(() => {
     if (!deepLinkUrl) {
       return;
     }
-    void completeMagicLink(appAuthClient, deepLinkUrl).then((result) => {
-      if (result.ok) {
-        setLinkError(null);
-        setScreen({ name: "signedIn" });
-      } else if (result.message) {
-        setLinkError({ message: result.message, reason: result.reason });
-      }
-    });
+    void completeMagicLink(appAuthClient, deepLinkUrl)
+      .then((result) => {
+        if (result.ok) {
+          setLinkError(null);
+          setScreen({ name: "signedIn" });
+        } else if (result.reason === "network") {
+          setServerUnreachable(true);
+        } else if (result.message) {
+          setLinkError({ message: result.message, reason: result.reason });
+        }
+      })
+      .catch(() => setServerUnreachable(true));
   }, [deepLinkUrl]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignOut = () => {
-    void signOut(appAuthClient, appSecureStore).finally(() => setScreen({ name: "email" }));
+    // A note from a link that failed while signed in is stale on the sign-in screen.
+    setServerUnreachable(false);
+    // signOut already clears the local session when the server is down; an unexpected rejection still ends on sign-in.
+    void signOut(appAuthClient, appSecureStore)
+      .catch(() => undefined)
+      .finally(() => setScreen({ name: "email" }));
   };
 
   return (
@@ -113,6 +136,8 @@ export function App() {
             onClearLinkError={() => setLinkError(null)}
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}
+            serverUnreachable={serverUnreachable}
+            onClearServerUnreachable={() => setServerUnreachable(false)}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
           />
         );

@@ -25,7 +25,6 @@ interface PendingEffect {
   readonly slots: HookSlots;
   readonly index: number;
   readonly effect: () => unknown;
-  readonly deps: readonly unknown[] | undefined;
 }
 
 /** Deep link the mocked expo-linking useURL() returns. */
@@ -88,7 +87,9 @@ export function harnessUseEffect(effect: () => unknown, deps?: readonly unknown[
   const { slots, index } = nextHook();
   const previousDeps = slots.values[index] as readonly unknown[] | undefined;
   if (!sameDeps(previousDeps, deps)) {
-    activeRenderer?.pendingEffects.push({ slots, index, effect, deps });
+    // Recorded now, so a state change in an earlier effect of this batch does not queue this one a second time.
+    slots.values[index] = deps;
+    activeRenderer?.pendingEffects.push({ slots, index, effect });
   }
 }
 
@@ -143,8 +144,7 @@ class ScreenRenderer {
       }
     }
     const effects = this.pendingEffects.splice(0);
-    for (const { slots, index, effect, deps } of effects) {
-      slots.values[index] = deps;
+    for (const { slots, index, effect } of effects) {
       runCleanup(slots, index);
       const cleanup = effect();
       if (typeof cleanup === "function") {
