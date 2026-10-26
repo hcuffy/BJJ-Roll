@@ -12,6 +12,8 @@ import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
+/** Calm note when the backend could not be reached (copy per Vera, HEN-285). Cleared by the next submit attempt. */
+export const SERVER_UNREACHABLE_NOTE = "Can't reach the server right now. Check your connection and try again.";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
@@ -22,6 +24,9 @@ export interface EmailEntryScreenProps {
   /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
   readonly onClearAccountNotice?: () => void;
+  /** The backend could not be reached (startup or sign-in link); shows a muted note under the email field. */
+  readonly serverUnreachable?: boolean;
+  readonly onClearServerUnreachable?: () => void;
 }
 
 type Sending = "code" | "link" | null;
@@ -44,6 +49,8 @@ export function EmailEntryScreen({
   onClearLinkError,
   accountNotice = null,
   onClearAccountNotice,
+  serverUnreachable = false,
+  onClearServerUnreachable,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -84,6 +91,7 @@ export function EmailEntryScreen({
 
   const send = async (kind: "code" | "link") => {
     startAction();
+    onClearServerUnreachable?.();
     if (sending !== null || !validate()) {
       return;
     }
@@ -187,6 +195,7 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
+      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} announce="polite" />
       <View>
         <Pressable
           accessibilityRole="checkbox"
