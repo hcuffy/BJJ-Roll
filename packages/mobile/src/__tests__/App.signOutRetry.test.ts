@@ -31,6 +31,8 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   let signOutEndpointErrors: boolean;
   const unhandledRejections: unknown[] = [];
   const recordUnhandled = (reason: unknown) => unhandledRejections.push(reason);
+  /** Text of every screen rendered since the last launch. */
+  let renderedScreens: string[] = [];
   let consoleSpies: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }[] = [];
 
   /** A fresh app process on the same phone: new auth client, same SecureStore. */
@@ -49,7 +51,8 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
           : backend.fetchImplementation(input, init);
       }),
     });
-    return await renderScreen(createElement(App));
+    renderedScreens = [];
+    return await renderScreen(createElement(App), (text) => renderedScreens.push(text));
   };
   const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await screen.pressRole("checkbox");
@@ -234,6 +237,42 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
       expect(signInAt).toBeGreaterThanOrEqual(0);
       expect(backend.requests.slice(signInAt).filter((request) => request.url.endsWith("/sign-out"))).toEqual([]);
       expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
+    });
+
+    /** Screens shown from launch until the first "You are signed in". */
+    const screensBeforeSignedIn = () => renderedScreens.slice(0, renderedScreens.findIndex((text) => text.includes(SIGNED_IN_SCREEN)));
+
+    it("cold start from a sign-in link with a pending sign-out: Loading until signed in, never the sign-in screen", async () => {
+      await signOutLeftUnfinished();
+
+      deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+      const coldStart = await launchApp();
+      deepLinkState.url = null;
+
+      expect(coldStart.text()).toContain(SIGNED_IN_SCREEN);
+      expect(screensBeforeSignedIn().length).toBeGreaterThan(0);
+      expect(screensBeforeSignedIn().filter((text) => text.includes(SIGN_IN_SCREEN))).toEqual([]);
+      expect(screensBeforeSignedIn().every((text) => text.includes("Loading"))).toBe(true);
+    });
+
+    it("cold start from a sign-in link with nothing pending: Loading until signed in, never the sign-in screen", async () => {
+      deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+      const coldStart = await launchApp();
+      deepLinkState.url = null;
+
+      expect(coldStart.text()).toContain(SIGNED_IN_SCREEN);
+      expect(screensBeforeSignedIn().length).toBeGreaterThan(0);
+      expect(screensBeforeSignedIn().filter((text) => text.includes(SIGN_IN_SCREEN))).toEqual([]);
+      expect(screensBeforeSignedIn().every((text) => text.includes("Loading"))).toBe(true);
+    });
+
+    it("cold start from a link that is not a sign-in link: leaves Loading for the sign-in screen", async () => {
+      deepLinkState.url = "bjjroll://other";
+      const coldStart = await launchApp();
+      deepLinkState.url = null;
+
+      expect(coldStart.text()).toContain(SIGN_IN_SCREEN);
+      expect(coldStart.text()).not.toContain("Loading");
     });
 
     it("sign-in is not blocked when the unfinished sign-out cannot be cancelled", async () => {

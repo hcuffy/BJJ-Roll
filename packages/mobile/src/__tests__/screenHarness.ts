@@ -112,7 +112,10 @@ class ScreenRenderer {
   private rerenderRequested = false;
   root: (HostNode | string)[] = [];
 
-  constructor(private readonly element: ReactNode) {}
+  constructor(
+    private readonly element: ReactNode,
+    private readonly onRender?: (text: string) => void,
+  ) {}
 
   rerender(): void {
     if (this.rendering) {
@@ -132,6 +135,7 @@ class ScreenRenderer {
     this.visitedPaths = new Set();
     try {
       this.root = this.resolve(this.element, "root");
+      this.onRender?.(this.root.map(textOf).join(" "));
     } finally {
       activeRenderer = previousRenderer;
       this.rendering = false;
@@ -225,8 +229,9 @@ export function flattenStyle(style: unknown, pressed = false): Record<string, un
   return value ? { ...(value as Record<string, unknown>) } : {};
 }
 
-export async function renderScreen(element: ReactNode) {
-  const renderer = new ScreenRenderer(element);
+/** `onRender` gets the text of every render, so a test can check what was shown in between. */
+export async function renderScreen(element: ReactNode, onRender?: (text: string) => void) {
+  const renderer = new ScreenRenderer(element, onRender);
   renderer.rerender();
   await settle();
 
