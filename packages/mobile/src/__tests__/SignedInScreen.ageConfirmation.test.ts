@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { AccessibilityInfo } from "react-native";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
@@ -8,6 +9,8 @@ import { createSignedInScreenHarness, deferred } from "./signedInScreenHarness";
 const CONFIRM = "Confirm I am 18 or older";
 const CONFIRMED = "18 or older: confirmed";
 const CANT_UNDO = "You can't undo this, except by deleting your account.";
+const DIALOG_TITLE = "Confirm you are 18 or older?";
+const DIALOG_YES = "Yes, I am 18 or older";
 
 describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
   let harness: ReturnType<typeof createSignedInScreenHarness>;
@@ -16,7 +19,7 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     harness = createSignedInScreenHarness();
   });
 
-  it("offers 'Confirm I am 18 or older' in the Account section, says visibly that it cannot be undone, and records it once", async () => {
+  it("offers the 18+ confirm in Account, says visibly it cannot be undone, and records it once after the dialog", async () => {
     const screen = await harness.render();
     expect(harness.state.ageReads).toBe(1);
     expect(screen.getPressable(CONFIRM).props).toMatchObject({
@@ -27,11 +30,16 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(text.indexOf(CANT_UNDO)).toBeGreaterThan(text.indexOf(CONFIRM));
     expect(flattenStyle(screen.queryByText(CANT_UNDO)?.props.style).color).toBe(colours.textSecondary);
 
+    await screen.press(CONFIRM);
+    expect(harness.state.adultConfirmations).toBe(0);
+    expect(screen.text()).toContain(DIALOG_TITLE);
+    expect(screen.text()).toContain(CANT_UNDO);
+
     const pending = deferred<AgeConfirmationResult>();
     harness.state.adultResult = pending.promise;
-    const button = screen.getPressable(CONFIRM);
-    (button.props.onPress as () => void)();
-    (button.props.onPress as () => void)();
+    const yes = screen.getPressable(DIALOG_YES);
+    (yes.props.onPress as () => void)();
+    (yes.props.onPress as () => void)();
     await screen.rerender();
     pending.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
     await screen.rerender();
@@ -40,6 +48,24 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(screen.text()).toContain(CONFIRMED);
     expect(screen.queryByText(CONFIRM)).toBeNull();
     expect(screen.queryByText(CANT_UNDO)).toBeNull();
+  });
+
+  it("the confirm dialog moves focus to its heading; Cancel writes nothing and returns focus to the button", async () => {
+    const screen = await harness.render();
+    await screen.press(CONFIRM);
+    const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);
+    const [headingTarget, headingEvent] = focusEvents.mock.calls.at(-1) ?? [];
+    expect(headingEvent).toBe("focus");
+    expect(textOf(headingTarget as never)).toBe(DIALOG_TITLE);
+    expect(screen.getPressable(DIALOG_YES)).toBeDefined();
+
+    await screen.press("Cancel");
+    expect(harness.state.adultConfirmations).toBe(0);
+    expect(screen.queryByText(DIALOG_TITLE)).toBeNull();
+    expect(screen.text()).not.toContain(CONFIRMED);
+    const [returnTarget, returnEvent] = focusEvents.mock.calls.at(-1) ?? [];
+    expect(returnEvent).toBe("focus");
+    expect(returnTarget).toBe(screen.getPressable(CONFIRM));
   });
 
   it("shows the confirmed line instead of the button when the account already confirmed 18+", async () => {
@@ -83,6 +109,7 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
     const screen = await harness.render();
     await screen.press(CONFIRM);
+    await screen.press(DIALOG_YES);
     expect(screen.text()).toContain(`We could not save that. ${FAILURE_MESSAGES.network}`);
     expect(screen.getPressable(CONFIRM)).toBeDefined();
 

@@ -65,7 +65,7 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
-8. Optional (HEN-263): **I am 18 or older (optional)** sits indented under the 16+ box, unticked, with "Only needed to buy things later. You can also confirm this in Account." under it. It stays dimmed and can't be ticked until 16+ is ticked, and unticking 16+ unticks it. Signed in without it, the Account section shows "Checking…" briefly, then **Confirm I am 18 or older** with "You can't undo this, except by deleting your account." under it; after a tap it reads "18 or older: confirmed".
+8. Optional (HEN-263): **I am 18 or older (optional)** sits indented under the 16+ box, unticked, with "Only needed to buy things later. You can also confirm this in Account." under it. It stays dimmed and can't be ticked until 16+ is ticked, and unticking 16+ unticks it. Signed in without it, the Account section shows "Checking…" briefly, then **Confirm I am 18 or older** with "You can't undo this, except by deleting your account." under it; a tap opens "Confirm you are 18 or older?" with the same warning: **Cancel** records nothing, **Yes, I am 18 or older** records it and the row reads "18 or older: confirmed".
 
 ### 5. Magic-link path (AC2, development build)
 

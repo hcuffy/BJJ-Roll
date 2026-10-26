@@ -101,6 +101,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).toContain("You are signed in");
 
     await screen.press("Confirm I am 18 or older");
+    await screen.press("Yes, I am 18 or older");
     expect(lastBodyFor("/account/age-confirmation")).toEqual({ age18Confirmed: true });
     expect(screen.text()).toContain("18 or older: confirmed");
     expect(screen.queryByText("Confirm I am 18 or older")).toBeNull();

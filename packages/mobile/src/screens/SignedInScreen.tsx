@@ -2,7 +2,9 @@ import { type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
-import { colours, sizes, spacing, textStyles, typeScale } from "../theme/tokens";
+import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
+import { AdultConfirmStep } from "./AdultConfirmStep";
+import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
@@ -26,17 +28,11 @@ export interface SignedInScreenProps {
 type AccountTask = "export" | "code" | "adult";
 type DeleteStep = "none" | "confirm" | "code";
 
-/** The 18+ answer: unknown while the read runs, "failed" when it could not be read (then the button shows anyway). */
-type AdultStatus = "checking" | "failed" | boolean;
-
 const styles = StyleSheet.create({
   // 16 margin + the layout's 16 gap = 32 above the section; 8 from the label to its items, 16 between items.
   accountSection: { marginTop: spacing.medium, gap: spacing.small },
   accountItems: { gap: spacing.medium },
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
-  // Lines up with the pills: same 48 height and 24 side padding, so the slot does not jump when the read returns.
-  statusRow: { minHeight: sizes.minTapTarget, paddingHorizontal: spacing.large, flexDirection: "row", alignItems: "center", gap: spacing.small },
-  adultItem: { gap: spacing.small },
 });
 
 function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
@@ -66,6 +62,9 @@ export function SignedInScreen({
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntry = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToDeleteEntry = useRef(false);
+  const [adultDialogOpen, setAdultDialogOpen] = useState(false);
+  const adultEntry = useRef<ComponentRef<typeof View>>(null);
+  const returnFocusToAdultEntry = useRef(false);
 
   // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
   // The code step moves focus to its own heading.
@@ -77,6 +76,13 @@ export function SignedInScreen({
       moveScreenReaderFocus(deleteEntry.current);
     }
   }, [deleteStep]);
+
+  useEffect(() => {
+    if (!adultDialogOpen && returnFocusToAdultEntry.current) {
+      returnFocusToAdultEntry.current = false;
+      moveScreenReaderFocus(adultEntry.current);
+    }
+  }, [adultDialogOpen]);
 
   // Read once per visit to this screen; the parent passes a fresh callback on every render.
   const readAgeConfirmation = useRef(onReadAgeConfirmation);
@@ -160,6 +166,21 @@ export function SignedInScreen({
     onPress: () => void exportData(),
   };
 
+  if (adultDialogOpen) {
+    return (
+      <AdultConfirmStep
+        onConfirm={() => {
+          setAdultDialogOpen(false);
+          void confirmAdultAge();
+        }}
+        onCancel={() => {
+          returnFocusToAdultEntry.current = true;
+          setAdultDialogOpen(false);
+        }}
+      />
+    );
+  }
+
   if (deleteStep === "code") {
     return (
       <DeleteAccountCodeStep
@@ -226,33 +247,16 @@ export function SignedInScreen({
             accessibilityHint="Opens the share sheet with a copy of your account data."
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
-          {age18Confirmed === "checking" ? (
-            <View style={styles.statusRow}>
-              <Text style={textStyles.bodyMuted}>Checking…</Text>
-            </View>
-          ) : null}
-          {age18Confirmed === true ? (
-            <View style={styles.statusRow}>
-              <Text style={textStyles.bodyMuted} accessibilityElementsHidden importantForAccessibility="no">
-                ✓
-              </Text>
-              <Text style={textStyles.bodyMuted}>18 or older: confirmed</Text>
-            </View>
-          ) : null}
-          {age18Confirmed === false || age18Confirmed === "failed" ? (
-            <View style={styles.adultItem}>
-              <AuthButton
-                title="Confirm I am 18 or older"
-                variant="secondary"
-                disabled={isBusy && runningTask !== "adult"}
-                loading={runningTask === "adult"}
-                loadingTitle="Saving…"
-                accessibilityHint="Records that you are 18 or older. Needed for buying later."
-                onPress={() => void confirmAdultAge()}
-              />
-              <Text style={textStyles.bodyMuted}>You can&apos;t undo this, except by deleting your account.</Text>
-            </View>
-          ) : null}
+          <AdultStatusItem
+            status={age18Confirmed}
+            buttonRef={adultEntry}
+            disabled={isBusy && runningTask !== "adult"}
+            loading={runningTask === "adult"}
+            onConfirmPress={() => {
+              setAdultError(null);
+              setAdultDialogOpen(true);
+            }}
+          />
           <StatusText message={adultError} style={authStyles.fieldError} />
           <AuthButton
             ref={deleteEntry}
