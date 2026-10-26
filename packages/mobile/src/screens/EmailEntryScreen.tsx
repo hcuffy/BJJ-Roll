@@ -133,7 +133,7 @@ export function EmailEntryScreen({
             <StatusText message={notice} style={textStyles.bodyMuted} />
           </View>
         </View>
-        <ServerUnreachableNote visible={offline} />
+        <ServerUnreachableNote visible={serverUnreachable || offline} />
         <StatusText message={formError} style={authStyles.fieldError} />
         <View style={authStyles.actions}>
           <AuthButton
@@ -150,6 +150,7 @@ export function EmailEntryScreen({
             disabled={sending !== null}
             onPress={() => {
               startAction();
+              setOffline(false);
               setLinkSentTo(null);
             }}
           />
