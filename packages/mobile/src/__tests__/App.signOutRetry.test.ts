@@ -28,6 +28,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let serverDown: boolean;
   let signOutEndpointDown: boolean;
+  let signOutEndpointErrors: boolean;
   const unhandledRejections: unknown[] = [];
   const recordUnhandled = (reason: unknown) => unhandledRejections.push(reason);
   let consoleSpies: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }[] = [];
@@ -40,6 +41,9 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
       storage: secureStore,
       fetchImplementation: vi.fn((input: string | URL | Request, init?: RequestInit) => {
         const signingOut = new Request(input, init).url.endsWith("/sign-out");
+        if (signingOut && signOutEndpointErrors) {
+          return Promise.resolve(new Response(JSON.stringify({ message: "Internal Server Error" }), { status: 500 }));
+        }
         return serverDown || (signingOut && signOutEndpointDown)
           ? Promise.reject(new TypeError("fetch failed"))
           : backend.fetchImplementation(input, init);
@@ -73,6 +77,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     secureStore = createMemorySecureStore();
     serverDown = false;
     signOutEndpointDown = false;
+    signOutEndpointErrors = false;
     deepLinkState.url = null;
     unhandledRejections.length = 0;
     process.on("unhandledRejection", recordUnhandled);
@@ -139,6 +144,19 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     expect(nextLaunch.text()).toContain(SIGN_IN_SCREEN);
     expect(signOutRequestCount()).toBe(signOutsBefore + 1);
     // Done now: the launch after that does not sign out again.
+    expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
+    expect(signOutRequestCount()).toBe(signOutsBefore + 1);
+  });
+
+  it("a server error on sign-out counts as not done: the next launch tells the server again", async () => {
+    const screen = await launchApp();
+    await signIn(screen);
+    signOutEndpointErrors = true;
+    await screen.press("Sign out");
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
+    const signOutsBefore = signOutRequestCount();
+
+    signOutEndpointErrors = false;
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
     expect(signOutRequestCount()).toBe(signOutsBefore + 1);
   });
