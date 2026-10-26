@@ -4,7 +4,7 @@ import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
-import { completeMagicLink, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -48,7 +48,7 @@ export function App() {
       .then((result) => {
         if (result.ok) {
           setLinkError(null);
-          setScreen({ name: "signedIn" });
+          handleSignedIn();
         } else if (result.reason === "network") {
           setServerUnreachable(true);
         } else if (result.message) {
@@ -59,6 +59,12 @@ export function App() {
   }, [deepLinkUrl]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
+
+  const handleSignedIn = () => {
+    // A new sign-in cancels a sign-out left to finish; if that fails the user still gets in.
+    void cancelPendingSignOut(appSecureStore);
+    setScreen({ name: "signedIn" });
+  };
 
   const handleSignOut = () => {
     // A note from a link that failed while signed in is stale on the sign-in screen.
@@ -109,12 +115,7 @@ export function App() {
       }
       case "code": {
         return (
-          <CodeEntryScreen
-            client={appAuthClient}
-            email={screen.email}
-            onSignedIn={() => setScreen({ name: "signedIn" })}
-            onBack={() => setScreen({ name: "email" })}
-          />
+          <CodeEntryScreen client={appAuthClient} email={screen.email} onSignedIn={handleSignedIn} onBack={() => setScreen({ name: "email" })} />
         );
       }
       case "email": {

@@ -188,6 +188,11 @@ export async function signOut(client: MobileAuthClient, secureStore: SessionKeyS
   await finishSignOut(client, secureStore);
 }
 
+/** Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session. Never rejects. */
+export async function cancelPendingSignOut(secureStore: SessionKeyStore): Promise<void> {
+  await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+}
+
 /**
  * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
  * so the user stays signed out on this launch even if the retry fails again.
