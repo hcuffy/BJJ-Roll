@@ -1,5 +1,5 @@
 import { type ComponentRef, type Ref, useEffect, useRef } from "react";
-import { AccessibilityInfo, Platform, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
 import { sizes, spacing, textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 
@@ -10,8 +10,10 @@ export interface AdultStatusItemProps {
   readonly status: AdultStatus;
   /** Screen reader focus returns here when the confirm dialog is cancelled. */
   readonly buttonRef: Ref<View>;
-  /** True only right after this visit's confirm saved: focus moves to the confirmed row and it is announced once (Vera delta item 1). */
-  readonly announceConfirmed: boolean;
+  /** True only right after this visit's confirm saved: focus moves to the confirmed row once (Vera delta item 1). */
+  readonly focusConfirmedRow: boolean;
+  /** Called after that focus move, so the flag is cleared on first use and a later remount does not move focus again. */
+  readonly onConfirmedRowFocused: () => void;
   readonly disabled: boolean;
   readonly loading: boolean;
   /** Opens the confirm dialog; nothing is written by this press. */
@@ -27,21 +29,20 @@ const styles = StyleSheet.create({
 export const ADULT_CONFIRMED_TEXT = "18 or older: confirmed";
 
 /** Account section 18+ slot (HEN-263): "Checking…", the confirmed row, or the confirm button with its can't-undo line. */
-export function AdultStatusItem({ status, buttonRef, announceConfirmed, disabled, loading, onConfirmPress }: AdultStatusItemProps) {
-  const announce = announceConfirmed && status === true;
+export function AdultStatusItem(props: AdultStatusItemProps) {
+  const { status, buttonRef, focusConfirmedRow, onConfirmedRowFocused, disabled, loading, onConfirmPress } = props;
+  const moveFocus = focusConfirmedRow && status === true;
   const confirmedRow = useRef<ComponentRef<typeof View>>(null);
-  // Same as StatusText: Android hears the polite live region, iOS (which ignores live regions) gets one announcement.
+  // The focus move alone reads the row once on both platforms; no live region or iOS announcement on top (Vera round 4 item 2).
   useEffect(() => {
-    if (!announce) {
+    if (!moveFocus) {
       return;
     }
     if (confirmedRow.current) {
       AccessibilityInfo.sendAccessibilityEvent(confirmedRow.current, "focus");
     }
-    if (Platform.OS === "ios") {
-      AccessibilityInfo.announceForAccessibility(ADULT_CONFIRMED_TEXT);
-    }
-  }, [announce]);
+    onConfirmedRowFocused();
+  }, [moveFocus, onConfirmedRowFocused]);
 
   if (status === "checking") {
     return (
@@ -52,7 +53,7 @@ export function AdultStatusItem({ status, buttonRef, announceConfirmed, disabled
   }
   if (status === true) {
     return (
-      <View ref={confirmedRow} accessible accessibilityLiveRegion={announce ? "polite" : undefined} style={styles.statusRow}>
+      <View ref={confirmedRow} accessible style={styles.statusRow}>
         <Text style={textStyles.bodyMuted} accessibilityElementsHidden importantForAccessibility="no">
           ✓
         </Text>

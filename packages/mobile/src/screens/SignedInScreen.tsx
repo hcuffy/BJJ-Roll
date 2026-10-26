@@ -65,7 +65,7 @@ export function SignedInScreen({
   const [adultDialogOpen, setAdultDialogOpen] = useState(false);
   const adultEntry = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToAdultEntry = useRef(false);
-  // Set when this visit's confirm saved: focus moves to the confirmed row and it is announced once.
+  // Set when this visit's confirm saved; cleared once focus has moved to the confirmed row (Vera round 4 item 3).
   const [adultJustConfirmed, setAdultJustConfirmed] = useState(false);
 
   // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
@@ -251,7 +251,8 @@ export function SignedInScreen({
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
-            announceConfirmed={adultJustConfirmed}
+            focusConfirmedRow={adultJustConfirmed}
+            onConfirmedRowFocused={() => setAdultJustConfirmed(false)}
             disabled={isBusy && runningTask !== "adult"}
             loading={runningTask === "adult"}
             onConfirmPress={() => {

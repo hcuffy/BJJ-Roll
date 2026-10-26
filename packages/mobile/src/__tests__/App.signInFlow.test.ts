@@ -203,6 +203,14 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).not.toContain(message);
   });
 
+  it("a magic link refused for age (r=age_refused) shows the refusal with the next step under it", async () => {
+    deepLinkState.url = "bjjroll://auth?r=age_refused";
+    const screen = await startApp();
+
+    expect(screen.text()).toContain("You must be 16 or older to sign up.");
+    expect(screen.text()).toContain("Tick I am 16 or older and send a new link.");
+  });
+
   it("shows a muted spinner and one readable 'Loading' on the dark background while the session loads, with light status bar icons", async () => {
     backend.fetchImplementation.mockImplementation(() => new Promise<Response>(() => undefined));
     const screen = await startApp();

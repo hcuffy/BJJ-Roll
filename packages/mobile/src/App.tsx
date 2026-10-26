@@ -11,7 +11,7 @@ import {
   type AccountSession,
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
-import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
+import { completeMagicLink, type FailureReason, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -26,7 +26,8 @@ type AuthScreen =
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
-  const [linkError, setLinkError] = useState<string | null>(null);
+  // The reason travels with the message so the card can key extra guidance on it, not on the copy (Vera round 4 item 4).
+  const [linkError, setLinkError] = useState<{ readonly message: string; readonly reason: FailureReason } | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const deepLinkUrl = Linking.useURL();
 
@@ -43,7 +44,7 @@ export function App() {
         setLinkError(null);
         setScreen({ name: "signedIn" });
       } else if (result.message) {
-        setLinkError(result.message);
+        setLinkError({ message: result.message, reason: result.reason });
       }
     });
   }, [deepLinkUrl]);
@@ -107,7 +108,8 @@ export function App() {
         return (
           <EmailEntryScreen
             client={appAuthClient}
-            linkError={linkError}
+            linkError={linkError?.message ?? null}
+            linkErrorReason={linkError?.reason ?? null}
             onClearLinkError={() => setLinkError(null)}
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}

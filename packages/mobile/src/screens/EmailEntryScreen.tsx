@@ -5,8 +5,6 @@ import {
   AGE_ADULT_CONFIRMATION_NOTE,
   AGE_ADULT_NEEDS_16_HINT,
   AGE_CONFIRMATION_LABEL,
-  AGE_GATE_REFUSAL_MESSAGE,
-  AGE_LINK_REFUSAL_NEXT_STEP,
   isEmailAddress,
 } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
@@ -15,6 +13,7 @@ import { textStyles } from "../theme/tokens";
 import { AgeCheckbox } from "./AgeCheckbox";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { type LinkErrorCardProps, LinkErrorCard } from "./LinkErrorCard";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
@@ -27,6 +26,8 @@ export interface EmailEntryScreenProps {
   readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
+  /** Why the link failed; see LinkErrorCard. */
+  readonly linkErrorReason?: LinkErrorCardProps["reason"];
   readonly onClearLinkError?: () => void;
   /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
@@ -50,6 +51,7 @@ export function EmailEntryScreen({
   client,
   onCodeSent,
   linkError = null,
+  linkErrorReason = null,
   onClearLinkError,
   accountNotice = null,
   onClearAccountNotice,
@@ -160,12 +162,7 @@ export function EmailEntryScreen({
 
   return (
     <AuthScreenLayout>
-      {linkError ? (
-        <View style={[authStyles.card, authStyles.errorCard]}>
-          <StatusText message={linkError} style={authStyles.cardError} />
-          {linkError === AGE_GATE_REFUSAL_MESSAGE ? <Text style={textStyles.body}>{AGE_LINK_REFUSAL_NEXT_STEP}</Text> : null}
-        </View>
-      ) : null}
+      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
       {accountNotice ? (
         <View style={authStyles.card}>
           <StatusText message={accountNotice} style={authStyles.notice} />

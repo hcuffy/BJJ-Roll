@@ -3,7 +3,7 @@ import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { AGE_GATE_REFUSAL_MESSAGE } from "../auth/ageConfirmation";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { FAILURE_MESSAGES, type FailureReason } from "../auth/signInActions";
 import { EmailEntryScreen, TICK_AGE_BOX_MESSAGE } from "../screens/EmailEntryScreen";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
@@ -26,10 +26,11 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     Platform.OS = "android";
   });
 
-  const render = (linkError: string | null = null) =>
+  const render = (linkError: string | null = null, linkErrorReason: FailureReason | null = null) =>
     renderScreen(
       createElement(EmailEntryScreen, {
         linkError,
+        linkErrorReason,
         client: createMobileAuthClient({
           backendUrl: TEST_BACKEND_URL,
           storage: createMemorySecureStore(),
@@ -118,14 +119,27 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
   });
 
-  it("delta 2: a link refused for age adds the next step under the refusal, in body text; other link errors do not", async () => {
-    const refused = await render(AGE_GATE_REFUSAL_MESSAGE);
-    const card = refused.findAllByType("View").find((view) => textOf(view) === `${AGE_GATE_REFUSAL_MESSAGE}${LINK_NEXT_STEP}`);
-    expect(card).toBeDefined();
+  it("delta 2 / round 4 item 1: a link refused for age stacks the next step under the refusal in one card body, in body text", async () => {
+    const refused = await render(AGE_GATE_REFUSAL_MESSAGE, "ageRequired");
+    const card = refused.findAllByType("View").find((view) => flattenStyle(view.props.style).borderColor === colours.danger);
+    // The card is a row (icon slot + body); both lines sit in one column body, like the "Check your email" card.
+    const cardChildren = card?.children.filter((child) => typeof child !== "string") ?? [];
+    expect(cardChildren).toHaveLength(1);
+    const [body] = cardChildren as { props: Record<string, unknown> }[];
+    expect(flattenStyle(body?.props.style)).toMatchObject({ flex: 1, gap: 8 });
+    expect(textOf(body as never)).toBe(`${AGE_GATE_REFUSAL_MESSAGE}${LINK_NEXT_STEP}`);
     expect(flattenStyle(refused.queryByText(LINK_NEXT_STEP)?.props.style).color).toBe(colours.textPrimary);
 
-    const invalid = await render(FAILURE_MESSAGES.invalidLink);
+    const invalid = await render(FAILURE_MESSAGES.invalidLink, "invalidLink");
     expect(invalid.text()).toContain("This sign-in link has expired or was already used. Send a new one.");
     expect(invalid.queryByText(LINK_NEXT_STEP)).toBeNull();
+  });
+
+  it("round 4 item 4: the next step follows the age_refused reason, not the refusal text", async () => {
+    const textOnly = await render(AGE_GATE_REFUSAL_MESSAGE);
+    expect(textOnly.queryByText(LINK_NEXT_STEP)).toBeNull();
+
+    const editedCopy = await render("Edited refusal copy.", "ageRequired");
+    expect(editedCopy.queryByText(LINK_NEXT_STEP)).not.toBeNull();
   });
 });

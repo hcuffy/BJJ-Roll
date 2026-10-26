@@ -122,7 +122,7 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(unread.queryByText("Checking…")).toBeNull();
   });
 
-  it("delta 1: after Yes, focus goes to the Saving… button, then to the confirmed row, which is announced once", async () => {
+  it("delta 1 / round 4 item 2: after Yes, focus goes to Saving…, then to the confirmed row; the focus move alone reads it", async () => {
     Platform.OS = "ios";
     vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
     const pending = deferred<AgeConfirmationResult>();
@@ -141,11 +141,30 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     pending.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
     await screen.rerender();
     const row = screen.findAllByType("View").find((view) => textOf(view) === `✓${CONFIRMED}`);
-    expect(row?.props).toMatchObject({ accessible: true, accessibilityLiveRegion: "polite" });
+    expect(row?.props.accessible).toBe(true);
+    // No live region and no iOS announcement on top of the focus move, so the row is read once (no double read).
+    expect(row?.props.accessibilityLiveRegion).toBeUndefined();
     expect(focusEvents.mock.calls.at(-1)).toEqual([row, "focus"]);
     await screen.rerender();
-    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[CONFIRMED]]);
+    expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled();
     Platform.OS = "android";
+  });
+
+  it("round 4 item 3: after Yes, Delete account then Cancel does not move focus to the confirmed row again", async () => {
+    harness.state.adultResult = Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
+    const screen = await harness.render();
+    await screen.press(CONFIRM);
+    await screen.press(DIALOG_YES);
+    await screen.rerender();
+    const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);
+    const isConfirmedRow = (target: unknown) => textOf(target as never) === `✓${CONFIRMED}`;
+    expect(focusEvents.mock.calls.filter(([target]) => isConfirmedRow(target))).toHaveLength(1);
+
+    await screen.press("Delete account");
+    await screen.press("Cancel");
+    await screen.rerender();
+    expect(focusEvents.mock.calls.filter(([target]) => isConfirmedRow(target))).toHaveLength(1);
+    expect(textOf(focusEvents.mock.calls.at(-1)?.[0] as never)).toBe("Delete account");
   });
 
   it("delta 1: an account already confirmed on load is not announced and does not take focus", async () => {
