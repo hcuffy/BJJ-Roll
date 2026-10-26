@@ -157,7 +157,7 @@ describe("sign-in requests", () => {
     expect(await completeMagicLink(client, "bjjroll://auth?code=used-code")).toEqual({
       ok: false,
       reason: "invalidLink",
-      message: "This sign-in link is invalid or has expired. Request a new one.",
+      message: "This sign-in link has expired or was already used. Send a new one.",
     });
   });
 

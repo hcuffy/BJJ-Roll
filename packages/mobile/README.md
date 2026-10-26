@@ -65,7 +65,7 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
-8. Optional (HEN-263): **I am 18 or older (optional)** sits indented under the 16+ box, unticked, with "Only needed to buy things later. You can also confirm this in Account." under it. It stays dimmed and can't be ticked until 16+ is ticked, and unticking 16+ unticks it. Signed in without it, the Account section shows "Checking…" briefly, then **Confirm I am 18 or older** with "You can't undo this, except by deleting your account." under it; a tap opens "Confirm you are 18 or older?" with the same warning: **Cancel** records nothing, **Yes, I am 18 or older** records it and the row reads "18 or older: confirmed".
+8. Optional (HEN-263): **I am 18 or older (optional)** sits indented under the 16+ box, unticked, with "Only needed to buy things later. You can also confirm this in Account." under it. It stays dimmed and can't be ticked until 16+ is ticked, and unticking 16+ unticks it. Signed in without it, the Account section shows "Checking…" briefly, then **Confirm I am 18 or older** with "You can't undo this, except by deleting your account." under it; a tap opens "Confirm you are 18 or older?" with the same warning: **Cancel** records nothing, **Yes, I am 18 or older** records it and the row reads "18 or older: confirmed"; with a screen reader on, focus lands on that row and it is read once.
 
 ### 5. Magic-link path (AC2, development build)
 
@@ -73,7 +73,7 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 2. Expect the "Check your email" card: "We sent a sign-in link to <your email>. Open it on this phone." with **Resend link** and **Use a different email**.
 3. Open the link on the same device, either from the mail app or with `adb shell am start -a android.intent.action.VIEW -d "<link from the email>"`.
 4. The browser hands over to the app (`bjjroll://auth?code=…`). Expect "You are signed in".
-5. Open the same link again. Expect a red card above the title: "This sign-in link is invalid or has expired. Request a new one." and no sign-in.
+5. Open the same link again. Expect a red card above the title: "This sign-in link has expired or was already used. Send a new one." and no sign-in.
 
 ### 6. Sign-out and restart (AC5)
 

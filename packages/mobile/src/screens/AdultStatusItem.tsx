@@ -1,5 +1,5 @@
-import type { Ref } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { type ComponentRef, type Ref, useEffect, useRef } from "react";
+import { AccessibilityInfo, Platform, StyleSheet, Text, View } from "react-native";
 import { sizes, spacing, textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 
@@ -10,6 +10,8 @@ export interface AdultStatusItemProps {
   readonly status: AdultStatus;
   /** Screen reader focus returns here when the confirm dialog is cancelled. */
   readonly buttonRef: Ref<View>;
+  /** True only right after this visit's confirm saved: focus moves to the confirmed row and it is announced once (Vera delta item 1). */
+  readonly announceConfirmed: boolean;
   readonly disabled: boolean;
   readonly loading: boolean;
   /** Opens the confirm dialog; nothing is written by this press. */
@@ -22,8 +24,25 @@ const styles = StyleSheet.create({
   adultItem: { gap: spacing.small },
 });
 
+export const ADULT_CONFIRMED_TEXT = "18 or older: confirmed";
+
 /** Account section 18+ slot (HEN-263): "Checking…", the confirmed row, or the confirm button with its can't-undo line. */
-export function AdultStatusItem({ status, buttonRef, disabled, loading, onConfirmPress }: AdultStatusItemProps) {
+export function AdultStatusItem({ status, buttonRef, announceConfirmed, disabled, loading, onConfirmPress }: AdultStatusItemProps) {
+  const announce = announceConfirmed && status === true;
+  const confirmedRow = useRef<ComponentRef<typeof View>>(null);
+  // Same as StatusText: Android hears the polite live region, iOS (which ignores live regions) gets one announcement.
+  useEffect(() => {
+    if (!announce) {
+      return;
+    }
+    if (confirmedRow.current) {
+      AccessibilityInfo.sendAccessibilityEvent(confirmedRow.current, "focus");
+    }
+    if (Platform.OS === "ios") {
+      AccessibilityInfo.announceForAccessibility(ADULT_CONFIRMED_TEXT);
+    }
+  }, [announce]);
+
   if (status === "checking") {
     return (
       <View style={styles.statusRow}>
@@ -33,11 +52,11 @@ export function AdultStatusItem({ status, buttonRef, disabled, loading, onConfir
   }
   if (status === true) {
     return (
-      <View style={styles.statusRow}>
+      <View ref={confirmedRow} accessible accessibilityLiveRegion={announce ? "polite" : undefined} style={styles.statusRow}>
         <Text style={textStyles.bodyMuted} accessibilityElementsHidden importantForAccessibility="no">
           ✓
         </Text>
-        <Text style={textStyles.bodyMuted}>18 or older: confirmed</Text>
+        <Text style={textStyles.bodyMuted}>{ADULT_CONFIRMED_TEXT}</Text>
       </View>
     );
   }
@@ -50,7 +69,7 @@ export function AdultStatusItem({ status, buttonRef, disabled, loading, onConfir
         disabled={disabled}
         loading={loading}
         loadingTitle="Saving…"
-        accessibilityHint="Records that you are 18 or older. Needed for buying later."
+        accessibilityHint="Asks you to confirm first. Needed for buying later."
         onPress={onConfirmPress}
       />
       <Text style={textStyles.bodyMuted}>You can&apos;t undo this, except by deleting your account.</Text>

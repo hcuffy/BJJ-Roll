@@ -33,6 +33,7 @@ export function AdultConfirmStep({ onConfirm, onCancel }: AdultConfirmStepProps)
           Confirm you are 18 or older?
         </Text>
         <Text style={textStyles.body}>You can&apos;t undo this, except by deleting your account.</Text>
+        <Text style={textStyles.bodyMuted}>Needed for buying later.</Text>
       </View>
       <View style={authStyles.actions}>
         <AuthButton title="Yes, I am 18 or older" variant="primary" accessibilityHint="Records that you are 18 or older." onPress={onConfirm} />

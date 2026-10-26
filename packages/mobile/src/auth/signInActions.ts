@@ -19,7 +19,7 @@ export const MAGIC_LINK_EXPIRY_MINUTES = 15;
 export const FAILURE_MESSAGES = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
-  invalidLink: "This sign-in link is invalid or has expired. Request a new one.",
+  invalidLink: "This sign-in link has expired or was already used. Send a new one.",
   network: "No connection. Check your internet and try again.",
   rateLimited: "Too many tries. Wait a minute and try again.",
   unknown: "Something went wrong. Please try again.",

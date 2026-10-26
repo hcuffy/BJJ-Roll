@@ -190,7 +190,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("an expired magic link keeps the user signed out and shows an announced error card above the title, cleared by the next action", async () => {
     deepLinkState.url = "bjjroll://auth?r=link_invalid";
     const screen = await startApp();
-    const message = "This sign-in link is invalid or has expired. Request a new one.";
+    const message = "This sign-in link has expired or was already used. Send a new one.";
 
     const [scrollView] = screen.findAllByType("ScrollView");
     const screenText = textOf(scrollView ?? "");

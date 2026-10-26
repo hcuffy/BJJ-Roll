@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
+import { AGE_GATE_REFUSAL_MESSAGE } from "../auth/ageConfirmation";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { EmailEntryScreen, TICK_AGE_BOX_MESSAGE } from "../screens/EmailEntryScreen";
 import { colours } from "../theme/tokens";
@@ -11,7 +12,9 @@ import { flattenStyle, renderScreen, textOf } from "./screenHarness";
 const ADULT = "I am 18 or older (optional)";
 const NOTE = "Only needed to buy things later. You can also confirm this in Account.";
 
-describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8)", () => {
+const LINK_NEXT_STEP = "Tick I am 16 or older and send a new link.";
+
+describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; delta items 2, 3 and 6)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
 
   beforeEach(() => {
@@ -23,9 +26,10 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8)", (
     Platform.OS = "android";
   });
 
-  const render = () =>
+  const render = (linkError: string | null = null) =>
     renderScreen(
       createElement(EmailEntryScreen, {
+        linkError,
         client: createMobileAuthClient({
           backendUrl: TEST_BACKEND_URL,
           storage: createMemorySecureStore(),
@@ -100,5 +104,28 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8)", (
 
     expect(screen.queryByText(TICK_AGE_BOX_MESSAGE)?.props.accessibilityRole).toBe("alert");
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[TICK_AGE_BOX_MESSAGE]]);
+  });
+
+  it("delta 6: with the email error already showing from blur, an empty submit announces the 16+ error instead", async () => {
+    Platform.OS = "ios";
+    const screen = await render();
+    await screen.changeText("Email", "not-an-email");
+    await screen.fire("Email", "onBlur");
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail]]);
+
+    await screen.press("Continue");
+    expect(screen.queryByText(TICK_AGE_BOX_MESSAGE)?.props.accessibilityRole).toBe("alert");
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
+  });
+
+  it("delta 2: a link refused for age adds the next step under the refusal, in body text; other link errors do not", async () => {
+    const refused = await render(AGE_GATE_REFUSAL_MESSAGE);
+    const card = refused.findAllByType("View").find((view) => textOf(view) === `${AGE_GATE_REFUSAL_MESSAGE}${LINK_NEXT_STEP}`);
+    expect(card).toBeDefined();
+    expect(flattenStyle(refused.queryByText(LINK_NEXT_STEP)?.props.style).color).toBe(colours.textPrimary);
+
+    const invalid = await render(FAILURE_MESSAGES.invalidLink);
+    expect(invalid.text()).toContain("This sign-in link has expired or was already used. Send a new one.");
+    expect(invalid.queryByText(LINK_NEXT_STEP)).toBeNull();
   });
 });

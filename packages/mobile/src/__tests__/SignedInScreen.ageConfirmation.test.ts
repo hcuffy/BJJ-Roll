@@ -1,4 +1,4 @@
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, Platform } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
@@ -24,7 +24,7 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(harness.state.ageReads).toBe(1);
     expect(screen.getPressable(CONFIRM).props).toMatchObject({
       accessibilityRole: "button",
-      accessibilityHint: "Records that you are 18 or older. Needed for buying later.",
+      accessibilityHint: "Asks you to confirm first. Needed for buying later.",
     });
     const text = screen.text();
     expect(text.indexOf(CANT_UNDO)).toBeGreaterThan(text.indexOf(CONFIRM));
@@ -34,6 +34,7 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(harness.state.adultConfirmations).toBe(0);
     expect(screen.text()).toContain(DIALOG_TITLE);
     expect(screen.text()).toContain(CANT_UNDO);
+    expect(flattenStyle(screen.queryByText("Needed for buying later.")?.props.style).color).toBe(colours.textSecondary);
 
     const pending = deferred<AgeConfirmationResult>();
     harness.state.adultResult = pending.promise;
@@ -119,5 +120,43 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     expect(unread.text()).toContain(CANT_UNDO);
     expect(unread.text()).not.toContain(CONFIRMED);
     expect(unread.queryByText("Checking…")).toBeNull();
+  });
+
+  it("delta 1: after Yes, focus goes to the Saving… button, then to the confirmed row, which is announced once", async () => {
+    Platform.OS = "ios";
+    vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
+    const pending = deferred<AgeConfirmationResult>();
+    harness.state.adultResult = pending.promise;
+    const screen = await harness.render();
+    await screen.press(CONFIRM);
+    await screen.press(DIALOG_YES);
+    const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);
+    // Like Cancel, focus returns to the 18+ slot's button (by then it reads Saving…) instead of being lost with the dialog.
+    const [slotTarget, slotEvent] = focusEvents.mock.calls.at(-1) ?? [];
+    expect(slotEvent).toBe("focus");
+    expect((slotTarget as unknown as { props: Record<string, unknown> }).props.accessibilityHint).toBe(
+      "Asks you to confirm first. Needed for buying later.",
+    );
+
+    pending.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
+    await screen.rerender();
+    const row = screen.findAllByType("View").find((view) => textOf(view) === `✓${CONFIRMED}`);
+    expect(row?.props).toMatchObject({ accessible: true, accessibilityLiveRegion: "polite" });
+    expect(focusEvents.mock.calls.at(-1)).toEqual([row, "focus"]);
+    await screen.rerender();
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[CONFIRMED]]);
+    Platform.OS = "android";
+  });
+
+  it("delta 1: an account already confirmed on load is not announced and does not take focus", async () => {
+    Platform.OS = "ios";
+    vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
+    harness.state.ageStatusResult = Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } });
+    const screen = await harness.render();
+    const row = screen.findAllByType("View").find((view) => textOf(view) === `✓${CONFIRMED}`);
+    expect(row?.props.accessibilityLiveRegion).toBeUndefined();
+    expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled();
+    expect(AccessibilityInfo.sendAccessibilityEvent).not.toHaveBeenCalled();
+    Platform.OS = "android";
   });
 });

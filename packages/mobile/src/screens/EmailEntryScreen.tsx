@@ -5,6 +5,8 @@ import {
   AGE_ADULT_CONFIRMATION_NOTE,
   AGE_ADULT_NEEDS_16_HINT,
   AGE_CONFIRMATION_LABEL,
+  AGE_GATE_REFUSAL_MESSAGE,
+  AGE_LINK_REFUSAL_NEXT_STEP,
   isEmailAddress,
 } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
@@ -58,6 +60,8 @@ export function EmailEntryScreen({
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
+  // False only when this submit also brought up a new email error, which is then the one announced (Vera items 8 and delta 6).
+  const [announceAgeError, setAnnounceAgeError] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
@@ -86,6 +90,8 @@ export function EmailEntryScreen({
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
     setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
+    // An email error already showing from blur is not read again, so the age error must be heard instead.
+    setAnnounceAgeError(emailValid || emailError !== null);
     setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
     return emailValid && age16Confirmed;
   };
@@ -157,6 +163,7 @@ export function EmailEntryScreen({
       {linkError ? (
         <View style={[authStyles.card, authStyles.errorCard]}>
           <StatusText message={linkError} style={authStyles.cardError} />
+          {linkError === AGE_GATE_REFUSAL_MESSAGE ? <Text style={textStyles.body}>{AGE_LINK_REFUSAL_NEXT_STEP}</Text> : null}
         </View>
       ) : null}
       {accountNotice ? (
@@ -211,8 +218,8 @@ export function EmailEntryScreen({
               setAgeError(null);
             }}
           />
-          {/* After an empty submit the email error is read first; this one stays visible but is not announced over it. */}
-          <StatusText message={ageError} style={authStyles.fieldError} announce={emailError === null} />
+          {/* After an empty submit the new email error is read first; this one stays visible but is not announced over it. */}
+          <StatusText message={ageError} style={authStyles.fieldError} announce={announceAgeError} />
         </View>
         <View style={authStyles.ageOptional}>
           <AgeCheckbox

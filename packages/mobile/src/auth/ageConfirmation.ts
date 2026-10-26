@@ -12,6 +12,8 @@ export const AGE_ADULT_CONFIRMATION_LABEL = `${AGE18_CONFIRMATION_LABEL} (option
 export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. You can also confirm this in Account.";
 /** Hint for the 18+ box while it is disabled: it can only be ticked after the 16+ box (Vera item 2). */
 export const AGE_ADULT_NEEDS_16_HINT = "Tick I am 16 or older first.";
+/** Second line of the link error card after an age refusal: the link is used up, so say what to do next (Vera delta item 2). */
+export const AGE_LINK_REFUSAL_NEXT_STEP = "Tick I am 16 or older and send a new link.";
 
 export interface EmailEntry {
   readonly email: string;

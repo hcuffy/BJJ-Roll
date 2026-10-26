@@ -65,6 +65,8 @@ export function SignedInScreen({
   const [adultDialogOpen, setAdultDialogOpen] = useState(false);
   const adultEntry = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToAdultEntry = useRef(false);
+  // Set when this visit's confirm saved: focus moves to the confirmed row and it is announced once.
+  const [adultJustConfirmed, setAdultJustConfirmed] = useState(false);
 
   // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
   // The code step moves focus to its own heading.
@@ -134,6 +136,7 @@ export function SignedInScreen({
       const result = await onConfirmAdult();
       if (result.ok) {
         setAge18Confirmed(result.status.age18Confirmed);
+        setAdultJustConfirmed(result.status.age18Confirmed);
       } else {
         setAdultError(`We could not save that. ${result.message}`);
       }
@@ -169,14 +172,12 @@ export function SignedInScreen({
   if (adultDialogOpen) {
     return (
       <AdultConfirmStep
+        // Either way out, focus goes back to the 18+ slot: the button on Cancel, "Saving…" on Yes, then the confirmed row once saved.
         onConfirm={() => {
           setAdultDialogOpen(false);
           void confirmAdultAge();
         }}
-        onCancel={() => {
-          returnFocusToAdultEntry.current = true;
-          setAdultDialogOpen(false);
-        }}
+        onCancel={() => setAdultDialogOpen(false)}
       />
     );
   }
@@ -250,10 +251,12 @@ export function SignedInScreen({
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
+            announceConfirmed={adultJustConfirmed}
             disabled={isBusy && runningTask !== "adult"}
             loading={runningTask === "adult"}
             onConfirmPress={() => {
               setAdultError(null);
+              returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
           />
