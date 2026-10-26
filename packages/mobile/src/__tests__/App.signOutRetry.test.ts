@@ -183,4 +183,51 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     await signIn(nextLaunch);
     expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
   });
+
+  describe("signing in again cancels the unfinished sign-out (Henry, 2026-10-26)", () => {
+    /** Signed in, then sign-out cannot reach the server: the session is gone from the phone, the sign-out is left to finish. */
+    const signOutLeftUnfinished = async () => {
+      const screen = await launchApp();
+      await signIn(screen);
+      signOutEndpointDown = true;
+      await screen.press("Sign out");
+      expect(screen.text()).toContain(SIGN_IN_SCREEN);
+      signOutEndpointDown = false;
+      return screen;
+    };
+
+    it("with the emailed code: the user is still signed in after a restart", async () => {
+      const screen = await signOutLeftUnfinished();
+      await signIn(screen);
+      const signOutsBefore = signOutRequestCount();
+
+      const nextLaunch = await launchApp();
+
+      expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
+      expect(signOutRequestCount()).toBe(signOutsBefore);
+    });
+
+    it("with a magic link: the user is still signed in after a restart", async () => {
+      const screen = await signOutLeftUnfinished();
+      deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+      await screen.rerender();
+      expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+      deepLinkState.url = null;
+      const signOutsBefore = signOutRequestCount();
+
+      const nextLaunch = await launchApp();
+
+      expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
+      expect(signOutRequestCount()).toBe(signOutsBefore);
+    });
+
+    it("sign-in is not blocked when the unfinished sign-out cannot be cancelled", async () => {
+      const screen = await signOutLeftUnfinished();
+      secureStore.failingKeys.add("bjjroll_pending_sign_out");
+
+      await signIn(screen);
+
+      expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    });
+  });
 });
