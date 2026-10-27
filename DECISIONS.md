@@ -38,14 +38,40 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Decided by:** Sara (2026-10-22)
 - **Consequences:** HEN-58 builds the schema, RLS and the `bjj_auth_lookup` function as SQL migrations, plus the email-hash adapter wrapper. See `docs/spikes/HEN-47-better-auth.md`.
 
-## D24: Owner can see their own footage unmasked
+## D17: Sign-in is email OTP plus Apple and Google, with no passwords (revised)
 
-Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
+Revised from planning D17 (email OTP + magic link) on 2026-10-27 for HEN-238.
 
-- **Decision:** Owner can see their own footage unmasked.
-- **Date:** 2026-10-17
-- **Decided by:** Henry
-- **Consequences:** The label set stays open under HEN-44.
+- **Decision:** Better Auth runs sign-in. The methods are email OTP (a 6-digit code, primary), magic link, Sign in with Apple and Google sign-in. There
+  are no passwords. SMS is not a sign-in method (see D25).
+- **Rejected alternatives:** Supabase Auth (GoTrue), self-hosted; Lucia-style own sessions (planning log §B).
+- **Date:** 2026-10-15 (planning D17); revised 2026-10-22 and 2026-10-25 (Henry)
+- **Decided by:** Sara (method and library); Henry (Apple and Google on top of email OTP)
+- **Consequences:** HEN-239 builds Apple and Google through Better Auth social providers. On the phone, session tokens live only in SecureStore
+  (`@better-auth/expo`).
+
+## D18: Every stored email and phone number is field-encrypted with an HMAC lookup hash (revised)
+
+Revised from planning D18 on 2026-10-27 for HEN-238.
+
+- **Decision:** Every stored email uses AES-256-GCM field encryption plus an HMAC-SHA256 lookup hash, with a `key_version` for rotation. This covers
+  emails typed for OTP, emails from Apple or Google, and Apple private-relay addresses. A phone number (when HEN-240 ships) uses the same pattern.
+- **Date:** 2026-10-15 (planning D18); revised 2026-10-22
+- **Decided by:** Sara; revision approved by Henry with the sign-in mix (D25)
+- **Consequences:** Social sign-in emails go through the same codec as OTP emails (`authCodecTransform.ts`), so account lookup and linking use the
+  HMAC only. Where the keys live: KMS choice OPEN (HEN-191).
+
+## D19: The account holds only an email, a handle and linked provider ids (revised)
+
+Revised from planning D19 on 2026-10-27 for HEN-238.
+
+- **Decision:** An account holds only the encrypted email, the handle and, per linked provider, the provider id and the provider's stable user id
+  (`sub`). No name, photo or other profile field from Apple or Google is stored. The only provider token kept is the Apple refresh token, encrypted,
+  used only to revoke Sign in with Apple when the account is deleted. No Google tokens are kept.
+- **Date:** 2026-10-15 (planning D19); revised 2026-10-22
+- **Decided by:** Sara and Henry; revision approved by Henry with the sign-in mix (D25)
+- **Consequences:** HEN-239 drops provider profile fields and Google tokens after sign-in. Account deletion revokes the Apple token before the account
+  rows are deleted (ARCHITECTURE §5). The encryption inventory lists the provider ids and the Apple token (ARCHITECTURE §6).
 
 ## D20: Transactional email provider is Lettermint (NL)
 
@@ -55,6 +81,29 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry
 - **Consequences:** The Lettermint DPA is read before go-live (HEN-118). The account, sending domain and real-send check are Henry's (HEN-262). Tests
   use a fake sender, so no Lettermint credentials are needed to build or test.
+
+## D24: Owner can see their own footage unmasked
+
+Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
+
+- **Decision:** Owner can see their own footage unmasked.
+- **Date:** 2026-10-17
+- **Decided by:** Henry
+- **Consequences:** The label set stays open under HEN-44.
+
+## D25: Sign-in mix: Apple and Google on top of email OTP; SMS only as a one-time phone check
+
+- **Decision:** Sign in with Apple and Google sign-in are added on top of email OTP, not as a replacement. SMS is only a one-time phone check (one
+  account per phone, against fake ranks), never a login method.
+- **Launch:** Apple is built at launch, with `appleEnabled` false until the Apple developer account exists (HEN-181). Android shows email and Google,
+  with Apple hidden. iOS shows email only while Apple is off, then email, native Apple and Google once it's on
+  (`packages/mobile/src/auth/socialSignIn.ts:44`, Apple rule 4.8).
+- Apple sign-in is iOS-only and hidden on Android.
+- **Rejected alternative:** Replacing email OTP with Apple/Google; SMS as a login method.
+- **Date:** 2026-10-22 and 2026-10-25
+- **Decided by:** Henry
+- **Consequences:** App Store rule 4.8 is met by offering Sign in with Apple next to Google sign-in. Every sign-up path (email, Apple, Google) has the
+  same 16+ gate (HEN-263). The phone check is built later in HEN-240 and stores the number per D18. HEN-239 builds the sign-in code.
 
 ## D26: Interim key storage is two separate deploy-time secrets
 
