@@ -8,6 +8,7 @@
     "bundle": "expo export --platform android --output-dir dist",
     "typecheck": "tsc --noEmit",
     "doctor": "EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1 expo-doctor && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/expoVersionCheck.ts",
+    "payment-guard": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/paymentLinkGuard.ts",
     "test": "vitest run"
   },
   "dependencies": {
