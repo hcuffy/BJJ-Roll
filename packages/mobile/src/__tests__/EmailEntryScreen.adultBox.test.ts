@@ -9,7 +9,7 @@ import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { flattenStyle, renderScreen, textOf } from "./screenHarness";
 
-const ADULT = "I am 18 or older (optional)";
+const ADULT = "I am 18 or older";
 const HAVE_ACCOUNT = "Already have an account? Confirm in Account.";
 const NOTE = `Only needed to buy things later. ${HAVE_ACCOUNT}`;
 

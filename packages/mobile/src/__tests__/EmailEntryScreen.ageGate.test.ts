@@ -177,7 +177,7 @@ describe("EmailEntryScreen", () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
     await screen.pressRole("checkbox");
-    (screen.getByLabelText("I am 18 or older (optional)").props.onPress as () => void)();
+    (screen.getByLabelText("I am 18 or older").props.onPress as () => void)();
     await screen.rerender();
     await screen.press("Email me a sign-in link instead");
     await screen.press("Use a different email");

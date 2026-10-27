@@ -5,10 +5,10 @@ import { AGE16_CONFIRMATION_LABEL, AGE18_CONFIRMATION_LABEL, age16ConfirmedSchem
 export { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 export const AGE_CONFIRMATION_LABEL = AGE16_CONFIRMATION_LABEL;
 /**
- * Optional, unticked by default; only 18+ accounts can buy (canPurchase). The on-screen name adds "(optional)" (Vera item 1);
- * the statement the user confirms stays the shared AGE18_CONFIRMATION_LABEL that the consent record's text version names.
+ * Optional, unticked by default; only 18+ accounts can buy (canPurchase). The on-screen name is exactly the shared
+ * AGE18_CONFIRMATION_LABEL that the consent record's text version names (Henry, 27 Oct: no "(optional)" suffix).
  */
-export const AGE_ADULT_CONFIRMATION_LABEL = `${AGE18_CONFIRMATION_LABEL} (optional)`;
+export const AGE_ADULT_CONFIRMATION_LABEL = AGE18_CONFIRMATION_LABEL;
 /** Muted note under the 18+ box. Sign-up only reads it for new accounts, so point signed-up users to Account (Vera item 3, Henry Q3). */
 export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. Already have an account? Confirm in Account.";
 /** Hint for the 18+ box while it is disabled: it can only be ticked after the 16+ box (Vera item 2). */

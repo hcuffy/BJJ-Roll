@@ -78,7 +78,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     try {
       const screen = await startApp();
       await screen.pressRole("checkbox");
-      await screen.press("I am 18 or older (optional)");
+      await screen.press("I am 18 or older");
       await screen.changeText("Email", "new.member@example.test");
       await screen.press("Continue");
       await vi.advanceTimersByTimeAsync(30_000);
