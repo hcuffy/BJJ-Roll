@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_CONFIRMATION_TEXT_VERSION_ID, AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
@@ -110,11 +110,11 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     await environment?.stop();
   }, 30_000);
 
-  it("creates an account for a new Google user who ticked the age box, returning only a one-time code to the app", async () => {
+  it("creates an account for a new Google user who ticked the 16+ box, returning only a one-time code to the app", async () => {
     const usersBefore = await countRows("users");
     const { location, callbackResponse } = await signInWithGoogle(
       { subject: "google-sub-new", email: "new.google.member@example.com", emailVerified: true },
-      { additionalData: { ageConfirmed: true } },
+      { additionalData: { age16Confirmed: true, age18Confirmed: true } },
     );
 
     expect(location.href.startsWith(`${DEEP_LINK_CALLBACK_URL}?`)).toBe(true);
@@ -131,12 +131,21 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
       refresh_token: string | null;
     }>("SELECT provider_id, access_token, id_token, refresh_token FROM public.accounts WHERE user_id = $1", [userId]);
     expect(accounts.rows).toEqual([{ provider_id: "google", access_token: null, id_token: null, refresh_token: null }]);
+    // HEN-263: the same consent record as an email sign-up, with the 18+ answer sent by the app.
+    const consent = await current().pool.query(
+      "SELECT consent_type, text_version_id, age16_confirmed, age18_confirmed FROM public.consent_records WHERE user_id = $1",
+      [userId],
+    );
+    expect(consent.rows).toEqual([
+      { consent_type: "age_confirmation", text_version_id: AGE_CONFIRMATION_TEXT_VERSION_ID, age16_confirmed: true, age18_confirmed: true },
+    ]);
   });
 
   it.each([
     { name: "no age answer", additionalData: undefined },
-    { name: "ageConfirmed false", additionalData: { ageConfirmed: false } },
-    { name: "ageConfirmed as a string", additionalData: { ageConfirmed: "true" } },
+    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
+    { name: "16+ as a string", additionalData: { age16Confirmed: "true" } },
+    { name: "only the old ageConfirmed field", additionalData: { age16Confirmed: true, age18Confirmed: false } },
   ])("refuses a new Google account with $name: error back to the app, no user or session", async ({ additionalData }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions"), accounts: await countRows("accounts") };
     const { location } = await signInWithGoogle(
@@ -153,7 +162,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
 
   it("signs a returning Google user in again without asking the age question", async () => {
     const googleUser = { subject: "google-sub-returning", email: "returning.google.member@example.com", emailVerified: true };
-    const first = await signInWithGoogle(googleUser, { additionalData: { ageConfirmed: true } });
+    const first = await signInWithGoogle(googleUser, { additionalData: { age16Confirmed: true, age18Confirmed: false } });
     const { userId } = await exchangeForSession(first.location.searchParams.get("code") ?? "");
 
     const again = await signInWithGoogle(googleUser, {});
@@ -164,7 +173,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
   it("links Google to an existing email account when Google has verified the same address", async () => {
     const email = "email.first.member@example.com";
     const sendResponse = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in", ageConfirmed: true },
+      body: { email, type: "sign-in", age16Confirmed: true },
       ipAddress: "198.51.100.202",
     });
     expect(sendResponse.status).toBe(200);
@@ -188,13 +197,16 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
 
   it("does not link or create an account when Google has not verified an address that already has an account", async () => {
     const email = "unverified.clash@example.com";
-    const first = await signInWithGoogle({ subject: "google-sub-owner", email, emailVerified: true }, { additionalData: { ageConfirmed: true } });
+    const first = await signInWithGoogle(
+      { subject: "google-sub-owner", email, emailVerified: true },
+      { additionalData: { age16Confirmed: true, age18Confirmed: false } },
+    );
     const { userId: ownerId } = await exchangeForSession(first.location.searchParams.get("code") ?? "");
     const before = { users: await countRows("users"), accounts: await countRows("accounts") };
 
     const { location } = await signInWithGoogle(
       { subject: "google-sub-intruder", email, emailVerified: false },
-      { additionalData: { ageConfirmed: true } },
+      { additionalData: { age16Confirmed: true, age18Confirmed: false } },
     );
     expect(location.searchParams.get("code")).toBeNull();
     expect(location.searchParams.get("error")).toBe("account_not_linked");
@@ -205,7 +217,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
 
   it("rejects a sign-in redirect that is not a bjjroll:// deep link", async () => {
     const response = await postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "google", callbackURL: "https://evil.example.com/steal", disableRedirect: true, additionalData: { ageConfirmed: true } },
+      body: {
+        provider: "google",
+        callbackURL: "https://evil.example.com/steal",
+        disableRedirect: true,
+        additionalData: { age16Confirmed: true, age18Confirmed: false },
+      },
       ipAddress: "198.51.100.203",
     });
     expect(response.status).toBe(400);

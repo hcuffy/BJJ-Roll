@@ -1,6 +1,5 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
-import { APIError, getOAuthState, type createAuthMiddleware } from "better-auth/api";
-import { isSocialSignUpAgeConfirmed } from "./ageGate.js";
+import { getOAuthState, type createAuthMiddleware } from "better-auth/api";
+import { readSocialSignUpAgeAnswers, type SocialSignUpAgeAnswers } from "./ageGate.js";
 import {
   exchangeNativeAppleAuthorizationCode,
   openAppleRefreshToken,
@@ -29,12 +28,10 @@ interface UserCreateHookContext {
   readonly body?: unknown;
 }
 
-/** HEN-239: user-create hook. An Apple or Google sign-in that would create a user needs the same 17+ answer as email sign-up. */
-export async function requireSocialSignUpAgeConfirmation(hookContext: UserCreateHookContext | null | undefined): Promise<void> {
+/** HEN-239: in the user-create hook, the 16+ and 18+ answers of an Apple or Google sign-up (request body or OAuth state). */
+export async function socialSignUpAgeAnswers(hookContext: UserCreateHookContext | null | undefined): Promise<SocialSignUpAgeAnswers> {
   const oauthState = hookContext?.path?.startsWith("/callback/") ? await getOAuthState() : null;
-  if (!isSocialSignUpAgeConfirmed(hookContext?.path, hookContext?.body, oauthState)) {
-    throw new APIError("BAD_REQUEST", { code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
-  }
+  return readSocialSignUpAgeAnswers(hookContext?.path, hookContext?.body, oauthState);
 }
 
 function readAppleAuthorizationCode(body: Record<string, unknown>): string | null {

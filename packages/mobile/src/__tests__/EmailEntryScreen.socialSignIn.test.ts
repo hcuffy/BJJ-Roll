@@ -56,19 +56,32 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     expect(screen.queryByText("Continue with Google")).toBeNull();
   });
 
-  it("needs only the 17+ box: without it a tap explains and sends nothing; with it Google signs in", async () => {
+  it("needs only the 16+ box: without it a tap explains and sends nothing; with it Google signs in", async () => {
     const screen = await renderWith(["google"]);
 
-    expect(screen.getPressable("Continue with Google").props.accessibilityHint).toBe("Tick the 17 or older box first.");
+    expect(screen.getPressable("Continue with Google").props.accessibilityHint).toBe("Tick the 16 or older box first.");
     await screen.press("Continue with Google");
-    expect(screen.text()).toContain("Tick the box to confirm you are 17 or older.");
+    expect(screen.text()).toContain("Tick the box to confirm you are 16 or older.");
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
     expect(socialSignIn.browser.openAuthSessionAsync).not.toHaveBeenCalled();
 
-    await screen.pressRole("checkbox");
+    await screen.press("I am 16 or older");
+    expect(screen.getPressable("Continue with Google").props.accessibilityHint).toBeUndefined();
     await screen.press("Continue with Google");
 
     expect(backend.requests.map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/sign-in/social", "/api/auth/magic-link/exchange"]);
+    expect(backend.requests[0]?.body).toMatchObject({ additionalData: { age16Confirmed: true, age18Confirmed: false } });
+    expect(signedIn).toBe(1);
+  });
+
+  it("sends the 18+ box with Google the same way the email buttons do", async () => {
+    const screen = await renderWith(["google"]);
+
+    await screen.press("I am 16 or older");
+    await screen.press("I am 18 or older");
+    await screen.press("Continue with Google");
+
+    expect(backend.requests[0]?.body).toMatchObject({ additionalData: { age16Confirmed: true, age18Confirmed: true } });
     expect(signedIn).toBe(1);
   });
 
@@ -79,7 +92,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     });
     const screen = await renderWith(["google"]);
 
-    await screen.pressRole("checkbox");
+    await screen.press("I am 16 or older");
     await screen.press("Continue with Google");
 
     expect(screen.text()).toContain("We couldn't sign you in with Google. Sign in with your email instead.");

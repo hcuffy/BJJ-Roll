@@ -7,7 +7,7 @@ export interface AuthButtonProps {
   readonly onPress: () => void;
   /**
    * primary: the one lime pill per screen. secondary: surface-2 pill. tertiary: text-only, still 48dp tall.
-   * danger: red-orange pill with a dark text label, only for the confirm step of an action that cannot be undone.
+   * danger: red-orange pill with a dark text label, only for the confirm step of a destructive action (deletes or loses data).
    * dangerText: tertiary with a red-orange label, the entry point to a destructive action.
    */
   readonly variant?: "primary" | "secondary" | "tertiary" | "danger" | "dangerText";

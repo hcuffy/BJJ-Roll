@@ -42,7 +42,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
     return { users: row?.users ?? -1, sessions: row?.sessions ?? -1, accounts: row?.accounts ?? -1 };
   };
 
-  const startGoogleSignIn = async (ageConfirmed: boolean): Promise<StartedGoogleSignIn> => {
+  const startGoogleSignIn = async (age16Confirmed: boolean): Promise<StartedGoogleSignIn> => {
     nextIp += 1;
     const ipAddress = `198.51.100.${nextIp}`;
     const response = await postAuthJson(current().app, "/sign-in/social", {
@@ -51,7 +51,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
         callbackURL: DEEP_LINK_CALLBACK_URL,
         errorCallbackURL: DEEP_LINK_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: ageConfirmed ? { ageConfirmed: true } : undefined,
+        additionalData: age16Confirmed ? { age16Confirmed: true, age18Confirmed: false } : undefined,
       },
       ipAddress,
     });
@@ -69,8 +69,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
   const stateQuery = (started: StartedGoogleSignIn): string =>
     `code=fake-google-code&state=${encodeURIComponent(started.authorizationUrl.searchParams.get("state") ?? "")}`;
 
-  const signInWithGoogle = async (googleUser: FakeGoogleUser, ageConfirmed = true): Promise<URL> => {
-    const started = await startGoogleSignIn(ageConfirmed);
+  const signInWithGoogle = async (googleUser: FakeGoogleUser, age16Confirmed = true): Promise<URL> => {
+    const started = await startGoogleSignIn(age16Confirmed);
     nextGoogleUser = googleUser;
     return await googleRedirectBack(started, stateQuery(started));
   };

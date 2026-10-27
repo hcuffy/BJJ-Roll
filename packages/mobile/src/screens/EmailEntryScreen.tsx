@@ -1,40 +1,44 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
+import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { signInWithProvider, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { textStyles } from "../theme/tokens";
-import { AgeCheckbox } from "./AgeCheckbox";
+import { AgeConfirmationFields } from "./AgeConfirmationFields";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { type LinkErrorCardProps, LinkErrorCard } from "./LinkErrorCard";
+import { LinkSentScreen } from "./LinkSentScreen";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
-import { missingHint } from "./missingHint";
-import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
+import { RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
-export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
-/** Calm note when the backend could not be reached (copy per Vera, HEN-285). Cleared by the next submit attempt. */
-export const SERVER_UNREACHABLE_NOTE = "Can't reach the server right now. Check your connection and try again.";
+export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 16 or older.";
+export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
-  readonly onCodeSent: (email: string) => void;
+  readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
+  /** Why the link failed; see LinkErrorCard. */
+  readonly linkErrorReason?: LinkErrorCardProps["reason"];
   readonly onClearLinkError?: () => void;
   /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
   readonly onClearAccountNotice?: () => void;
-  /** Apple and Google buttons to show (HEN-239); none when empty. */
-  readonly socialProviders?: readonly SocialProvider[];
-  readonly socialSignIn?: SocialSignInDependencies;
-  readonly onSignedIn?: () => void;
   /** The backend could not be reached (startup or sign-in link); shows a muted note under the email field. */
   readonly serverUnreachable?: boolean;
   readonly onClearServerUnreachable?: () => void;
+  /** Apple and Google buttons to show (HEN-239); none without `socialSignIn`. */
+  readonly socialProviders?: readonly SocialProvider[];
+  readonly socialSignIn?: SocialSignInDependencies;
+  /** A social sign-in finished with a session. */
+  readonly onSignedIn?: () => void;
 }
 
 type Sending = "code" | "link" | SocialProvider | null;
@@ -43,26 +47,32 @@ export function EmailEntryScreen({
   client,
   onCodeSent,
   linkError = null,
+  linkErrorReason = null,
   onClearLinkError,
   accountNotice = null,
   onClearAccountNotice,
+  serverUnreachable = false,
+  onClearServerUnreachable,
   socialProviders = [],
   socialSignIn,
   onSignedIn,
-  serverUnreachable = false,
-  onClearServerUnreachable,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [age16Confirmed, setAge16Confirmed] = useState(false);
+  const [age18Confirmed, setAge18Confirmed] = useState(false);
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
+  // False only when this submit also brought up a new email error, which is then the one announced (Vera items 8 and delta 6).
+  const [announceAgeError, setAnnounceAgeError] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  // This screen's own send failed on the network; App's serverUnreachable covers startup and links.
+  const [offline, setOffline] = useState(false);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
-  const ready = ageConfirmed && isEmailAddress(email);
-  const sendHint = missingHint(isEmailAddress(email), ageConfirmed);
+  const ready = age16Confirmed && isEmailAddress(email);
+  const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -76,6 +86,8 @@ export function EmailEntryScreen({
       setAgeError(result.message);
     } else if (result.reason === "invalidEmail") {
       setEmailError(result.message);
+    } else if (result.reason === "network") {
+      setOffline(true);
     } else {
       setFormError(result.message);
     }
@@ -85,24 +97,27 @@ export function EmailEntryScreen({
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
     setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
-    setAgeError(ageConfirmed ? null : TICK_AGE_BOX_MESSAGE);
-    return emailValid && ageConfirmed;
+    // An email error already showing from blur is not read again, so the age error must be heard instead.
+    setAnnounceAgeError(emailValid || emailError !== null);
+    setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
+    return emailValid && age16Confirmed;
   };
 
   const send = async (kind: "code" | "link") => {
     startAction();
     onClearServerUnreachable?.();
+    setOffline(false);
     if (sending !== null || !validate()) {
       return;
     }
     setSending(kind);
     const action = kind === "code" ? sendEmailCode : sendMagicLink;
-    const result = await action(client, { email, ageConfirmed });
+    const result = await action(client, { email, age16Confirmed, age18Confirmed });
     setSending(null);
     if (!result.ok) {
       showFailure(result);
     } else if (kind === "code") {
-      onCodeSent(email.trim());
+      onCodeSent(email.trim(), age18Confirmed);
     } else if (linkSentTo === null) {
       setLinkSentTo(email.trim());
       linkCooldown.restart();
@@ -112,20 +127,21 @@ export function EmailEntryScreen({
     }
   };
 
-  /** Apple or Google: only the 17+ box is needed (the provider supplies the email). */
+  /** Social sign-in needs only the 16+ box (the provider gives the email) and sends the 18+ answer like the email buttons. */
   const signInWithSocial = async (provider: SocialProvider) => {
     startAction();
     setEmailError(null);
     if (sending !== null || !socialSignIn) {
       return;
     }
-    if (!ageConfirmed) {
+    if (!age16Confirmed) {
+      setAnnounceAgeError(true);
       setAgeError(TICK_AGE_BOX_MESSAGE);
       return;
     }
     setAgeError(null);
     setSending(provider);
-    const result = await signInWithProvider(socialSignIn, provider, ageConfirmed);
+    const result = await signInWithProvider(socialSignIn, provider, { age16Confirmed, age18Confirmed });
     setSending(null);
     if (result.ok) {
       onSignedIn?.();
@@ -136,51 +152,27 @@ export function EmailEntryScreen({
 
   if (linkSentTo !== null) {
     return (
-      <AuthScreenLayout>
-        <Text accessibilityRole="header" style={textStyles.display}>
-          Check your email
-        </Text>
-        <View style={authStyles.card}>
-          <Text style={authStyles.cardIcon} accessibilityElementsHidden importantForAccessibility="no">
-            ✉
-          </Text>
-          <View style={authStyles.cardBody}>
-            <StatusText message={`We sent a sign-in link to ${linkSentTo}. Open it on this phone.`} style={authStyles.notice} />
-            <Text style={textStyles.bodyMuted}>Link expires in {MAGIC_LINK_EXPIRY_MINUTES} minutes.</Text>
-            <StatusText message={notice} style={textStyles.bodyMuted} />
-          </View>
-        </View>
-        <StatusText message={formError} style={authStyles.fieldError} />
-        <View style={authStyles.actions}>
-          <AuthButton
-            title={linkCooldown.secondsLeft > 0 && sending !== "link" ? `Resend in ${formatCountdown(linkCooldown.secondsLeft)}` : "Resend link"}
-            variant="secondary"
-            disabled={linkCooldown.secondsLeft > 0}
-            loading={sending === "link"}
-            loadingTitle="Sending link…"
-            onPress={() => void send("link")}
-          />
-          <AuthButton
-            title="Use a different email"
-            variant="tertiary"
-            disabled={sending !== null}
-            onPress={() => {
-              startAction();
-              setLinkSentTo(null);
-            }}
-          />
-        </View>
-      </AuthScreenLayout>
+      <LinkSentScreen
+        email={linkSentTo}
+        notice={notice}
+        offline={serverUnreachable || offline}
+        formError={formError}
+        cooldownSecondsLeft={linkCooldown.secondsLeft}
+        sending={sending === "link"}
+        canUseDifferentEmail={sending === null}
+        onResend={() => void send("link")}
+        onUseDifferentEmail={() => {
+          startAction();
+          setOffline(false);
+          setLinkSentTo(null);
+        }}
+      />
     );
   }
 
   return (
     <AuthScreenLayout>
-      {linkError ? (
-        <View style={[authStyles.card, authStyles.errorCard]}>
-          <StatusText message={linkError} style={authStyles.cardError} />
-        </View>
-      ) : null}
+      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
       {accountNotice ? (
         <View style={authStyles.card}>
           <StatusText message={accountNotice} style={authStyles.notice} />
@@ -217,20 +209,26 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} announce="polite" />
-      <View>
-        <AgeCheckbox
-          label={AGE_CONFIRMATION_LABEL}
-          checked={ageConfirmed}
-          hint={ageError ?? undefined}
-          onPress={() => {
-            startAction();
-            setAgeConfirmed(!ageConfirmed);
-            setAgeError(null);
-          }}
-        />
-        <StatusText message={ageError} style={authStyles.fieldError} />
-      </View>
+      <ServerUnreachableNote visible={serverUnreachable || offline} />
+      <AgeConfirmationFields
+        age16Confirmed={age16Confirmed}
+        age18Confirmed={age18Confirmed}
+        ageError={ageError}
+        announceAgeError={announceAgeError}
+        onPress16={() => {
+          startAction();
+          // Unticking 16+ also unticks 18+; ticking 18+ never ticks 16+ for the user (Vera item 2).
+          if (age16Confirmed) {
+            setAge18Confirmed(false);
+          }
+          setAge16Confirmed(!age16Confirmed);
+          setAgeError(null);
+        }}
+        onPress18={() => {
+          startAction();
+          setAge18Confirmed(!age18Confirmed);
+        }}
+      />
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
@@ -255,7 +253,7 @@ export function EmailEntryScreen({
         {socialSignIn ? (
           <SocialSignInButtons
             providers={socialProviders}
-            ageConfirmed={ageConfirmed}
+            age16Confirmed={age16Confirmed}
             sending={sending}
             onPress={(provider) => void signInWithSocial(provider)}
           />

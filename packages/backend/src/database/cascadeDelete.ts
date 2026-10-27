@@ -32,6 +32,11 @@ export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = 
     description: "Deletes linked provider account rows via accounts.user_id ON DELETE CASCADE.",
   },
   {
+    table: "consent_records",
+    mechanism: "foreign_key_cascade",
+    description: "Deletes the age confirmation consent records via consent_records.user_id ON DELETE CASCADE (HEN-263).",
+  },
+  {
     table: "users",
     mechanism: "primary_row",
     description: "Deletes the owner user row in public.users under owner RLS.",

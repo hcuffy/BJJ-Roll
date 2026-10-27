@@ -1,20 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { expo } from "@better-auth/expo";
-import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { emailOTP, magicLink } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { Context, Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
-import { ageGateRefusalForNewUser } from "./ageGate.js";
+import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
+import { enqueueSignInEmail } from "./signInEmailQueue.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
   DEEP_LINK_SCHEME,
@@ -52,8 +50,8 @@ import { buildSocialProviders, type SocialProviderConfig } from "./socialProvide
 import {
   afterAuthRequest,
   createAppleSignInCapture,
-  requireSocialSignUpAgeConfirmation,
   revokeSealedAppleRefreshToken,
+  socialSignUpAgeAnswers,
   type AuthEventLogger,
 } from "./socialSignInHooks.js";
 
@@ -119,7 +117,12 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     telemetry: betterAuthTelemetryDisabledConfig,
     logger: options.logger ?? { disabled: true },
     trustedOrigins: [`${DEEP_LINK_SCHEME}://`, `${DEEP_LINK_SCHEME}://*`, baseURL, ...(options.trustedOrigins ?? [])],
-    database: createEncryptedRlsAuthAdapter({ pool: options.pool, codec }),
+    database: createEncryptedRlsAuthAdapter({
+      pool: options.pool,
+      codec,
+      // HEN-263: the consent record is written in the user insert's own transaction, so neither row can exist without the other.
+      onUserCreated: (transaction, user) => storeAgeConfirmationInUserTransaction(transaction, codec, user),
+    }),
     user: {
       modelName: "users",
       additionalFields: {
@@ -145,7 +148,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     socialProviders: buildSocialProviders(socialProviderConfig, appleSignIn.appleTokenClient?.clientSecretFor),
     // Provider tokens are not stored (see authCodecTransform), so the endpoints that hand them out or refresh them stay off.
     disabledPaths: ["/refresh-token", "/get-access-token", "/account-info"],
-    databaseHooks: { user: { create: { before: async (_user, hookContext) => await requireSocialSignUpAgeConfirmation(hookContext) } } },
     verification: {
       modelName: "verifications",
       additionalFields: {
@@ -164,16 +166,21 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       database: { generateId: () => randomUUID() },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send;
+          // HEN-239: an Apple or Google sign-up needs the same tick, sent with the sign-in request.
+          before: async (user, hookContext) => {
+            await assertSignUpAgeConfirmation(options.pool, codec, { email: user.email, social: await socialSignUpAgeAnswers(hookContext) });
+          },
+        },
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
         await refuseUnsafeAppleIdToken(middlewareContext, options.pool);
-        const ageGateRefusal = await ageGateRefusalForNewUser(middlewareContext.path, middlewareContext.body, (email) =>
-          middlewareContext.context.internalAdapter.findUserByEmail(email),
-        );
-        if (ageGateRefusal) {
-          return ageGateRefusal;
-        }
         // Over HTTP, check-verification-otp may only test sign-in codes: a public check of a delete code would be a guessing oracle
         // outside the DELETE /account try budget.
         if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
@@ -191,6 +198,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
           }
+          // HEN-263: no refusal here. Every email gets the same answer; the 16+ check runs when the account is created.
+          if (isAccountCreatingSend(middlewareContext.path, body) && middlewareContext.request) {
+            await recordPendingAgeAnswers(options.pool, codec, body);
+          }
         }
       }),
       after: createAuthMiddleware(async (middlewareContext) => await afterAuthRequest(middlewareContext, appleSignIn)),
@@ -203,18 +214,22 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         allowedAttempts: OTP_MAX_ATTEMPTS,
         generateOTP: () => generateCsprngOtpCode(),
         storeOTP: { hash: (otp) => Promise.resolve(codec.hashOtpCode(otp)) },
-        sendVerificationOTP: ({ email, otp, type }) =>
-          options.emailSender.sendOneTimeCode({
-            to: email,
-            code: otp,
-            expiresInMinutes: OTP_EXPIRY_MINUTES,
-            ...(type === "email-verification" ? { purpose: "account_deletion" as const } : {}),
-          }),
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          const input = { to: email, code: otp, expiresInMinutes: OTP_EXPIRY_MINUTES };
+          if (type === "email-verification") {
+            // Account-deletion codes come from POST /account/delete-code, a signed-in server call: it still waits for the send.
+            await options.emailSender.sendOneTimeCode({ ...input, purpose: "account_deletion" });
+            return;
+          }
+          enqueueSignInEmail(() => options.emailSender.sendOneTimeCode(input));
+        },
       }),
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
         storeToken: { type: "custom-hasher", hash: (token) => Promise.resolve(codec.hashMagicLinkToken(token)) },
-        sendMagicLink: ({ email, url }) => options.emailSender.sendMagicLink({ to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES }),
+        sendMagicLink: ({ email, url }) => {
+          enqueueSignInEmail(() => options.emailSender.sendMagicLink({ to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES }));
+        },
       }),
       createMagicLinkExchangePlugin({ pool: options.pool, codec }),
     ],
@@ -252,28 +267,4 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       }
     },
   };
-}
-
-export function readSocketAddress(context: Context): string | undefined {
-  try {
-    return getConnInfo(context).remote.address;
-  } catch {
-    return undefined;
-  }
-}
-
-// 32 KiB covers an email, a one-time code, and a short deep link, and still rejects oversized auth bodies.
-export const AUTH_REQUEST_BODY_LIMIT_BYTES = 32 * 1024;
-
-export function mountAuthRoutes(app: Hono, auth: Pick<AuthInstance, "handler">): void {
-  app.use(
-    `${AUTH_BASE_PATH}/*`,
-    bodyLimit({
-      maxSize: AUTH_REQUEST_BODY_LIMIT_BYTES,
-      onError: (context) => context.text("Payload Too Large", 413),
-    }),
-  );
-  app.on(["GET", "POST"], `${AUTH_BASE_PATH}/*`, async (context) => {
-    return await auth.handler(context.req.raw, { remoteAddress: readSocketAddress(context) });
-  });
 }

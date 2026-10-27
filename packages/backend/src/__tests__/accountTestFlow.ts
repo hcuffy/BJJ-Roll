@@ -37,7 +37,7 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
 
   const sendOtp = async (email: string, ipAddress: string): Promise<void> => {
     const response = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in", ageConfirmed: true },
+      body: { email, type: "sign-in", age16Confirmed: true },
       ipAddress,
     });
     expect(response.status).toBe(200);

@@ -1,4 +1,13 @@
-import { accountExportSchema, socialProviderNames, type AccountExport, type SocialProviderName } from "@bjj-roll/shared";
+import {
+  AGE_CONFIRMATION_TEXT_VERSION_ID,
+  accountExportSchema,
+  adultConfirmationRequestSchema,
+  socialProviderNames,
+  type AccountExport,
+  type AgeConfirmationStatus,
+  type SocialProviderName,
+} from "@bjj-roll/shared";
+import { randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { handleDeleteAccount, handleSendAccountDeletionCode } from "./accountDeletion.js";
@@ -49,13 +58,14 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
   if (!authenticatedUserId) {
     return context.json({ error: "Authentication required" }, 401);
   }
-  const row = await withUserContext(options.db, authenticatedUserId, (transaction) =>
-    transaction
+  const { row, consentRecords } = await withUserContext(options.db, authenticatedUserId, async (transaction) => ({
+    row: await transaction
       .selectFrom("users")
       .select(["id", "emailCiphertext", "keyVersion", "handle", "createdAt"])
       .where("id", "=", authenticatedUserId)
       .executeTakeFirst(),
-  );
+    consentRecords: await selectAgeConfirmationRecords(transaction, authenticatedUserId),
+  }));
   if (!row) {
     return context.json({ error: "User not found" }, 404);
   }
@@ -74,17 +84,81 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
       createdAt: formatTimestamp(row.createdAt),
       linkedProviders,
     },
+    consentRecords: consentRecords.map((record) => ({
+      ...record,
+      acceptedAt: formatTimestamp(record.acceptedAt),
+      withdrawnAt: record.withdrawnAt === null ? null : formatTimestamp(record.withdrawnAt),
+    })),
   });
   options.logAccountEvent("account_exported", authenticatedUserId);
   context.header("Cache-Control", "no-store");
   return context.json(exported, 200);
 }
 
-/** GET /account/export, POST /account/delete-code and DELETE /account, for the signed-in user only (HEN-65). */
+function selectAgeConfirmationRecords(transaction: Kysely<BjjRollDatabase>, userId: string) {
+  return transaction
+    .selectFrom("consentRecords")
+    .select(["id", "userId", "consentType", "textVersionId", "age16Confirmed", "age18Confirmed", "acceptedAt", "withdrawnAt"])
+    .where("userId", "=", userId)
+    .where("consentType", "=", "age_confirmation")
+    .orderBy("acceptedAt")
+    .orderBy("id")
+    .execute();
+}
+
+/** HEN-263: the latest age record decides; no record (or a sign-up without the 18+ tick) means no purchases. */
+async function readAgeConfirmationStatus(transaction: Kysely<BjjRollDatabase>, userId: string): Promise<AgeConfirmationStatus> {
+  const records = await selectAgeConfirmationRecords(transaction, userId);
+  const latest = records.at(-1);
+  const age18Confirmed = latest?.age18Confirmed === true && latest.withdrawnAt === null;
+  return { age16Confirmed: latest?.age16Confirmed === true, age18Confirmed, canPurchase: age18Confirmed };
+}
+
+async function handleReadAgeConfirmation(context: Context, options: AccountRoutesOptions): Promise<Response> {
+  const authenticatedUserId = await options.resolveAuthenticatedUserId(context);
+  if (!authenticatedUserId) {
+    return context.json({ error: "Authentication required" }, 401);
+  }
+  const status = await withUserContext(options.db, authenticatedUserId, (transaction) => readAgeConfirmationStatus(transaction, authenticatedUserId));
+  context.header("Cache-Control", "no-store");
+  return context.json(status, 200);
+}
+
+/** A later "I am 18 or older" is a new record with its own timestamp; records are never updated, so it cannot be undone. */
+async function handleConfirmAdult(context: Context, options: AccountRoutesOptions): Promise<Response> {
+  const authenticatedUserId = await options.resolveAuthenticatedUserId(context);
+  if (!authenticatedUserId) {
+    return context.json({ error: "Authentication required" }, 401);
+  }
+  const body: unknown = await context.req.json().catch(() => undefined);
+  if (!adultConfirmationRequestSchema.safeParse(body).success) {
+    return context.json({ error: "Invalid request" }, 400);
+  }
+  const status = await withUserContext(options.db, authenticatedUserId, async (transaction) => {
+    await transaction
+      .insertInto("consentRecords")
+      .values({
+        id: randomUUID(),
+        userId: authenticatedUserId,
+        consentType: "age_confirmation",
+        textVersionId: AGE_CONFIRMATION_TEXT_VERSION_ID,
+        age16Confirmed: true,
+        age18Confirmed: true,
+      })
+      .execute();
+    return readAgeConfirmationStatus(transaction, authenticatedUserId);
+  });
+  context.header("Cache-Control", "no-store");
+  return context.json(status, 200);
+}
+
+/** GET /account/export, GET/POST /account/age-confirmation, POST /account/delete-code and DELETE /account, for the signed-in user only (HEN-65). */
 export function createAccountRoutes(input: AccountRoutesInput): Hono {
   const options: AccountRoutesOptions = { ...input, logAccountEvent: input.logAccountEvent ?? defaultLogAccountEvent };
   const routes = new Hono();
   routes.get("/account/export", (context) => handleExportAccount(context, options));
+  routes.get("/account/age-confirmation", (context) => handleReadAgeConfirmation(context, options));
+  routes.post("/account/age-confirmation", (context) => handleConfirmAdult(context, options));
   routes.post("/account/delete-code", (context) => handleSendAccountDeletionCode(context, options));
   routes.delete("/account", (context) => handleDeleteAccount(context, options));
   return routes;

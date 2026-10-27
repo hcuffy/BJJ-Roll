@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "./ageConfirmation";
+import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import type { ExpoConfigWithExtra } from "./authConfig";
 import {
@@ -70,22 +70,29 @@ export interface SocialSignInDependencies {
 const ignored: ActionResult = { ok: false, reason: "ignored", message: null };
 const ageRequired: ActionResult = { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
 
-/** Signs in with Apple (native sheet on iOS) or Google (browser). Nothing is sent unless the 17+ box is ticked. Closing the sheet is not an error. */
+/** The age answers the backend stores for a new account (HEN-263); sent only once the 16+ box is ticked. */
+interface SocialAgeAnswers {
+  readonly age16Confirmed: true;
+  readonly age18Confirmed: boolean;
+}
+
+/** Signs in with Apple (native sheet on iOS) or Google (browser). Nothing is sent unless the 16+ box is ticked. Closing the sheet is not an error. */
 export async function signInWithProvider(
   dependencies: SocialSignInDependencies,
   provider: SocialProvider,
-  ageConfirmed: boolean,
+  answers: AgeAnswers,
 ): Promise<ActionResult> {
-  if (!ageConfirmed) {
+  if (!isAgeConfirmed(answers)) {
     return ageRequired;
   }
+  const ages: SocialAgeAnswers = { age16Confirmed: true, age18Confirmed: answers.age18Confirmed === true };
   if (provider === "apple" && dependencies.platform === "ios" && dependencies.appleNative) {
-    return await signInWithAppleNative(dependencies.client, dependencies.appleNative);
+    return await signInWithAppleNative(dependencies.client, dependencies.appleNative, ages);
   }
-  return await signInWithBrowser(dependencies, provider);
+  return await signInWithBrowser(dependencies, provider, ages);
 }
 
-async function signInWithAppleNative(client: MobileAuthClient, appleNative: AppleNativeSignIn): Promise<ActionResult> {
+async function signInWithAppleNative(client: MobileAuthClient, appleNative: AppleNativeSignIn, ages: SocialAgeAnswers): Promise<ActionResult> {
   // Apple gets SHA-256(nonce); the backend gets the raw nonce, checks the hash and refuses a nonce it has seen before.
   const nonce = appleNative.createNonce();
   let credential: Awaited<ReturnType<AppleNativeSignIn["signInAsync"]>>;
@@ -103,12 +110,12 @@ async function signInWithAppleNative(client: MobileAuthClient, appleNative: Appl
     body: {
       provider: "apple",
       idToken: { token: credential.identityToken, nonce },
-      additionalData: { ageConfirmed: true, ...(credential.authorizationCode ? { appleAuthorizationCode: credential.authorizationCode } : {}) },
+      additionalData: { ...ages, ...(credential.authorizationCode ? { appleAuthorizationCode: credential.authorizationCode } : {}) },
     },
   });
 }
 
-async function signInWithBrowser(dependencies: SocialSignInDependencies, provider: SocialProvider): Promise<ActionResult> {
+async function signInWithBrowser(dependencies: SocialSignInDependencies, provider: SocialProvider, ages: SocialAgeAnswers): Promise<ActionResult> {
   let authorizationUrl: unknown;
   try {
     const { data, error } = await dependencies.client.$fetch<{ url?: unknown }>("/sign-in/social", {
@@ -119,7 +126,7 @@ async function signInWithBrowser(dependencies: SocialSignInDependencies, provide
         callbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         errorCallbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: { ageConfirmed: true },
+        additionalData: ages,
       },
     });
     if (error) {

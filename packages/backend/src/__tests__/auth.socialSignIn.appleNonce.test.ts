@@ -66,7 +66,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Apple native sig
   const postAppleIdToken = (idToken: { token: string; nonce?: unknown }): Promise<Response> => {
     nextIp += 1;
     return postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken, additionalData: { ageConfirmed: true } },
+      body: { provider: "apple", idToken, additionalData: { age16Confirmed: true, age18Confirmed: false } },
       ipAddress: `198.51.100.${nextIp}`,
     });
   };

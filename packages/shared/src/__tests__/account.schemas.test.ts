@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { accountDeletionCodeResponseSchema, accountDeletionRequestSchema, accountDeletionResponseSchema, accountExportSchema } from "../index.js";
+import {
+  accountDeletionCodeResponseSchema,
+  accountDeletionRequestSchema,
+  accountDeletionResponseSchema,
+  accountExportSchema,
+  adultConfirmationRequestSchema,
+  AGE_CONFIRMATION_TEXT_VERSION_ID,
+  ageConfirmationStatusSchema,
+} from "../index.js";
 
 const userId = "01964c3a-7f00-7000-8000-000000000001";
 const timestamp = "2026-10-25T08:00:00.000Z";
@@ -7,6 +15,18 @@ const timestamp = "2026-10-25T08:00:00.000Z";
 const validExport = {
   exportedAt: timestamp,
   user: { id: userId, email: "member@example.test", handle: "roller_1", createdAt: timestamp, linkedProviders: [] },
+  consentRecords: [
+    {
+      id: "01964c3a-7f00-7000-8000-000000000002",
+      userId,
+      consentType: "age_confirmation",
+      textVersionId: AGE_CONFIRMATION_TEXT_VERSION_ID,
+      age16Confirmed: true,
+      age18Confirmed: false,
+      acceptedAt: timestamp,
+      withdrawnAt: null,
+    },
+  ],
 };
 
 describe("account export and deletion schemas (HEN-65)", () => {
@@ -51,5 +71,25 @@ describe("account export and deletion schemas (HEN-65)", () => {
   it("accepts only sent: true as the delete-code response", () => {
     expect(accountDeletionCodeResponseSchema.parse({ sent: true })).toEqual({ sent: true });
     expect(accountDeletionCodeResponseSchema.safeParse({ sent: true, code: "123456" }).success).toBe(false);
+  });
+
+  it("requires the consent records in the export (HEN-263)", () => {
+    const withoutConsentRecords: Partial<typeof validExport> = { ...validExport };
+    delete withoutConsentRecords.consentRecords;
+    expect(accountExportSchema.safeParse(withoutConsentRecords).success).toBe(false);
+    expect(accountExportSchema.parse({ ...validExport, consentRecords: [] }).consentRecords).toEqual([]);
+  });
+
+  it("age confirmation status carries canPurchase next to both confirmations, nothing else (HEN-263)", () => {
+    const status = { age16Confirmed: true, age18Confirmed: false, canPurchase: false };
+    expect(ageConfirmationStatusSchema.parse(status)).toEqual(status);
+    expect(ageConfirmationStatusSchema.safeParse({ ...status, birthdate: "2000-01-01" }).success).toBe(false);
+  });
+
+  it("the later 18+ confirmation accepts only age18Confirmed: true, so there is no way to un-confirm (HEN-263)", () => {
+    expect(adultConfirmationRequestSchema.parse({ age18Confirmed: true })).toEqual({ age18Confirmed: true });
+    for (const body of [{}, { age18Confirmed: false }, { age18Confirmed: "true" }, { age18Confirmed: true, userId }]) {
+      expect(adultConfirmationRequestSchema.safeParse(body).success).toBe(false);
+    }
   });
 });

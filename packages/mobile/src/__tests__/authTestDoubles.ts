@@ -10,21 +10,35 @@ export interface RecordedRequest {
   readonly body: Record<string, unknown> | null;
 }
 
-/** In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use. */
+/**
+ * In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use.
+ * Keys in `failingKeys` can still be read, but async writes and deletes reject, as a locked or broken keystore would.
+ */
 export function createMemorySecureStore() {
   const items = new Map<string, string>();
+  const failingKeys = new Set<string>();
+  const failIfBroken = (key: string) => (failingKeys.has(key) ? Promise.reject(new Error("SecureStore write failed")) : null);
   return {
     items,
+    failingKeys,
     getItem: (key: string) => items.get(key) ?? null,
     getItemAsync: (key: string) => Promise.resolve(items.get(key) ?? null),
     setItem: (key: string, value: string) => {
       items.set(key, value);
     },
     setItemAsync: (key: string, value: string) => {
+      const broken = failIfBroken(key);
+      if (broken) {
+        return broken;
+      }
       items.set(key, value);
       return Promise.resolve();
     },
     deleteItemAsync: vi.fn((key: string) => {
+      const broken = failIfBroken(key);
+      if (broken) {
+        return broken;
+      }
       items.delete(key);
       return Promise.resolve();
     }),
@@ -48,6 +62,18 @@ export const TEST_ACCOUNT_EXPORT = {
     createdAt: "2026-10-01T08:00:00.000Z",
     linkedProviders: [],
   },
+  consentRecords: [
+    {
+      id: "01964c3a-7f00-7000-8000-000000000002",
+      userId: "01964c3a-7f00-7000-8000-000000000001",
+      textVersionId: "age-confirmation-v1",
+      acceptedAt: "2026-10-01T08:00:00.000Z",
+      withdrawnAt: null,
+      consentType: "age_confirmation",
+      age16Confirmed: true,
+      age18Confirmed: false,
+    },
+  ],
 } as const;
 
 /** Where the fake backend's browser sign-in starts (a stand-in for Google's or Apple's consent page). */
@@ -57,6 +83,7 @@ export const TEST_PROVIDER_AUTHORIZATION_URL = "https://provider.example.test/au
 /** `nativeSignInRefusal`: how the backend answers a native (id token) social sign-in instead of signing in. */
 export function createFakeBackend(options: { nativeSignInRefusal?: { status: number; body: unknown } } = {}) {
   const requests: RecordedRequest[] = [];
+  let adultConfirmed = false;
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const bodyText = request.method === "GET" ? "" : await request.text();
@@ -86,9 +113,23 @@ export function createFakeBackend(options: { nativeSignInRefusal?: { status: num
       return jsonResponse(signedIn ? { user: { id: "user-1" }, session: { id: "session-1", expiresAt: "2099-01-01T00:00:00.000Z" } } : null);
     }
     // Account routes (HEN-65) sit outside /api/auth and need the session cookie.
-    if (pathname === "/account/export" || pathname === "/account" || pathname === "/account/delete-code") {
+    if (
+      pathname === "/account/export" ||
+      pathname === "/account" ||
+      pathname === "/account/delete-code" ||
+      pathname === "/account/age-confirmation"
+    ) {
       if (!signedIn) {
         return jsonResponse({ error: "Authentication required" }, {}, 401);
+      }
+      if (pathname === "/account/age-confirmation") {
+        if (request.method === "POST") {
+          if (requests.at(-1)?.body?.age18Confirmed !== true) {
+            return jsonResponse({ error: "Invalid request" }, {}, 400);
+          }
+          adultConfirmed = true;
+        }
+        return jsonResponse({ age16Confirmed: true, age18Confirmed: adultConfirmed, canPurchase: adultConfirmed });
       }
       if (pathname === "/account/delete-code") {
         return jsonResponse({ sent: true });

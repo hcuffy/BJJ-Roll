@@ -54,6 +54,9 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
         case "accounts": {
           return countOf("public.accounts WHERE user_id = $1", [userId]);
         }
+        case "consent_records": {
+          return countOf("public.consent_records WHERE user_id = $1", [userId]);
+        }
         case "verifications": {
           return countOf("public.verifications WHERE user_id = $1 OR identifier = ANY($2::text[])", [
             userId,

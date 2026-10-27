@@ -1,3 +1,4 @@
+import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, type EmailEntry } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 
@@ -19,7 +20,7 @@ export const MAGIC_LINK_EXPIRY_MINUTES = 15;
 export const FAILURE_MESSAGES = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
-  invalidLink: "This sign-in link is invalid or has expired. Request a new one.",
+  invalidLink: "This sign-in link has expired or was already used. Send a new one.",
   // HEN-239 (Sara): neutral, so the answer never says whether an email has an account.
   accountNotLinked: "We couldn't sign you in this way. Sign in with your email instead.",
   network: "No connection. Check your internet and try again.",
@@ -30,7 +31,7 @@ const INVALID_CODE_ERRORS = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATT
 /** The backend's refusal of a social sign-in whose email the provider did not verify (one answer for every email). */
 const OAUTH_LINK_ERROR_CODE = "OAUTH_LINK_ERROR";
 const HTTP_TOO_MANY_REQUESTS = 429;
-/** Error code of the backend's 400 when a new account is requested without `ageConfirmed: true` (HEN-77). */
+/** Error code of the backend's refusal when a new account's latest send had no `age16Confirmed: true` (HEN-77, HEN-263). */
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 const OTP_PATTERN = /^\d{6}$/u;
 
@@ -86,7 +87,7 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
   return failure("unknown");
 }
 
-/** Emails a 6-digit sign-in code. No request is sent unless the 17+ box is ticked. */
+/** Emails a 6-digit sign-in code. No request is sent unless the 16+ box is ticked. */
 export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -94,11 +95,11 @@ export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/email-otp/send-verification-otp",
-    body: { email: entry.email.trim(), type: "sign-in", ageConfirmed: true },
+    body: { email: entry.email.trim(), type: "sign-in", age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
   });
 }
 
-/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 17+ box is ticked. */
+/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 16+ box is ticked. */
 export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -106,7 +107,7 @@ export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/sign-in/magic-link",
-    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ageConfirmed: true },
+    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
   });
 }
 
@@ -126,7 +127,7 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
   }
   return await postAuth(client, {
     path: "/sign-in/email-otp",
-    body: { email: entry.email.trim(), otp: code, ageConfirmed: true },
+    body: { email: entry.email.trim(), otp: code, age16Confirmed: true },
     clientErrorReason: "invalidCode",
   });
 }
@@ -146,8 +147,17 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth" || parsed.pathname === SOCIAL_SIGN_IN_CALLBACK_PATH) {
     return { ok: false, reason: "ignored", message: null };
   }
-  if (parsed.searchParams.has("error")) {
+  // A failed link carries a reason code only (HEN-263); the copy is the app's own. Any other code or a legacy
+  // `error` param gets the generic message, so nothing from the URL is ever shown.
+  const reason = parsed.searchParams.get(MAGIC_LINK_REASON_PARAM);
+  if (reason === MAGIC_LINK_REASONS.ageRefused) {
+    return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
+  }
+  if (reason === MAGIC_LINK_REASONS.linkInvalid) {
     return failure("invalidLink");
+  }
+  if (reason !== null || parsed.searchParams.has("error")) {
+    return failure("unknown");
   }
   const code = parsed.searchParams.get("code");
   if (!code) {
@@ -167,14 +177,53 @@ export const SESSION_STORAGE_KEYS = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESS
 
 export interface SessionKeyStore {
   readonly deleteItemAsync: (key: string) => Promise<void>;
+  readonly getItemAsync: (key: string) => Promise<string | null>;
+  readonly setItemAsync: (key: string, value: string) => Promise<void>;
 }
 
-/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). */
-export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+/** Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286). */
+export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
+
+async function signOutOnServer(client: MobileAuthClient): Promise<boolean> {
   try {
-    await client.signOut();
+    const { error } = await client.signOut();
+    return !error;
   } catch {
-    // Offline or server error: the local session is still removed below, so the user is signed out on this phone.
+    // Offline or the backend cannot be reached.
+    return false;
   }
-  await Promise.all(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+}
+
+/** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  const serverSignedOut = await signOutOnServer(client);
+  const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+  if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
+    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+  }
+}
+
+/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). Never rejects. */
+export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
+  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, "1").catch(() => undefined);
+  await finishSignOut(client, secureStore);
+}
+
+/** Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session. Never rejects. */
+export async function cancelPendingSignOut(secureStore: SessionKeyStore): Promise<void> {
+  await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+}
+
+/**
+ * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
+ * so the user stays signed out on this launch even if the retry fails again.
+ */
+export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<boolean> {
+  const pending = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
+  if (pending === null) {
+    return false;
+  }
+  await finishSignOut(client, secureStore);
+  return true;
 }

@@ -32,10 +32,9 @@ export {
   type AuthCryptoCodec,
   type AuthSecretEnvironment,
 } from "./authSecrets.js";
+export { AUTH_REQUEST_BODY_LIMIT_BYTES, mountAuthRoutes } from "./authRoutes.js";
 export {
-  AUTH_REQUEST_BODY_LIMIT_BYTES,
   createAuth,
-  mountAuthRoutes,
   resolveClientIpAddress,
   TRUSTABLE_PROXY_IP_HEADERS,
   type AuthConnectionInfo,

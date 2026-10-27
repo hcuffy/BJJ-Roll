@@ -74,7 +74,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     const response = await signInWithApple({
       subject: `apple-sub-${randomUUID()}`,
       email,
-      additionalData: { ageConfirmed: true, appleAuthorizationCode: "fake-apple-code" },
+      additionalData: { age16Confirmed: true, age18Confirmed: false, appleAuthorizationCode: "fake-apple-code" },
       ipAddress,
     });
     expect(response.status).toBe(200);
@@ -149,7 +149,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
 
   it.each([
     { name: "no age answer", additionalData: undefined },
-    { name: "ageConfirmed false", additionalData: { ageConfirmed: false } },
+    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
+    { name: "only the old ageConfirmed field", additionalData: { age16Confirmed: true, age18Confirmed: false } },
   ])("refuses a new Apple account with $name and leaves no user or session", async ({ additionalData }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions") };
     const response = await signInWithApple({
@@ -171,7 +172,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     const forged = `${unsignedPart}.${Buffer.from("forged").toString("base64url")}`;
     const usersBefore = await countRows("users");
     const response = await postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken: { token: forged, nonce }, additionalData: { ageConfirmed: true } },
+      body: { provider: "apple", idToken: { token: forged, nonce }, additionalData: { age16Confirmed: true, age18Confirmed: false } },
       ipAddress: "198.51.100.212",
     });
     expect(response.status).toBe(401);
@@ -183,7 +184,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
       const response = await signInWithApple({
         subject: "apple-sub-no-code",
         email: "no.code.apple@example.com",
-        additionalData: { ageConfirmed: true },
+        additionalData: { age16Confirmed: true, age18Confirmed: false },
         ipAddress: "198.51.100.213",
       });
       expect(response.status).toBe(200);

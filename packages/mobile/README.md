@@ -42,7 +42,8 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
    | `APPLE_TEAM_ID`, `APPLE_KEY_ID`            | Apple developer team id and the id of the Sign in with Apple key                                    |
    | `APPLE_PRIVATE_KEY`                        | That key's PKCS#8 PEM; `\n` escapes are accepted for one-line values                                |
 
-   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple.
+   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple. Apple is off for now (Android first).
+   The buttons need the same **I am 16 or older** tick as email sign-in and send the 18+ answer the same way. The server refuses a new account without the 16+ tick and stores both answers in its consent record.
    The server accepts a provider email only when the provider marks it verified; otherwise it refuses with the same answer for every email. Native Apple sign-in sends Apple SHA-256 of a one-time random nonce, and the server refuses a nonce it has seen.
 
 3. Build, run the migrations once, then start the server:
@@ -73,19 +74,20 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 
 1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue** looks dimmed but still responds.
 2. Tap **Continue** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
-3. Type your email and tap **I am 17 or older**. The box shows ✓ and **Continue** turns lime.
+3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue** turns lime.
 4. Tap **Continue** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
+8. Optional (HEN-263): **I am 18 or older** sits indented under the 16+ box, unticked, with "Only needed to buy things later. Already have an account? Confirm in Account." under it. It stays dimmed and can't be ticked until 16+ is ticked, and unticking 16+ unticks it. Signed in without it, the Account section shows "Checking…" briefly, then **Confirm I am 18 or older** with "You can't undo this, except by deleting your account." under it; a tap opens "Confirm you are 18 or older?" with the same warning: **Cancel** records nothing, **Yes, I am 18 or older** records it and the row reads "18 or older: confirmed"; with a screen reader on, focus lands on that row and it is read once.
 
 ### 5. Magic-link path (AC2, development build)
 
-1. On the start screen, tap **I am 17 or older**, type your email, and tap **Email me a sign-in link instead**.
+1. On the start screen, tap **I am 16 or older**, type your email, and tap **Email me a sign-in link instead**.
 2. Expect the "Check your email" card: "We sent a sign-in link to <your email>. Open it on this phone." with **Resend link** and **Use a different email**.
 3. Open the link on the same device, either from the mail app or with `adb shell am start -a android.intent.action.VIEW -d "<link from the email>"`.
 4. The browser hands over to the app (`bjjroll://auth?code=…`). Expect "You are signed in".
-5. Open the same link again. Expect a red card above the title: "This sign-in link is invalid or has expired. Request a new one." and no sign-in.
+5. Open the same link again. Expect a red card above the title: "This sign-in link has expired or was already used. Send a new one." and no sign-in.
 
 ### 6. Sign-out and restart (AC5)
 
@@ -112,7 +114,7 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 - [ ] A wrong code, an invalid email, the "tick the box" hint, a network error and the expired-link card are each read out once, without moving focus there by hand (Android live region, iOS announcement).
 - [ ] The busy buttons ("Sending code…", "Signing in…") are read as busy/disabled.
-- [ ] The 17+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
+- [ ] The 16+ checkbox is read with its label and checked state, and the ✓ glyph is not read separately.
 - [ ] Field labels are read once, and the field's error is read as its hint.
 
 **Account deletion (HEN-65 AC7)**

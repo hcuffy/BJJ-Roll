@@ -24,6 +24,7 @@ vi.mock("../auth/signInActions", async (importOriginal) => {
 const { App } = await import("../App");
 const { completeMagicLink, signOut } = await import("../auth/signInActions");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
+const { AGE_CONFIRMATION_LABEL } = await import("../auth/ageConfirmation");
 
 describe("App when the server cannot be reached (HEN-285)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
@@ -79,9 +80,9 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     // Muted body text, not the red error style.
     expect(flattenStyle(note?.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22, color: colours.textSecondary });
     expect(flattenStyle(note?.props.style).color).not.toBe(colours.danger);
-    // Under the email field, above the 17+ box.
+    // Under the email field, above the age box.
     expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeGreaterThan(screen.text().indexOf("Email"));
-    expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeLessThan(screen.text().indexOf("17 or older"));
+    expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeLessThan(screen.text().indexOf(AGE_CONFIRMATION_LABEL));
   });
 
   it("field errors next to the note are still announced as alerts", async () => {
@@ -110,14 +111,16 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
-  it("the note clears on the next submit attempt, even if that attempt fails too", async () => {
+  it("a retry that also fails on the network shows the same calm note again, not red (HEN-287)", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue");
 
-    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
     expect(screen.text()).toContain("Sign in to BJJ Roll");
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.accessibilityRole).toBeUndefined();
+    expect(flattenStyle(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.style).color).toBe(colours.textSecondary);
+    expect(screen.text()).not.toContain("No connection.");
   });
 
   it("magic link: a rejected link exchange lands on the sign-in screen with the same note, no hang", async () => {
@@ -144,6 +147,24 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
     expect(screen.text()).not.toContain("You are signed in");
     expect(screen.text()).not.toContain("No connection.");
+  });
+
+  it("magic link: a link that fails offline while on 'Check your email' shows the note there (HEN-287)", async () => {
+    serverDown = false;
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Email me a sign-in link instead");
+    expect(screen.text()).toContain("Check your email");
+
+    serverDown = true;
+    deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    await screen.rerender();
+
+    expect(screen.text()).toContain("Check your email");
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
+    expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.accessibilityRole).toBeUndefined();
+    expect(flattenStyle(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.style).color).toBe(colours.textSecondary);
   });
 
   it("sign-out with the server down clears the local session and shows the sign-in screen", async () => {
@@ -198,6 +219,39 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     await screen.press("Delete my account");
 
     expect(screen.text()).toContain("Sign in to BJJ Roll");
+    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
+  });
+
+  it("account deleted after a link failed while signed in: the deleted card shows without the server note", async () => {
+    serverDown = false;
+    const screen = await startSignedIn();
+    const backendUp = backend.fetchImplementation.getMockImplementation();
+    backend.fetchImplementation.mockImplementation((input, init) =>
+      new Request(input, init).url.endsWith("/magic-link/exchange")
+        ? Promise.reject(new TypeError("fetch failed"))
+        : (backendUp?.(input, init) ?? Promise.reject(new Error("no backend"))),
+    );
+    deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    await screen.rerender();
+    expect(screen.text()).toContain("You are signed in");
+
+    await screen.press("Delete account");
+    await screen.press("Email me a code");
+    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Your account was deleted.");
+    expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
+  });
+
+  it("Continue with an invalid email shows the field errors and drops the note at the same time", async () => {
+    const screen = await startApp();
+    expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
+
+    await screen.changeText("Email", "not-an-email");
+    await screen.press("Continue");
+
+    expect(screen.text()).toContain("Enter a valid email address.");
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 

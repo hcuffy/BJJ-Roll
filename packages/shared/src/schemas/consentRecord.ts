@@ -12,7 +12,15 @@ const consentRecordBaseSchema = z.object({
   withdrawnAt: timestampSchema.nullable(),
 });
 
+/** HEN-263: the sign-up age answers, and a later 18+ confirmation from settings as a new record. Never updated in place. */
+export const ageConfirmationRecordSchema = consentRecordBaseSchema.extend({
+  consentType: z.literal("age_confirmation"),
+  age16Confirmed: z.literal(true),
+  age18Confirmed: z.boolean(),
+});
+
 export const consentRecordSchema = z.discriminatedUnion("consentType", [
+  ageConfirmationRecordSchema,
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_signup") }), // M2-13, HEN-183 (type name proposed)
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_upload"), videoId: identifierSchema }), // M4-25, HEN-190
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_share"), videoId: identifierSchema }), // M6-11 (type name proposed)
@@ -29,3 +37,4 @@ export const consentRecordSchema = z.discriminatedUnion("consentType", [
 
 export type ConsentRecipientType = z.infer<typeof consentRecipientTypeSchema>;
 export type ConsentRecord = z.infer<typeof consentRecordSchema>;
+export type AgeConfirmationRecord = z.infer<typeof ageConfirmationRecordSchema>;

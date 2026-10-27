@@ -1,6 +1,6 @@
 import { createPublicKey, verify } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { isSocialSignUpAgeConfirmed } from "../auth/ageGate.js";
+import { readSocialSignUpAgeAnswers } from "../auth/ageGate.js";
 import { encodeCreateData, encodeUpdateData } from "../auth/authCodecTransform.js";
 import {
   APPLE_ENVIRONMENT_NAMES,
@@ -108,14 +108,31 @@ describe("HEN-239 provider tokens at rest", () => {
   });
 });
 
-describe("HEN-239 age gate for social sign-up", () => {
-  it("needs ageConfirmed true from the request (native token) or the OAuth state (browser), and nothing elsewhere", () => {
-    expect(isSocialSignUpAgeConfirmed("/sign-in/social", { additionalData: { ageConfirmed: true } }, undefined)).toBe(true);
-    expect(isSocialSignUpAgeConfirmed("/sign-in/social", { additionalData: { ageConfirmed: "true" } }, undefined)).toBe(false);
-    expect(isSocialSignUpAgeConfirmed("/sign-in/social", {}, { ageConfirmed: true })).toBe(false);
-    expect(isSocialSignUpAgeConfirmed("/callback/google", { additionalData: { ageConfirmed: true } }, undefined)).toBe(false);
-    expect(isSocialSignUpAgeConfirmed("/callback/apple", undefined, { ageConfirmed: true })).toBe(true);
-    expect(isSocialSignUpAgeConfirmed("/callback/apple", undefined, { ageConfirmed: false })).toBe(false);
-    expect(isSocialSignUpAgeConfirmed("/sign-in/email-otp", undefined, undefined)).toBe(true);
+describe("HEN-239 age gate for social sign-up (16+, HEN-263)", () => {
+  const ticked16 = { age16Confirmed: true, age18Confirmed: false };
+
+  it("reads the 16+ and 18+ answers from the request (native token) or the OAuth state (browser), and from nowhere else", () => {
+    expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: ticked16 }, undefined)).toEqual({ social: true, answers: ticked16 });
+    expect(readSocialSignUpAgeAnswers("/callback/apple", undefined, { age16Confirmed: true, age18Confirmed: true })).toEqual({
+      social: true,
+      answers: { age16Confirmed: true, age18Confirmed: true },
+    });
+    expect(readSocialSignUpAgeAnswers("/sign-in/social", {}, ticked16)).toEqual({ social: true, answers: null });
+    expect(readSocialSignUpAgeAnswers("/callback/google", { additionalData: ticked16 }, undefined)).toEqual({ social: true, answers: null });
+    expect(readSocialSignUpAgeAnswers("/sign-in/email-otp", undefined, undefined)).toEqual({ social: false });
+  });
+
+  it("refuses without a real 16+ tick, even with 18+ ticked; the old ageConfirmed field no longer counts", () => {
+    for (const additionalData of [{ age16Confirmed: false, age18Confirmed: true }, { age16Confirmed: "true" }, { ageConfirmed: true }, undefined]) {
+      expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData }, undefined)).toEqual({ social: true, answers: null });
+      expect(readSocialSignUpAgeAnswers("/callback/google", undefined, additionalData)).toEqual({ social: true, answers: null });
+    }
+  });
+
+  it("stores 18+ only when it is exactly true", () => {
+    expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: { age16Confirmed: true, age18Confirmed: "true" } }, undefined)).toEqual({
+      social: true,
+      answers: ticked16,
+    });
   });
 });

@@ -41,6 +41,11 @@ export const authStyles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxTicked: { backgroundColor: colours.primary, borderColor: colours.primary },
+  checkboxDisabled: { borderColor: colours.border },
+  checkboxLabelDisabled: { color: colours.textSecondary },
+  // The two age rows read as one group: 8 apart, and the optional 18+ row indented to line up with the 16+ label (24 box + 12 gap).
+  ageGroup: { gap: spacing.small },
+  ageOptional: { marginLeft: sizes.checkbox + 12 },
   checkmark: { ...typeScale.body, color: colours.onPrimary, fontWeight: "700" },
   checkboxLabel: { ...typeScale.body, color: colours.textPrimary, flexShrink: 1 },
   fieldError: { ...typeScale.label, color: colours.danger },

@@ -27,7 +27,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account delete ke
   const ipAddress = "198.51.100.106";
 
   const sendOtp = (): Promise<Response> =>
-    postAuthJson(current().app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", ageConfirmed: true }, ipAddress });
+    postAuthJson(current().app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", age16Confirmed: true }, ipAddress });
 
   const { signIn, deleteAccount } = createAccountTestFlow(current);
 
