@@ -10,8 +10,8 @@ kit recommendation for HEN-46.
 
 ## 0. How to read this doc
 
-- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A3 and repo D24 in
-  [`DECISIONS.md`](../DECISIONS.md), D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear issue.
+- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A4, D20, D24 and D26 in
+  [`DECISIONS.md`](../DECISIONS.md), the other D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear issue.
 - **[Proposal]** means a technical choice made in this doc. Sara approves or changes it in review. Once approved, durable choices go into `DECISIONS.md`.
 - **OPEN (owner)** means not decided anywhere. The owner decides: Henry (product, money), Sara (tech) or the lawyer (legal). This doc does not pick an
   answer for these.
@@ -599,7 +599,7 @@ references. Payouts: provider account references only; no bank or ID documents (
 
 | Data                                           | Where                           | At-rest protection                                                                         | Status                               | E2E (M6-14) changes it?                                                                             |
 | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Email                                          | Postgres                        | AES-256-GCM field encryption + HMAC-SHA256 lookup hash, envelope keys, `key_version` (D18) | Decided (design); KMS OPEN (HEN-191) | No                                                                                                  |
+| Email                                          | Postgres                        | AES-256-GCM + HMAC-SHA256 lookup hash, `key_version` (D18); two deploy-time secrets (D26). | Decided (D26, interim); KMS: HEN-191 | No                                                                                                  |
 | Handle                                         | Postgres                        | Disk/volume encryption only (needs a unique index; shown to groups)                        | Proposal                             | No                                                                                                  |
 | Sessions, OTP codes                            | Postgres                        | Disk/volume encryption; OTP stored hashed if Better Auth supports it (HEN-47 spike)        | OPEN (Sara)                          | No                                                                                                  |
 | Source videos, transcodes, renders, thumbnails | Hetzner Object Storage          | Hetzner server-side encryption or client-side encryption: A4                               | OPEN (A4, owned by HEN-191)          | No: server-side analysis and masked renders need the plaintext                                      |
