@@ -67,10 +67,6 @@ export async function revokeSealedAppleRefreshToken(capture: AppleSignInCapture,
 }
 
 /**
- * After-hook for native iOS Apple sign-in: the id token proves who it is; the authorization code is exchanged once for the refresh
- * token that account deletion revokes. A failed exchange never blocks sign-in; it is logged by user id only.
- */
-/**
  * The after hook: neutral account_not_linked redirects first (HEN-239), then the Apple refresh-token capture, then (HEN-183) the
  * sign-in duties tick for an existing account.
  */
@@ -94,6 +90,10 @@ async function refreshSignUpAttestation(middlewareContext: AuthMiddlewareContext
   }
 }
 
+/**
+ * After-hook for native iOS Apple sign-in: the id token proves who it is; the authorization code is exchanged once for the refresh
+ * token that account deletion revokes. A failed exchange never blocks sign-in; it is logged by user id only.
+ */
 export async function captureAppleRefreshToken(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture): Promise<void> {
   const { appleTokenClient, codec, logAuthEvent } = capture;
   if (middlewareContext.path !== "/sign-in/social" || !appleTokenClient) {
