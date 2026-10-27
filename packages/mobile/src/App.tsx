@@ -4,7 +4,7 @@ import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
-import { completeMagicLink, readSignedInUserId, signOut } from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -19,6 +19,8 @@ export function App() {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const [serverUnreachable, setServerUnreachable] = useState(false);
+  // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
+  const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
 
   // Signing in proves the server is reachable, so a note set earlier must not reappear later.
@@ -29,39 +31,60 @@ export function App() {
   }, [screen.name]);
 
   useEffect(() => {
-    void readSignedInUserId(appAuthClient)
-      .then((userId) => setScreen(userId ? { name: "signedIn" } : { name: "email" }))
+    // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
+    void finishPendingSignOut(appAuthClient, appSecureStore)
+      .then(async (signOutPending) => (signOutPending ? null : await readSignedInUserId(appAuthClient)))
+      .then((userId) => setStartupScreen(userId ? { name: "signedIn" } : { name: "email" }))
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
         setServerUnreachable(true);
-        setScreen({ name: "email" });
+        setStartupScreen({ name: "email" });
       });
   }, []);
 
+  // A link that started the app waits for the startup step, so a pending sign-out cannot end the session the link creates.
   useEffect(() => {
+    if (!startupScreen) {
+      return;
+    }
+    // Leaves Loading only once; a link opened later in the running app does not move the user.
+    const showStartupScreen = () => setScreen((current) => (current.name === "loading" ? startupScreen : current));
     if (!deepLinkUrl) {
+      showStartupScreen();
       return;
     }
     void completeMagicLink(appAuthClient, deepLinkUrl)
       .then((result) => {
         if (result.ok) {
           setLinkError(null);
-          setScreen({ name: "signedIn" });
-        } else if (result.reason === "network") {
+          handleSignedIn();
+          return;
+        }
+        if (result.reason === "network") {
           setServerUnreachable(true);
         } else if (result.message) {
           setLinkError(result.message);
         }
+        showStartupScreen();
       })
-      .catch(() => setServerUnreachable(true));
-  }, [deepLinkUrl]);
+      .catch(() => {
+        setServerUnreachable(true);
+        showStartupScreen();
+      });
+  }, [deepLinkUrl, startupScreen]);
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
+
+  const handleSignedIn = () => {
+    // A new sign-in cancels a sign-out left to finish; if that fails the user still gets in.
+    void cancelPendingSignOut(appSecureStore);
+    setScreen({ name: "signedIn" });
+  };
 
   const handleSignOut = () => {
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    // signOut already clears the local session when the server is down; an unexpected rejection still ends on sign-in.
+    // signOut clears the local session when the server is down and finishes a failed one on the next launch.
     void signOut(appAuthClient, appSecureStore)
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
@@ -97,6 +120,8 @@ export function App() {
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
             onAccountDeleted={() => {
+              // A note from a link that failed while signed in must not sit next to the deleted card.
+              setServerUnreachable(false);
               setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
               setScreen({ name: "email" });
             }}
@@ -105,12 +130,7 @@ export function App() {
       }
       case "code": {
         return (
-          <CodeEntryScreen
-            client={appAuthClient}
-            email={screen.email}
-            onSignedIn={() => setScreen({ name: "signedIn" })}
-            onBack={() => setScreen({ name: "email" })}
-          />
+          <CodeEntryScreen client={appAuthClient} email={screen.email} onSignedIn={handleSignedIn} onBack={() => setScreen({ name: "email" })} />
         );
       }
       case "email": {
