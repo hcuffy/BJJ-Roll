@@ -4,6 +4,7 @@ import type { SocialProvider } from "../auth/socialSignIn";
 import { colours, typeScale } from "../theme/tokens";
 import { AppleSignInButton } from "./AppleSignInButton";
 import { GoogleSignInButton } from "./GoogleSignInButton";
+import { OrDivider } from "./OrDivider";
 
 export const SOCIAL_BUTTON_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Continue with Apple", google: "Continue with Google" };
 const SOCIAL_LOADING_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
@@ -22,13 +23,15 @@ export interface SocialSignInButtonsProps {
 }
 
 /**
- * Apple and Google sign-in (HEN-239) in each brand's own style. Brand buttons are never dimmed: until the 16+ box is ticked
+ * Apple and Google sign-in (HEN-239) in each brand's own style, after an "or" row so the email sign-in above stays first.
+ * Brand buttons are never dimmed: until the 16+ box is ticked
  * a muted line says why (screen readers get the same words as the buttons' hint) and a tap explains instead of signing in.
  */
 export function SocialSignInButtons({ providers, age16Confirmed, sending, onPress }: SocialSignInButtonsProps) {
   const hint = missingHint(true, age16Confirmed);
   return (
     <>
+      {providers.length > 0 ? <OrDivider /> : null}
       {hint && providers.length > 0 ? (
         <Text style={styles.notYet} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {hint}
