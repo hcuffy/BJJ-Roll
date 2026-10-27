@@ -60,11 +60,11 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
   it("email form: Continue offline shows the calm note, not red; once the server is back Continue sends the code", async () => {
     const screen = await renderEmailEntry();
     await fillEmailForm(screen);
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     expectCalmNote(screen);
 
     serverDown = false;
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     expect(codesSentTo).toEqual(["member@example.test"]);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
@@ -81,7 +81,7 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     const screen = await renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, serverUnreachable: true }));
     expectCalmNote(screen);
     await fillEmailForm(screen);
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     expectCalmNote(screen);
   });
 
@@ -166,7 +166,7 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     backend.fetchImplementation.mockImplementationOnce(() => Promise.resolve(Response.json({ message: "Too many" }, { status: 429 })));
     const emailScreen = await renderEmailEntry();
     await fillEmailForm(emailScreen);
-    await emailScreen.press("Continue");
+    await emailScreen.press("Continue with email");
     expect(emailScreen.queryByText("Too many tries.")?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
     expect(flattenStyle(emailScreen.queryByText("Too many tries.")?.props.style).color).toBe(colours.danger);
     expect(emailScreen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);

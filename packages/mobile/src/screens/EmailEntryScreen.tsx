@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
-import { signInWithProvider, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
+import { signInWithProvider, socialFailureMessage, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { textStyles } from "../theme/tokens";
 import { AgeConfirmationFields } from "./AgeConfirmationFields";
 import { AuthButton } from "./AuthButton";
@@ -70,6 +70,8 @@ export function EmailEntryScreen({
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   // This screen's own send failed on the network; App's serverUnreachable covers startup and links.
   const [offline, setOffline] = useState(false);
+  const [socialProgress, setSocialProgress] = useState<"opening" | "signingIn">("opening");
+  const [socialError, setSocialError] = useState<string | null>(null);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
   const ready = age16Confirmed && isEmailAddress(email);
   const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
@@ -78,10 +80,12 @@ export function EmailEntryScreen({
     onClearLinkError?.();
     onClearAccountNotice?.();
     setFormError(null);
+    setSocialError(null);
     setNotice(null);
   };
 
-  const showFailure = (result: Extract<ActionResult, { ok: false }>) => {
+  /** Age, email and offline failures go to their own slots; anything else goes to `showOther` (the form error by default). */
+  const showFailure = (result: Extract<ActionResult, { ok: false }>, showOther: (message: string | null) => void = setFormError) => {
     if (result.reason === "ageRequired") {
       setAgeError(result.message);
     } else if (result.reason === "invalidEmail") {
@@ -89,7 +93,7 @@ export function EmailEntryScreen({
     } else if (result.reason === "network") {
       setOffline(true);
     } else {
-      setFormError(result.message);
+      showOther(result.message);
     }
   };
 
@@ -130,6 +134,9 @@ export function EmailEntryScreen({
   /** Social sign-in needs only the 16+ box (the provider gives the email) and sends the 18+ answer like the email buttons. */
   const signInWithSocial = async (provider: SocialProvider) => {
     startAction();
+    // A new attempt: an offline note from an earlier one must not sit next to this one's result (HEN-287, Vera interim item 4).
+    onClearServerUnreachable?.();
+    setOffline(false);
     setEmailError(null);
     if (sending !== null || !socialSignIn) {
       return;
@@ -141,12 +148,14 @@ export function EmailEntryScreen({
     }
     setAgeError(null);
     setSending(provider);
-    const result = await signInWithProvider(socialSignIn, provider, { age16Confirmed, age18Confirmed });
+    setSocialProgress("opening");
+    const dependencies = { ...socialSignIn, onReturned: () => setSocialProgress("signingIn") };
+    const result = await signInWithProvider(dependencies, provider, { age16Confirmed, age18Confirmed });
     setSending(null);
     if (result.ok) {
       onSignedIn?.();
-    } else if (result.message !== null) {
-      showFailure(result);
+    } else {
+      showFailure({ ...result, message: socialFailureMessage(provider, result) }, setSocialError);
     }
   };
 
@@ -232,7 +241,7 @@ export function EmailEntryScreen({
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
-          title="Continue"
+          title="Continue with email"
           looksDisabled={!ready}
           accessibilityHint={sendHint}
           loading={sending === "code"}
@@ -255,6 +264,8 @@ export function EmailEntryScreen({
             providers={socialProviders}
             age16Confirmed={age16Confirmed}
             sending={sending}
+            progress={socialProgress}
+            error={socialError}
             onPress={(provider) => void signInWithSocial(provider)}
           />
         ) : null}

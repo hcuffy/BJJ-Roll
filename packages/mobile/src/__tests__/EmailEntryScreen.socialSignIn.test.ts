@@ -44,8 +44,8 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     const screen = await renderWith(["apple", "google"]);
 
     expect(screen.queryByText("Continue with Apple")).not.toBeNull();
-    expect(screen.queryByText("Continue with Google")).not.toBeNull();
-    expect(screen.queryByText("Continue")).not.toBeNull();
+    expect(screen.queryByLabelText("Continue with Google")).not.toBeNull();
+    expect(screen.queryByText("Continue with email")).not.toBeNull();
     expect(screen.findAllByType("TextInput").some((input) => input.props.secureTextEntry === true)).toBe(false);
   });
 
@@ -53,7 +53,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     const screen = await renderWith([]);
 
     expect(screen.queryByText("Continue with Apple")).toBeNull();
-    expect(screen.queryByText("Continue with Google")).toBeNull();
+    expect(screen.queryByLabelText("Continue with Google")).toBeNull();
   });
 
   it("needs only the 16+ box: without it a tap explains and sends nothing; with it Google signs in", async () => {

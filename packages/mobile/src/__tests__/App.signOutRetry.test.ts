@@ -57,7 +57,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
   };

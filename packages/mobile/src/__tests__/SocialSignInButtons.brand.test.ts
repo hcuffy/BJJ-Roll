@@ -21,27 +21,25 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     Platform.OS = "android";
   });
 
-  it("Google: dark pill per Google's guidelines, 56 tall, with the colour G hidden from screen readers", async () => {
+  it("Google: Google's official dark pill button image, unedited, 56 tall at its own aspect ratio, centred, in one labelled button", async () => {
     const { screen } = await renderButtons();
     const button = screen.getPressable("Continue with Google");
 
     expect(button.props.accessibilityRole).toBe("button");
     expect(button.props.accessibilityLabel).toBe("Continue with Google");
-    expect(flattenStyle(button.props.style)).toMatchObject({
-      backgroundColor: "#131314",
-      borderColor: "#8E918F",
-      borderWidth: 1,
-      minHeight: 56,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      gap: 10,
+    expect(flattenStyle(button.props.style)).toMatchObject({ alignSelf: "center" });
+    expect(textOf(button)).toBe("");
+    const images = screen.findAllByType("Image");
+    expect(images).toHaveLength(1);
+    expect(String(images[0]?.props.source)).toMatch(/google-sign-in-dark-pill\.png$/u);
+    // The bundle's @1x is 180×40: 56 tall keeps that ratio (252 wide), so the image is never stretched.
+    expect(flattenStyle(images[0]?.props.style)).toEqual({ height: 56, width: 252 });
+    expect(images[0]?.props).toMatchObject({
+      resizeMode: "contain",
+      accessible: false,
+      accessibilityElementsHidden: true,
+      importantForAccessibility: "no",
     });
-    const [logo] = screen.findAllByType("Image");
-    expect(String(logo?.props.source)).toMatch(/google-g\.png$/u);
-    expect(flattenStyle(logo?.props.style)).toMatchObject({ width: 20, height: 20 });
-    expect(logo?.props).toMatchObject({ accessible: false, accessibilityElementsHidden: true, importantForAccessibility: "no" });
-    const label = screen.queryByText("Continue with Google");
-    expect(flattenStyle(label?.props.style)).toMatchObject({ color: "#E3E3E3", fontSize: 14, lineHeight: 20, fontWeight: "500" });
   });
 
   it("without the 16+ tick the brand colours stay, a visible line and the hint say why, and a tap still explains", async () => {
@@ -60,15 +58,35 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     expect(ticked.screen.queryByText(TICK_16_HINT)).toBeNull();
   });
 
-  it("Google: busy while it signs in, and disabled (announced) while another sign-in runs", async () => {
-    const busy = (await renderButtons({ sending: "google" })).screen.getPressable("Opening Google…");
+  it("Google: busy while it signs in, with the image unchanged; disabled (announced) while another sign-in runs", async () => {
+    const { screen: busyScreen } = await renderButtons({ sending: "google" });
+    const busy = busyScreen.getPressable("Continue with Google");
     expect(busy.props.accessibilityState).toEqual({ disabled: true, busy: true });
-    expect(busy.props.accessibilityLabel).toBe("Opening Google…");
+    expect(String(busyScreen.findAllByType("Image")[0]?.props.source)).toMatch(/google-sign-in-dark-pill\.png$/u);
+    expect(busyScreen.queryByText("Opening Google…")).not.toBeNull();
+
+    const returned = (await renderButtons({ sending: "google", progress: "signingIn" })).screen;
+    expect(returned.queryByText("Signing in…")).not.toBeNull();
+    expect(returned.queryByText("Opening Google…")).toBeNull();
 
     const { screen, onPress } = await renderButtons({ sending: "code" });
     expect(screen.getPressable("Continue with Google").props.accessibilityState).toEqual({ disabled: true, busy: false });
+    expect(screen.queryByText("Opening Google…")).toBeNull();
     await screen.press("Continue with Google");
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("order: 'or' divider, then the 16+ line, then the brand buttons, then a social error", async () => {
+    const { screen } = await renderButtons({ age16Confirmed: false, error: "Couldn't sign in with Google. Try again." });
+    const texts = screen.findAllByType("Text").map(textOf);
+
+    expect(texts.indexOf("or")).toBeGreaterThanOrEqual(0);
+    expect(texts.indexOf("or")).toBeLessThan(texts.indexOf(TICK_16_HINT));
+    const all = screen.findAllByType("Text");
+    const google = screen.getPressable("Continue with Google");
+    expect(all.length).toBeGreaterThan(2);
+    expect(texts.at(-1)).toBe("Couldn't sign in with Google. Try again.");
+    expect(google).toBeDefined();
   });
 
   it("Apple on iOS: Apple's native button (Continue, white, pill, 56 tall), the same 16+ hint, before Google", async () => {

@@ -24,17 +24,22 @@ async function renderSignIn(socialProviders: readonly SocialProvider[]) {
 const dividerRow = (screen: Awaited<ReturnType<typeof renderSignIn>>) =>
   screen.findAllByType("View").filter((node) => textOf(node) === "or" && node.children.length === 3);
 
-describe("HEN-239 sign-in order: email first, then an 'or' divider, then the brand buttons (Vera Round 4 item 4, Henry Q4)", () => {
+describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (Vera Round 4 item 4, interim item 2, Henry Q4)", () => {
   it("puts the email buttons first, the 'or' row next, and the brand buttons after it", async () => {
     const screen = await renderSignIn(["apple", "google"]);
     const texts = screen.findAllByType("Text").map(textOf);
     const at = (text: string) => texts.indexOf(text);
 
-    expect(at("Continue")).toBeGreaterThanOrEqual(0);
-    expect(at("Continue")).toBeLessThan(at("Email me a sign-in link instead"));
+    expect(at("Continue with email")).toBeGreaterThanOrEqual(0);
+    expect(at("Continue with email")).toBeLessThan(at("Email me a sign-in link instead"));
     expect(at("Email me a sign-in link instead")).toBeLessThan(at("or"));
-    expect(at("or")).toBeLessThan(at("Continue with Apple"));
-    expect(at("or")).toBeLessThan(at("Continue with Google"));
+    // Vera interim item 2: the muted 16+ line sits between the divider and the brand buttons.
+    expect(at("or")).toBeLessThan(at("Tick the 16 or older box first."));
+    expect(at("Tick the 16 or older box first.")).toBeLessThan(at("Continue with Apple"));
+    // Google's button is an image with no Text, so check it comes after Apple among the buttons.
+    const buttons = screen.pressables().map((node) => (node.props.accessibilityLabel as string | undefined) ?? textOf(node));
+    expect(buttons.indexOf("Continue with Apple")).toBeGreaterThan(buttons.indexOf("Continue with email"));
+    expect(buttons.indexOf("Continue with Google")).toBeGreaterThan(buttons.indexOf("Continue with Apple"));
   });
 
   it("the 'or' row: muted Label 13/18 between two 1pt border-colour lines, 24 from its neighbours, hidden from screen readers", async () => {

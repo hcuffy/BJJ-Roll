@@ -65,6 +65,15 @@ export interface SocialSignInDependencies {
   readonly platform: string;
   readonly browser: AuthBrowser;
   readonly appleNative?: AppleNativeSignIn;
+  /** Called once the browser or Apple's sheet comes back with an answer, before the backend makes the session. */
+  readonly onReturned?: () => void;
+}
+
+const PROVIDER_NAMES: Readonly<Record<SocialProvider, string>> = { apple: "Apple", google: "Google" };
+
+/** Copy for a failed social attempt shown under the brand buttons: the unknown case names the provider (Vera interim item 6). */
+export function socialFailureMessage(provider: SocialProvider, result: { readonly reason: string; readonly message: string | null }): string | null {
+  return result.reason === "unknown" ? `Couldn't sign in with ${PROVIDER_NAMES[provider]}. Try again.` : result.message;
 }
 
 const ignored: ActionResult = { ok: false, reason: "ignored", message: null };
@@ -87,12 +96,16 @@ export async function signInWithProvider(
   }
   const ages: SocialAgeAnswers = { age16Confirmed: true, age18Confirmed: answers.age18Confirmed === true };
   if (provider === "apple" && dependencies.platform === "ios" && dependencies.appleNative) {
-    return await signInWithAppleNative(dependencies.client, dependencies.appleNative, ages);
+    return await signInWithAppleNative(dependencies, dependencies.appleNative, ages);
   }
   return await signInWithBrowser(dependencies, provider, ages);
 }
 
-async function signInWithAppleNative(client: MobileAuthClient, appleNative: AppleNativeSignIn, ages: SocialAgeAnswers): Promise<ActionResult> {
+async function signInWithAppleNative(
+  { client, onReturned }: SocialSignInDependencies,
+  appleNative: AppleNativeSignIn,
+  ages: SocialAgeAnswers,
+): Promise<ActionResult> {
   // Apple gets SHA-256(nonce); the backend gets the raw nonce, checks the hash and refuses a nonce it has seen before.
   const nonce = appleNative.createNonce();
   let credential: Awaited<ReturnType<AppleNativeSignIn["signInAsync"]>>;
@@ -104,6 +117,7 @@ async function signInWithAppleNative(client: MobileAuthClient, appleNative: Appl
   if (!credential.identityToken) {
     return failure("unknown");
   }
+  onReturned?.();
   // The authorization code lets the backend get Apple's refresh token, which account deletion revokes (App Store rule 5.1.1(v)).
   return await postAuth(client, {
     path: "/sign-in/social",
@@ -146,6 +160,7 @@ async function signInWithBrowser(dependencies: SocialSignInDependencies, provide
   if (result.type !== "success" || !result.url) {
     return ignored;
   }
+  dependencies.onReturned?.();
   return await completeSocialSignIn(dependencies.client, result.url, provider);
 }
 

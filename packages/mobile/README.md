@@ -72,10 +72,10 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 
 ### 4. Code path (AC1)
 
-1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue** looks dimmed but still responds.
-2. Tap **Continue** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
-3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue** turns lime.
-4. Tap **Continue** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
+1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue with email** looks dimmed but still responds.
+2. Tap **Continue with email** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
+3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue with email** turns lime.
+4. Tap **Continue with email** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
@@ -101,7 +101,7 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 **Keyboard**
 
-- [ ] The keyboard never covers **Continue**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView `padding`, with a 24 gap above the keyboard; Android: KeyboardAvoidingView `height`, which shrinks the view by the keyboard height on edge-to-edge). On Android, check the content does not shift twice (once from the view, once from the window resizing).
+- [ ] The keyboard never covers **Continue with email**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView `padding`, with a 24 gap above the keyboard; Android: KeyboardAvoidingView `height`, which shrinks the view by the keyboard height on edge-to-edge). On Android, check the content does not shift twice (once from the view, once from the window resizing).
 - [ ] A tap on a button while the keyboard is open works the first time (no tap spent just closing the keyboard).
 - [ ] Email field: Go submits. Code field: number pad, Done submits, and iOS/Android offer the emailed code for autofill.
 

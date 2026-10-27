@@ -204,7 +204,7 @@ describe("email entry design details", () => {
       borderRadius: radius.pill,
     });
     expect(flattenStyle(screen.queryByText("Email me a sign-in link instead")?.props.style).color).toBe(colours.textPrimary);
-    expect(flattenStyle(screen.getPressable("Continue").props.style)).toMatchObject({ minHeight: 56, backgroundColor: colours.primary });
+    expect(flattenStyle(screen.getPressable("Continue with email").props.style)).toMatchObject({ minHeight: 56, backgroundColor: colours.primary });
   });
 
   it("shows the sent-link notice on a 16-radius surface card with a mail glyph hidden from screen readers", async () => {

@@ -1,17 +1,23 @@
-import { StyleSheet, Text } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { missingHint } from "../auth/ageConfirmation";
 import type { SocialProvider } from "../auth/socialSignIn";
 import { colours, typeScale } from "../theme/tokens";
 import { AppleSignInButton } from "./AppleSignInButton";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { OrDivider } from "./OrDivider";
+import { StatusText } from "./StatusText";
+import { authStyles } from "./authStyles";
 
 export const SOCIAL_BUTTON_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Continue with Apple", google: "Continue with Google" };
 const SOCIAL_LOADING_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
+/** After the browser or Apple's sheet returns, while the backend makes the session (Vera interim item 5). */
+export const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
 const BRAND_BUTTONS = { apple: AppleSignInButton, google: GoogleSignInButton } as const;
 
 const styles = StyleSheet.create({
   notYet: { ...typeScale.label, color: colours.textSecondary, textAlign: "center" },
+  progressRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  progress: { ...typeScale.label, color: colours.textSecondary },
 });
 
 export interface SocialSignInButtonsProps {
@@ -20,15 +26,20 @@ export interface SocialSignInButtonsProps {
   /** What the screen is sending right now; the other buttons are disabled meanwhile. */
   readonly sending: string | null;
   readonly onPress: (provider: SocialProvider) => void;
+  /** While a provider runs: "opening" until the browser or sheet returns, then "signingIn". */
+  readonly progress?: "opening" | "signingIn";
+  /** The last social attempt's error, shown under the buttons (Vera interim item 6). */
+  readonly error?: string | null;
 }
 
 /**
  * Apple and Google sign-in (HEN-239) in each brand's own style, after an "or" row so the email sign-in above stays first.
- * Brand buttons are never dimmed: until the 16+ box is ticked
- * a muted line says why (screen readers get the same words as the buttons' hint) and a tap explains instead of signing in.
+ * Order: "or", the 16+ line, the buttons, progress, then a social error. Brand buttons are never dimmed: until the 16+ box
+ * is ticked a muted line says why (screen readers get the same words as the buttons' hint) and a tap explains instead of signing in.
  */
-export function SocialSignInButtons({ providers, age16Confirmed, sending, onPress }: SocialSignInButtonsProps) {
+export function SocialSignInButtons({ providers, age16Confirmed, sending, onPress, progress = "opening", error = null }: SocialSignInButtonsProps) {
   const hint = missingHint(true, age16Confirmed);
+  const running = providers.find((provider) => provider === sending);
   return (
     <>
       {providers.length > 0 ? <OrDivider /> : null}
@@ -51,6 +62,17 @@ export function SocialSignInButtons({ providers, age16Confirmed, sending, onPres
           />
         );
       })}
+      {running ? (
+        <View style={styles.progressRow}>
+          <ActivityIndicator size="small" color={colours.textSecondary} />
+          <StatusText
+            message={progress === "opening" ? SOCIAL_LOADING_TITLES[running] : SOCIAL_SIGNING_IN_TITLE}
+            style={styles.progress}
+            announce="polite"
+          />
+        </View>
+      ) : null}
+      <StatusText message={error} style={authStyles.fieldError} />
     </>
   );
 }

@@ -1,49 +1,39 @@
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import googleG from "../../assets/google-g.png";
-import { radius, sizes } from "../theme/tokens";
+import { Image, Pressable, StyleSheet } from "react-native";
+import googleSignInDarkPill from "../../assets/google-sign-in-dark-pill.png";
+import { sizes } from "../theme/tokens";
 import type { BrandButtonProps } from "./brandButtonProps";
 
-/**
- * Google's dark theme, from Google's "Sign in with Google" branding guidelines (developers.google.com/identity/branding-guidelines):
- * fill #131314, 1px #8E918F stroke, #E3E3E3 label, the standard colour G at its fixed 20dp, 12dp before the G and 10dp after it.
- * The guidelines name Google Sans Medium 14/20; the app bundles no Google font, so this is the system font (Roboto on Android) at weight 500.
- */
-export const GOOGLE_DARK = { fill: "#131314", stroke: "#8E918F", text: "#E3E3E3" } as const;
+/** The bundle's @1x image is 180×40; at 56 tall it keeps that ratio, so it is scaled, never stretched. */
+const IMAGE_WIDTH = Math.round((sizes.buttonHeight * 180) / 40);
 
 const styles = StyleSheet.create({
-  button: {
-    minHeight: sizes.buttonHeight,
-    borderRadius: radius.pill,
-    backgroundColor: GOOGLE_DARK.fill,
-    borderColor: GOOGLE_DARK.stroke,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  pressed: { transform: [{ scale: 0.98 }] },
-  logo: { width: 20, height: 20 },
-  label: { color: GOOGLE_DARK.text, fontSize: 14, lineHeight: 20, fontWeight: "500" },
+  button: { alignSelf: "center" },
+  pressed: { opacity: 0.85 },
+  image: { height: sizes.buttonHeight, width: IMAGE_WIDTH },
 });
 
-export function GoogleSignInButton({ title, loadingTitle, accessibilityHint, loading, disabled, onPress }: BrandButtonProps) {
-  const label = loading ? loadingTitle : title;
+/**
+ * Google's official dark pill button image from Google's sign-in branding bundle (developers.google.com/identity/branding-guidelines),
+ * unedited (Henry A3, Vera interim item 1). The image is the whole button, so progress shows under the buttons, not in it.
+ */
+export function GoogleSignInButton({ title, accessibilityHint, loading, disabled, onPress }: BrandButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={title}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-      <View accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Image source={googleG} style={styles.logo} accessible={false} accessibilityElementsHidden importantForAccessibility="no" />
-      </View>
-      <Text style={styles.label}>{label}</Text>
-      {loading ? <ActivityIndicator color={GOOGLE_DARK.text} /> : null}
+      <Image
+        source={googleSignInDarkPill}
+        style={styles.image}
+        resizeMode="contain"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      />
     </Pressable>
   );
 }
