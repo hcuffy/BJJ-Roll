@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { type ComponentRef, useEffect, useRef, useState, type ReactNode } from "react";
+import { AccessibilityInfo, BackHandler, StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, SignUpAttestationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import {
@@ -10,10 +10,11 @@ import {
   ATTESTATION_SAVING,
   SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
 } from "../auth/signUpAttestation";
-import { textStyles } from "../theme/tokens";
+import { spacing, textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
+import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { LoadingScreen } from "./LoadingScreen";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
@@ -24,7 +25,7 @@ export interface SignUpAttestationGateProps {
   readonly onReadStatus: () => Promise<SignUpAttestationResult>;
   readonly onAccept: () => Promise<SignUpAttestationResult>;
   readonly onSignOut: () => void;
-  /** Delete account stays reachable while gated (Apple 5.1.1(v), Play): the same code step as the signed-in screen. */
+  /** Delete account stays reachable while gated (Apple 5.1.1(v), Play): the same confirm and code steps as the signed-in screen. */
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   readonly onAccountDeleted: () => void;
@@ -38,6 +39,16 @@ export const TRY_AGAIN = "Try again";
 
 /** "readFailed": the status is unknown, so neither the app nor the duties are shown; only a retry or sign-out. */
 type GateState = "checking" | "readFailed" | "prompt" | "accepted";
+type DeleteStep = "none" | "confirm" | "code";
+
+// The actions' 16 gap + 8 = 24 between Sign out and the destructive Delete account (Vera #74 round 4).
+const styles = StyleSheet.create({ deleteEntry: { marginTop: spacing.small } });
+
+function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
+  if (target) {
+    AccessibilityInfo.sendAccessibilityEvent(target, "focus");
+  }
+}
 
 const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
 
@@ -60,8 +71,15 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [acceptOffline, setAcceptOffline] = useState(false);
   const [sending, setSending] = useState(false);
-  const [deleteStep, setDeleteStep] = useState<"none" | "sendingCode" | "code">("none");
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
+  const [sendingCode, setSendingCode] = useState(false);
   const [deleteCodeError, setDeleteCodeError] = useState<string | null>(null);
+  const [deleteOffline, setDeleteOffline] = useState(false);
+  // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a code.
+  const codeInFlight = useRef(false);
+  const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
+  const deleteEntryButton = useRef<ComponentRef<typeof View>>(null);
+  const returnFocusToDeleteEntry = useRef(false);
   // Each "Try again" bumps this to read again.
   const [attempt, setAttempt] = useState(0);
   // Read once per sign-in (plus explicit retries): the parent passes a fresh function on every render.
@@ -87,6 +105,37 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
       active = false;
     };
   }, [attempt]);
+
+  // Like the signed-in screen: focus moves into the confirm, and back to Delete account when the delete is cancelled.
+  useEffect(() => {
+    if (deleteStep === "confirm") {
+      moveScreenReaderFocus(confirmHeading.current);
+    } else if (deleteStep === "none" && returnFocusToDeleteEntry.current) {
+      returnFocusToDeleteEntry.current = false;
+      moveScreenReaderFocus(deleteEntryButton.current);
+    }
+  }, [deleteStep]);
+
+  const cancelDelete = () => {
+    setDeleteCodeError(null);
+    setDeleteOffline(false);
+    returnFocusToDeleteEntry.current = true;
+    setDeleteStep("none");
+  };
+
+  // Android back on a delete step acts like its Cancel (Vera #74 round 4 item 4); ignored while a code is being sent.
+  useEffect(() => {
+    if (deleteStep === "none") {
+      return undefined;
+    }
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!codeInFlight.current) {
+        cancelDelete();
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, [deleteStep]);
 
   const retryRead = () => {
     setState("checking");
@@ -115,41 +164,59 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     }
   };
 
-  const startDelete = async () => {
-    if (sending || deleteStep !== "none") {
+  const requestDeleteCode = async () => {
+    if (codeInFlight.current) {
       return;
     }
+    codeInFlight.current = true;
     setDeleteCodeError(null);
-    setDeleteStep("sendingCode");
+    setDeleteOffline(false);
+    setSendingCode(true);
     const result = await onRequestDeleteCode().catch(unknownFailure);
-    setDeleteStep(result.ok ? "code" : "none");
-    if (!result.ok) {
+    codeInFlight.current = false;
+    setSendingCode(false);
+    if (result.ok) {
+      setDeleteStep("code");
+    } else if (result.reason === "network") {
+      setDeleteOffline(true);
+    } else {
       setDeleteCodeError(`We could not send the code. ${result.message}`);
     }
   };
 
   const deleteEntry = (
-    <>
-      <StatusText message={deleteCodeError} style={authStyles.fieldError} />
+    <View style={styles.deleteEntry}>
       <AuthButton
+        ref={deleteEntryButton}
         title="Delete account"
         variant="dangerText"
         disabled={sending}
-        loading={deleteStep === "sendingCode"}
-        loadingTitle="Sending code…"
-        accessibilityHint="Emails you a code to confirm. Nothing is deleted yet."
-        onPress={() => void startDelete()}
+        accessibilityHint="Asks you to confirm before anything is deleted."
+        onPress={() => setDeleteStep("confirm")}
       />
-    </>
+    </View>
   );
 
+  if (deleteStep === "confirm") {
+    return (
+      <DeleteAccountConfirmStep
+        headingRef={confirmHeading}
+        codeRequestError={deleteCodeError}
+        offline={deleteOffline}
+        sendingCode={sendingCode}
+        cancelDisabled={sendingCode}
+        onEmailCode={() => void requestDeleteCode()}
+        onCancel={cancelDelete}
+      />
+    );
+  }
   if (deleteStep === "code") {
     return (
       <DeleteAccountCodeStep
         onRequestDeleteCode={onRequestDeleteCode}
         onDeleteAccount={onDeleteAccount}
         onAccountDeleted={onAccountDeleted}
-        onCancel={() => setDeleteStep("none")}
+        onCancel={cancelDelete}
       />
     );
   }

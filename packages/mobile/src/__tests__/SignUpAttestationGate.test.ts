@@ -12,7 +12,6 @@ import { flattenStyle, renderScreen } from "./screenHarness";
 
 const CURRENT = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
 const ACCEPT = "Accept and continue";
-const DELETE_ENTRY = "Delete account";
 const required = (acceptedTextVersionId: string | null): SignUpAttestationResult => ({
   ok: true,
   status: { required: true, currentTextVersionId: CURRENT, acceptedTextVersionId },
@@ -175,35 +174,5 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(gate.calls.signOuts).toBe(1);
   });
 
-  // Stamp #74 store check (Apple 5.1.1(v), Play account deletion): a gated account can still delete itself in the app.
-  it.each([
-    ["the re-accept prompt", required(null)],
-    ["the status-read error screen", serverError],
-  ])("from %s, a gated user can delete the account without accepting", async (_case, read) => {
-    const gate = renderGate([read], []);
-    const screen = await gate.render();
-    const entry = screen.getPressable(DELETE_ENTRY);
-    expect(entry.props.accessibilityHint).toBe("Emails you a code to confirm. Nothing is deleted yet.");
-    expect(flattenStyle(screen.queryByText(DELETE_ENTRY)?.props.style).color).toBe(colours.danger);
-
-    await screen.press(DELETE_ENTRY);
-    expect(gate.calls.deleteCodes).toBe(1);
-    expect(screen.text()).toContain("Enter the code we emailed you");
-    await screen.changeText("6-digit code", "654321");
-    await screen.press("Delete my account");
-
-    expect(gate.calls.deletes).toEqual(["654321"]);
-    expect(gate.calls.deleted).toBe(1);
-    expect(gate.calls.accepts).toBe(0);
-    expect(screen.text()).not.toContain("Account content");
-  });
-
-  it("Cancel on the code step goes back to the gate, still gated", async () => {
-    const gate = renderGate([required(null)], []);
-    const screen = await gate.render();
-    await screen.press(DELETE_ENTRY);
-    await screen.press("Cancel");
-    expect(screen.text()).toContain(SIGN_UP_ATTESTATION_LABEL);
-    expect(screen.text()).not.toContain("Account content");
-  });
+  // Delete account from the gate (Stamp 5.1.1(v), Vera round 4): SignUpAttestationGate.delete.test.ts.
 });

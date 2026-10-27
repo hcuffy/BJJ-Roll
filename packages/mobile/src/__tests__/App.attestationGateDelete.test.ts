@@ -46,6 +46,8 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
     expect(screen.text()).toContain("Accept the sign-up duties");
 
     await screen.press("Delete account");
+    expect(screen.text()).toContain("Delete your account?");
+    await screen.press("Email me a code");
     await screen.changeText("6-digit code", TEST_DELETE_CODE);
     await screen.press("Delete my account");
 
