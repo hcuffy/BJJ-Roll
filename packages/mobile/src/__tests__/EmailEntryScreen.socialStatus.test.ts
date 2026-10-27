@@ -56,7 +56,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     const screen = await render();
 
     await screen.press("I am 16 or older");
-    await screen.press("Continue with Google");
+    await screen.press("Sign in with Google");
 
     expect(onClearServerUnreachable).toHaveBeenCalled();
   });
@@ -71,7 +71,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
 
     control.offline = false;
-    await screen.press("Continue with Google");
+    await screen.press("Sign in with Google");
 
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
@@ -84,13 +84,13 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     control.holdExchange = new Promise((resolve) => (finishExchange = resolve));
     const screen = await render();
     await screen.press("I am 16 or older");
-    await screen.press("Continue with Google");
+    await screen.press("Sign in with Google");
 
     const texts = () => screen.findAllByType("Text").map(textOf);
     expect(texts()).toContain("Opening Google…");
     expect(texts().indexOf("Opening Google…")).toBeGreaterThan(texts().indexOf("or"));
     expect(screen.findAllByType("ActivityIndicator")).toHaveLength(1);
-    expect(screen.getPressable("Continue with Google").props.accessibilityState).toEqual({ disabled: true, busy: true });
+    expect(screen.getPressable("Sign in with Google").props.accessibilityState).toEqual({ disabled: true, busy: true });
 
     returnFromBrowser({ type: "success", url: SIGNED_IN_URL });
     await settle();
@@ -108,7 +108,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     browser.openAuthSessionAsync.mockResolvedValueOnce({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=server_error` });
     const screen = await render();
     await screen.press("I am 16 or older");
-    await screen.press("Continue with Google");
+    await screen.press("Sign in with Google");
 
     const texts = screen.findAllByType("Text");
     const error = texts.find((text) => textOf(text) === "Couldn't sign in with Google. Try again.");

@@ -39,14 +39,14 @@ describe("HEN-239 sign-in buttons in the shipped config (Apple off)", () => {
     const screen = await renderSignIn(await shippedSocialSignIn("ios"));
 
     expect(screen.text()).not.toMatch(/Continue with (?:Apple|Google)/u);
-    expect(screen.queryByLabelText("Continue with Google")).toBeNull();
+    expect(screen.queryByLabelText("Sign in with Google")).toBeNull();
     expect(screen.queryByText("Continue with email")).not.toBeNull();
   });
 
   it("Android with the same config shows Google (so the iOS check is not vacuous)", async () => {
     const screen = await renderSignIn(await shippedSocialSignIn("android"));
 
-    expect(screen.queryByLabelText("Continue with Google")).not.toBeNull();
+    expect(screen.queryByLabelText("Sign in with Google")).not.toBeNull();
     expect(screen.queryByText("Continue with Apple")).toBeNull();
   });
 });

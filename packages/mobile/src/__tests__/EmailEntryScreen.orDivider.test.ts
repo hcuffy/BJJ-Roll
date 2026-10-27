@@ -39,7 +39,7 @@ describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (V
     // Google's button is an image with no Text, so check it comes after Apple among the buttons.
     const buttons = screen.pressables().map((node) => (node.props.accessibilityLabel as string | undefined) ?? textOf(node));
     expect(buttons.indexOf("Continue with Apple")).toBeGreaterThan(buttons.indexOf("Continue with email"));
-    expect(buttons.indexOf("Continue with Google")).toBeGreaterThan(buttons.indexOf("Continue with Apple"));
+    expect(buttons.indexOf("Sign in with Google")).toBeGreaterThan(buttons.indexOf("Continue with Apple"));
   });
 
   it("the 'or' row: muted Label 13/18 between two 1pt border-colour lines, 24 from its neighbours, hidden from screen readers", async () => {

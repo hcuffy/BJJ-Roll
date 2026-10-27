@@ -23,10 +23,10 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
 
   it("Google: Google's official dark pill button image, unedited, 56 tall at its own aspect ratio, centred, in one labelled button", async () => {
     const { screen } = await renderButtons();
-    const button = screen.getPressable("Continue with Google");
+    const button = screen.getPressable("Sign in with Google");
 
     expect(button.props.accessibilityRole).toBe("button");
-    expect(button.props.accessibilityLabel).toBe("Continue with Google");
+    expect(button.props.accessibilityLabel).toBe("Sign in with Google");
     expect(flattenStyle(button.props.style)).toMatchObject({ alignSelf: "center" });
     expect(textOf(button)).toBe("");
     const images = screen.findAllByType("Image");
@@ -45,34 +45,38 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
   it("without the 16+ tick the brand colours stay, a visible line and the hint say why, and a tap still explains", async () => {
     const unticked = await renderButtons({ age16Confirmed: false });
     const ticked = await renderButtons({ age16Confirmed: true });
-    const untickedButton = unticked.screen.getPressable("Continue with Google");
+    const untickedButton = unticked.screen.getPressable("Sign in with Google");
 
-    expect(flattenStyle(untickedButton.props.style)).toEqual(flattenStyle(ticked.screen.getPressable("Continue with Google").props.style));
+    expect(flattenStyle(untickedButton.props.style)).toEqual(flattenStyle(ticked.screen.getPressable("Sign in with Google").props.style));
     expect(untickedButton.props.accessibilityHint).toBe(TICK_16_HINT);
     expect(untickedButton.props.disabled).not.toBe(true);
     expect(unticked.screen.queryByText(TICK_16_HINT)).not.toBeNull();
-    await unticked.screen.press("Continue with Google");
+    await unticked.screen.press("Sign in with Google");
     expect(unticked.onPress).toHaveBeenCalledWith("google");
 
-    expect(ticked.screen.getPressable("Continue with Google").props.accessibilityHint).toBeUndefined();
+    expect(ticked.screen.getPressable("Sign in with Google").props.accessibilityHint).toBeUndefined();
     expect(ticked.screen.queryByText(TICK_16_HINT)).toBeNull();
   });
 
   it("Google: busy while it signs in, with the image unchanged; disabled (announced) while another sign-in runs", async () => {
     const { screen: busyScreen } = await renderButtons({ sending: "google" });
-    const busy = busyScreen.getPressable("Continue with Google");
+    const busy = busyScreen.getPressable("Sign in with Google");
     expect(busy.props.accessibilityState).toEqual({ disabled: true, busy: true });
     expect(String(busyScreen.findAllByType("Image")[0]?.props.source)).toMatch(/google-sign-in-dark-pill\.png$/u);
     expect(busyScreen.queryByText("Opening Google…")).not.toBeNull();
+    // Vera delta item 3: the spinner is decoration; only the words are read (and announced politely).
+    const [spinner, ...extraSpinners] = busyScreen.findAllByType("ActivityIndicator");
+    expect(extraSpinners).toHaveLength(0);
+    expect(spinner?.props).toMatchObject({ accessible: false, accessibilityElementsHidden: true, importantForAccessibility: "no" });
 
     const returned = (await renderButtons({ sending: "google", progress: "signingIn" })).screen;
     expect(returned.queryByText("Signing in…")).not.toBeNull();
     expect(returned.queryByText("Opening Google…")).toBeNull();
 
     const { screen, onPress } = await renderButtons({ sending: "code" });
-    expect(screen.getPressable("Continue with Google").props.accessibilityState).toEqual({ disabled: true, busy: false });
+    expect(screen.getPressable("Sign in with Google").props.accessibilityState).toEqual({ disabled: true, busy: false });
     expect(screen.queryByText("Opening Google…")).toBeNull();
-    await screen.press("Continue with Google");
+    await screen.press("Sign in with Google");
     expect(onPress).not.toHaveBeenCalled();
   });
 
@@ -83,7 +87,7 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     expect(texts.indexOf("or")).toBeGreaterThanOrEqual(0);
     expect(texts.indexOf("or")).toBeLessThan(texts.indexOf(TICK_16_HINT));
     const all = screen.findAllByType("Text");
-    const google = screen.getPressable("Continue with Google");
+    const google = screen.getPressable("Sign in with Google");
     expect(all.length).toBeGreaterThan(2);
     expect(texts.at(-1)).toBe("Couldn't sign in with Google. Try again.");
     expect(google).toBeDefined();
@@ -101,7 +105,7 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
       accessibilityHint: TICK_16_HINT,
     });
     expect(flattenStyle(apple?.props.style)).toMatchObject({ height: 56 });
-    expect(screen.pressables().indexOf(apple!)).toBeLessThan(screen.pressables().indexOf(screen.getPressable("Continue with Google")));
+    expect(screen.pressables().indexOf(apple!)).toBeLessThan(screen.pressables().indexOf(screen.getPressable("Sign in with Google")));
     (apple?.props.onPress as () => void)();
     expect(onPress).toHaveBeenCalledWith("apple");
   });

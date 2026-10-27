@@ -8,7 +8,8 @@ import { OrDivider } from "./OrDivider";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
-export const SOCIAL_BUTTON_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Continue with Apple", google: "Continue with Google" };
+/** Each name matches the button's visible text (WCAG 2.5.3): Google's official image reads "Sign in with Google". */
+export const SOCIAL_BUTTON_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Continue with Apple", google: "Sign in with Google" };
 const SOCIAL_LOADING_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
 /** After the browser or Apple's sheet returns, while the backend makes the session (Vera interim item 5). */
 export const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
@@ -64,7 +65,13 @@ export function SocialSignInButtons({ providers, age16Confirmed, sending, onPres
       })}
       {running ? (
         <View style={styles.progressRow}>
-          <ActivityIndicator size="small" color={colours.textSecondary} />
+          <ActivityIndicator
+            size="small"
+            color={colours.textSecondary}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
           <StatusText
             message={progress === "opening" ? SOCIAL_LOADING_TITLES[running] : SOCIAL_SIGNING_IN_TITLE}
             style={styles.progress}
