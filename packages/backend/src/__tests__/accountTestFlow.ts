@@ -1,4 +1,4 @@
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import type { FakeSentOneTimeCodeMessage } from "../email/index.js";
 import { extractSessionCookie, postAuthJson, socketEnvironment, testBaseUrl, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 
@@ -36,11 +36,14 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
   };
 
   const sendOtp = async (email: string, ipAddress: string): Promise<void> => {
+    const sentBefore = current().emailSender.sentMessages.length;
     const response = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
       body: { email, type: "sign-in", age16Confirmed: true },
       ipAddress,
     });
     expect(response.status).toBe(200);
+    // With the real queue (HEN-284) the code arrives a moment after the response.
+    await vi.waitFor(() => expect(current().emailSender.sentMessages.length).toBeGreaterThan(sentBefore), { timeout: 15_000, interval: 50 });
   };
 
   const signIn = async (email: string, ipAddress: string): Promise<SignedInUser> => {

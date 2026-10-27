@@ -6,7 +6,7 @@ import { mountAuthRoutes, readSocketAddress } from "./auth/authRoutes.js";
 import { createAuth, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
 import { createDatabase } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
-import { LettermintEmailSender } from "./email/index.js";
+import { LettermintEmailSender, PgBossEmailQueue } from "./email/index.js";
 import { mountHandleRoutes } from "./handleRoutes.js";
 import { loadServerConfig, type ServerConfig, type ServerEnvironment } from "./serverConfig.js";
 
@@ -20,7 +20,7 @@ export interface CreateAppOptions {
         | "accountDeletionCodes"
         | "accountDeletionAttempts"
         | "resolveClientIp"
-        | "emailSender"
+        | "emailQueue"
         | "revokeAppleRefreshToken"
       >
     | CreateAuthOptions;
@@ -46,7 +46,7 @@ export function createApp(options?: CreateAppOptions): Hono {
         accountDeletionCodes: authInstance.accountDeletionCodes,
         accountDeletionAttempts: authInstance.accountDeletionAttempts,
         resolveClientIp: (context) => authInstance.resolveClientIp(context.req.raw.headers, { remoteAddress: readSocketAddress(context) }),
-        emailSender: authInstance.emailSender,
+        emailQueue: authInstance.emailQueue,
         revokeAppleRefreshToken: (sealedRefreshToken) => authInstance.revokeAppleRefreshToken(sealedRefreshToken),
       });
     }
@@ -59,12 +59,16 @@ export interface ServerApp {
   readonly app: Hono;
   readonly config: ServerConfig;
   readonly pool: Pool;
+  /** Not started yet: the server starts it before it listens and stops it on shutdown. */
+  readonly emailQueue: PgBossEmailQueue;
 }
 
 /** The production app: validates config (fails fast, never prints values), then mounts /health, /api/auth/*, handle routes and account routes. */
 export function createAppFromEnvironment(env: ServerEnvironment = process.env): ServerApp {
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });
+  const emailSender = new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress });
+  const emailQueue = new PgBossEmailQueue({ connectionString: config.databaseUrl, emailSender, keyring: config.keyring });
   const app = createApp({
     auth: {
       pool,
@@ -72,9 +76,10 @@ export function createAppFromEnvironment(env: ServerEnvironment = process.env): 
       baseURL: config.authBaseUrl,
       trustedProxyIpHeaders: config.trustedProxyIpHeaders,
       socialProviders: config.socialProviders,
-      emailSender: new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress }),
+      emailSender,
+      emailQueue,
     },
     database: createDatabase(pool),
   });
-  return { app, config, pool };
+  return { app, config, pool, emailQueue };
 }

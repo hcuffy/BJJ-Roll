@@ -428,6 +428,21 @@ export const jobResultSchema = z.discriminatedUnion("outcome", [
   `shared` fails if the committed JSON Schema is stale.
 - Logs: job id, queue, timings and error class only (HEN-227 log-scrub test). Partner pose, masks and metrics are never persisted (D6).
 
+### 3.7 Email queue (HEN-284)
+
+Sign-in codes, magic links and the account-deleted notice go through the pg-boss queue `email_send` (`packages/backend/src/email/emailQueue.ts`, pg-boss
+12.37.1). The API process runs the worker; pg-boss creates its own `pgboss` schema on start, so the app role needs CREATE on the database. The
+account-deletion code is still sent directly, because DELETE /account waits for it.
+
+- Retries: 3 tries in all (`retryLimit: 2`), first retry after 1 s, doubling, at most 60 s. A 4xx answer (except 408, 409, 429) or a configuration error
+  is not retried. A try still running after 60 s counts as failed (the provider timeout is 10 s).
+- Duplicates: the job id is derived from a keyed hash of the email (or a caller key, such as the user id for the deleted notice), so the same request twice
+  stores one job. The job id is sent to Lettermint as `Idempotency-Key`, so a retry after a slow or timed-out send does not send a second email.
+- Dead letter: after the last try, or at once for a non-retried error, the worker writes one JSON line `email_dead_lettered` to stdout (kind, reason,
+  tries; never the address, code or link). There is no `_dead_letter` queue for emails, so the payload is not kept.
+- Privacy: the job payload (address, code, link) is sealed with the app data key (D18). Jobs are dropped after a day unsent, and deleted a day after they
+  finish. The deleted notice job can outlive the account by up to that day.
+
 ## 4. Row-level security
 
 ### 4.1 Roles and session context [Proposal, following SEC-08 in HEN-58]
