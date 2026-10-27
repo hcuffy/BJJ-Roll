@@ -34,10 +34,15 @@ export function readSocialSignInConfig(expoConfig: ExpoConfigWithExtra | null | 
   return { appleEnabled: flags.appleEnabled === true, googleEnabled: flags.googleEnabled === true };
 }
 
-/** Buttons to show. App Store rule 4.8: an iOS app that offers Google sign-in must offer Apple too, so iOS shows Google only next to Apple. */
+/**
+ * Buttons to show. Apple only on iOS (its native button): Apple's logo artwork is licensed for Apple platforms only (Henry, 27 Oct).
+ * App Store rule 4.8: an iOS app that offers Google sign-in must offer Apple too, so iOS shows Google only next to Apple.
+ */
 export function visibleSocialProviders(config: SocialSignInConfig, platform: string): readonly SocialProvider[] {
-  const showGoogle = config.googleEnabled && (platform !== "ios" || config.appleEnabled);
-  return [...(config.appleEnabled ? (["apple"] as const) : []), ...(showGoogle ? (["google"] as const) : [])];
+  const isIos = platform === "ios";
+  const showApple = config.appleEnabled && isIos;
+  const showGoogle = config.googleEnabled && (!isIos || config.appleEnabled);
+  return [...(showApple ? (["apple"] as const) : []), ...(showGoogle ? (["google"] as const) : [])];
 }
 
 /** expo-web-browser's auth session, narrowed to what sign-in uses. */

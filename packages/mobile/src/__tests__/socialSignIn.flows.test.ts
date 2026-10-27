@@ -201,10 +201,11 @@ describe("HEN-239 which sign-in buttons show", () => {
     });
   });
 
-  it("on iOS shows Google only next to Apple (App Store rule 4.8); Android shows what is on", () => {
+  it("on iOS shows Google only next to Apple (App Store rule 4.8); Android never shows Apple (Henry, 27 Oct)", () => {
     expect(visibleSocialProviders({ appleEnabled: false, googleEnabled: true }, "ios")).toEqual([]);
     expect(visibleSocialProviders({ appleEnabled: true, googleEnabled: true }, "ios")).toEqual(["apple", "google"]);
     expect(visibleSocialProviders({ appleEnabled: false, googleEnabled: true }, "android")).toEqual(["google"]);
-    expect(visibleSocialProviders({ appleEnabled: true, googleEnabled: false }, "android")).toEqual(["apple"]);
+    expect(visibleSocialProviders({ appleEnabled: true, googleEnabled: true }, "android")).toEqual(["google"]);
+    expect(visibleSocialProviders({ appleEnabled: true, googleEnabled: false }, "android")).toEqual([]);
   });
 });

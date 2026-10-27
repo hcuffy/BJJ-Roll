@@ -42,7 +42,7 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
    | `APPLE_TEAM_ID`, `APPLE_KEY_ID`            | Apple developer team id and the id of the Sign in with Apple key                                    |
    | `APPLE_PRIVATE_KEY`                        | That key's PKCS#8 PEM; `\n` escapes are accepted for one-line values                                |
 
-   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple. Apple is off for now (Android first).
+   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple; Android never shows Apple. Apple is off for now (Android first).
    The buttons need the same **I am 16 or older** tick as email sign-in and send the 18+ answer the same way. The server refuses a new account without the 16+ tick and stores both answers in its consent record.
    The server accepts a provider email only when the provider marks it verified; otherwise it refuses with the same answer for every email. Native Apple sign-in sends Apple SHA-256 of a one-time random nonce, and the server refuses a nonce it has seen.
 

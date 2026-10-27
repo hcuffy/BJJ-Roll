@@ -120,18 +120,6 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("Apple elsewhere (browser flow): a white HIG pill with a black title, 56 tall, no recoloured Apple logo", async () => {
-    const { screen } = await renderButtons({ providers: ["apple"] });
-    const button = screen.getPressable("Continue with Apple");
-
-    expect(button.props.accessibilityLabel).toBe("Continue with Apple");
-    expect(flattenStyle(button.props.style)).toMatchObject({ backgroundColor: "#FFFFFF", minHeight: 56, borderRadius: 999 });
-    const title = screen.queryByText("Continue with Apple");
-    expect(flattenStyle(title?.props.style)).toMatchObject({ color: "#000000" });
-    expect(screen.findAllByType("Image")).toHaveLength(0);
-    expect(textOf(button)).toBe("Continue with Apple");
-  });
-
   it("the shipped app keeps Apple off", () => {
     expect(appConfig.expo.extra.socialSignIn.appleEnabled).toBe(false);
   });

@@ -10,9 +10,12 @@ import appConfig from "../../app.json";
 vi.mock("../auth/appAuthClient", () => ({ appAuthClient: null, appSecureStore: null, appBackendUrl: "http://backend.test" }));
 
 /** The sign-in wiring the shipped app (app.json) gets on a platform, read the way App.tsx reads it. */
-async function shippedSocialSignIn(platform: string): Promise<{ providers: readonly SocialProvider[]; socialSignIn: SocialSignInDependencies }> {
+async function shippedSocialSignIn(
+  platform: string,
+  expoConfig: unknown = appConfig.expo,
+): Promise<{ providers: readonly SocialProvider[]; socialSignIn: SocialSignInDependencies }> {
   vi.resetModules();
-  vi.doMock("expo-constants", () => ({ default: { expoConfig: appConfig.expo } }));
+  vi.doMock("expo-constants", () => ({ default: { expoConfig } }));
   const { Platform } = await import("react-native");
   Platform.OS = platform as typeof Platform.OS;
   const { appSocialProviders, appSocialSignIn } = await import("../auth/appSocialSignIn");
@@ -48,5 +51,25 @@ describe("HEN-239 sign-in buttons in the shipped config (Apple off)", () => {
 
     expect(screen.queryByLabelText("Sign in with Google")).not.toBeNull();
     expect(screen.queryByText("Continue with Apple")).toBeNull();
+  });
+
+  describe("with Apple turned on (Henry, 27 Oct: Android hides Apple)", () => {
+    const appleOn = { ...appConfig.expo, extra: { ...appConfig.expo.extra, socialSignIn: { appleEnabled: true, googleEnabled: true } } };
+
+    it("Android renders Google only and no Apple button", async () => {
+      const screen = await renderSignIn(await shippedSocialSignIn("android", appleOn));
+
+      expect(screen.queryByLabelText("Sign in with Google")).not.toBeNull();
+      expect(screen.findAllByType("AppleAuthenticationButton")).toHaveLength(0);
+      expect(screen.text()).not.toMatch(/Apple/u);
+    });
+
+    it("iOS still shows Apple's native button, before Google", async () => {
+      const screen = await renderSignIn(await shippedSocialSignIn("ios", appleOn));
+      const [apple, ...others] = screen.findAllByType("AppleAuthenticationButton");
+
+      expect(others).toHaveLength(0);
+      expect(screen.pressables().indexOf(apple!)).toBeLessThan(screen.pressables().indexOf(screen.getPressable("Sign in with Google")));
+    });
   });
 });

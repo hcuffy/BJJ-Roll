@@ -40,10 +40,10 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
       }),
     );
 
-  it("shows Continue with Apple and Sign in with Google next to email, with no password field", async () => {
+  it("shows Apple's native button and Sign in with Google next to email, with no password field", async () => {
     const screen = await renderWith(["apple", "google"]);
 
-    expect(screen.queryByText("Continue with Apple")).not.toBeNull();
+    expect(screen.findAllByType("AppleAuthenticationButton")).toHaveLength(1);
     expect(screen.queryByLabelText("Sign in with Google")).not.toBeNull();
     expect(screen.queryByText("Continue with email")).not.toBeNull();
     expect(screen.findAllByType("TextInput").some((input) => input.props.secureTextEntry === true)).toBe(false);
@@ -52,7 +52,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
   it("shows no social buttons when none is configured", async () => {
     const screen = await renderWith([]);
 
-    expect(screen.queryByText("Continue with Apple")).toBeNull();
+    expect(screen.findAllByType("AppleAuthenticationButton")).toHaveLength(0);
     expect(screen.queryByLabelText("Sign in with Google")).toBeNull();
   });
 

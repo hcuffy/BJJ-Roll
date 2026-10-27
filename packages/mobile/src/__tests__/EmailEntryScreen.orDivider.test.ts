@@ -1,5 +1,6 @@
 import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+import { Platform } from "react-native";
+import { afterEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import type { SocialProvider } from "../auth/socialSignIn";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
@@ -15,7 +16,7 @@ async function renderSignIn(socialProviders: readonly SocialProvider[]) {
   const socialSignIn = {
     client,
     backendUrl: TEST_BACKEND_URL,
-    platform: "android" as const,
+    platform: Platform.OS,
     browser: { openAuthSessionAsync: () => Promise.resolve({ type: "cancel" as const }) },
   };
   return await renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, socialProviders, socialSignIn }));
@@ -25,7 +26,13 @@ const dividerRow = (screen: Awaited<ReturnType<typeof renderSignIn>>) =>
   screen.findAllByType("View").filter((node) => textOf(node) === "or" && node.children.length === 3);
 
 describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (Vera Round 4 item 4, interim item 2, Henry Q4)", () => {
+  afterEach(() => {
+    Platform.OS = "android";
+  });
+
   it("puts the email buttons first, the 'or' row next, and the brand buttons after it", async () => {
+    // Apple shows on iOS only, as Apple's native button (no Text node): order it among the buttons.
+    Platform.OS = "ios";
     const screen = await renderSignIn(["apple", "google"]);
     const texts = screen.findAllByType("Text").map(textOf);
     const at = (text: string) => texts.indexOf(text);
@@ -35,11 +42,10 @@ describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (V
     expect(at("Email me a sign-in link instead")).toBeLessThan(at("or"));
     // Vera interim item 2: the muted 16+ line sits between the divider and the brand buttons.
     expect(at("or")).toBeLessThan(at("Tick the 16 or older box first."));
-    expect(at("Tick the 16 or older box first.")).toBeLessThan(at("Continue with Apple"));
-    // Google's button is an image with no Text, so check it comes after Apple among the buttons.
-    const buttons = screen.pressables().map((node) => (node.props.accessibilityLabel as string | undefined) ?? textOf(node));
-    expect(buttons.indexOf("Continue with Apple")).toBeGreaterThan(buttons.indexOf("Continue with email"));
-    expect(buttons.indexOf("Sign in with Google")).toBeGreaterThan(buttons.indexOf("Continue with Apple"));
+    const [apple] = screen.findAllByType("AppleAuthenticationButton");
+    const pressables = screen.pressables();
+    expect(pressables.indexOf(apple!)).toBeGreaterThan(pressables.indexOf(screen.getPressable("Continue with email")));
+    expect(pressables.indexOf(screen.getPressable("Sign in with Google"))).toBeGreaterThan(pressables.indexOf(apple!));
   });
 
   it("the 'or' row: muted Label 13/18 between two 1pt border-colour lines, 24 from its neighbours, hidden from screen readers", async () => {
