@@ -75,7 +75,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 used Apple nonce
     expect(await rowExists(`${NONCE_PREFIX}${claim}`)).toBe(false);
   });
 
-  it("indexes verifications.expires_at (migration 003)", async () => {
+  it("indexes verifications.expires_at (migration 004)", async () => {
     const indexes = await current().pool.query<{ indexdef: string }>(
       "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'verifications' AND indexname = 'verifications_expires_at_idx'",
     );

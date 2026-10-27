@@ -63,7 +63,7 @@ export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<bo
     await client.query("SELECT set_config('app.verification_identifier', $1, true)", [identifier]);
     // Serialises two requests carrying the same token, so exactly one of them can claim it.
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [identifier]);
-    // No cleanup job: each new claim also removes expired used-nonce rows (migration 003 lets bjj_app reach only those).
+    // No cleanup job: each new claim also removes expired used-nonce rows (migration 004 lets bjj_app reach only those).
     await client.query("DELETE FROM public.verifications WHERE starts_with(identifier, $1) AND expires_at < now()", [USED_NONCE_IDENTIFIER_PREFIX]);
     const used = await client.query("SELECT 1 FROM public.verifications WHERE identifier = $1 LIMIT 1", [identifier]);
     if (used.rowCount === 0) {

@@ -1,5 +1,7 @@
 import { AGE_CONFIRMATION_TEXT_VERSION_ID, AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { RATE_LIMIT_WINDOW_SECONDS, MAX_VERIFIES_PER_IP_PER_WINDOW } from "../auth/authLimits.js";
+import { authIpRateLimitCustomRules } from "../auth/authRateLimits.js";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import {
@@ -228,16 +230,41 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect(response.status).toBe(400);
   });
 
-  it("rate limits sign-in starts per IP", async () => {
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      const response = await postAuthJson(current().app, "/sign-in/social", {
+  /** Sends `max + 2` requests from one IP; returns the 1-based number of the first 429 (or null). */
+  const firstLimitedRequest = async (send: () => Promise<Response>, max: number): Promise<number | null> => {
+    for (let request = 1; request <= max + 2; request += 1) {
+      if ((await send()).status === 429) {
+        return request;
+      }
+    }
+    return null;
+  };
+
+  // Better Auth 1.7.7's built-in rule for every /sign-in* path is 3 requests per 10 seconds; ours must replace it.
+  const BETTER_AUTH_DEFAULT_SIGN_IN_MAX = 3;
+
+  it("rate limits sign-in starts per IP with our rule (not Better Auth's 3 per 10 s default): the first 429 is request max + 1", async () => {
+    const rule = authIpRateLimitCustomRules["/sign-in/social"];
+    expect(rule).toEqual({ window: RATE_LIMIT_WINDOW_SECONDS, max: MAX_VERIFIES_PER_IP_PER_WINDOW });
+    expect(rule?.max).not.toBe(BETTER_AUTH_DEFAULT_SIGN_IN_MAX);
+    const start = () =>
+      postAuthJson(current().app, "/sign-in/social", {
         body: { provider: "google", callbackURL: DEEP_LINK_CALLBACK_URL, disableRedirect: true },
         ipAddress: "198.51.100.204",
       });
-      statuses.push(response.status);
-    }
-    expect(statuses).toContain(429);
+
+    expect(await firstLimitedRequest(start, rule?.max ?? 0)).toBe((rule?.max ?? 0) + 1);
+  });
+
+  it("rate limits provider callbacks per IP with our /callback/* rule: the first 429 is request max + 1", async () => {
+    const rule = authIpRateLimitCustomRules["/callback/*"];
+    expect(rule).toEqual({ window: RATE_LIMIT_WINDOW_SECONDS, max: MAX_VERIFIES_PER_IP_PER_WINDOW });
+    const callback = () => getAuthPath(current().app, "/callback/google?code=replayed-code&state=not-a-real-state", { ipAddress: "198.51.100.205" });
+
+    expect(await firstLimitedRequest(callback, rule?.max ?? 0)).toBe((rule?.max ?? 0) + 1);
+    // Another IP still gets through: the limit is per IP.
+    const otherIp = await getAuthPath(current().app, "/callback/google?code=replayed-code&state=not-a-real-state", { ipAddress: "198.51.100.206" });
+    expect(otherIp.status).not.toBe(429);
   });
 
   it("never stores or logs the provider tokens, the age answer or the email", async () => {
