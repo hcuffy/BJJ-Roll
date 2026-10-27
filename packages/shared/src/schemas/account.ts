@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { identifierSchema, timestampSchema } from "./common.js";
+import { ageConfirmationRecordSchema } from "./consentRecord.js";
 import { handleSchema } from "./handle.js";
 
 /**
@@ -14,6 +15,7 @@ export const accountExportSchema = z.strictObject({
     handle: handleSchema.nullable(),
     createdAt: timestampSchema,
   }),
+  consentRecords: z.array(ageConfirmationRecordSchema), // HEN-263: deleted with the account, exported like HEN-183
 });
 
 export type AccountExport = z.infer<typeof accountExportSchema>;
@@ -38,3 +40,19 @@ export const accountDeletionCodeResponseSchema = z.strictObject({
 });
 
 export type AccountDeletionCodeResponse = z.infer<typeof accountDeletionCodeResponseSchema>;
+
+/** GET /account/age-confirmation (HEN-263): canPurchase is age18Confirmed; under-18 accounts stay on the free tier. */
+export const ageConfirmationStatusSchema = z.strictObject({
+  age16Confirmed: z.boolean(),
+  age18Confirmed: z.boolean(),
+  canPurchase: z.boolean(),
+});
+
+export type AgeConfirmationStatus = z.infer<typeof ageConfirmationStatusSchema>;
+
+/** POST /account/age-confirmation body (HEN-263): only a later 18+ confirmation. Deleting the account is the only way back. */
+export const adultConfirmationRequestSchema = z.strictObject({
+  age18Confirmed: z.literal(true),
+});
+
+export type AdultConfirmationRequest = z.infer<typeof adultConfirmationRequestSchema>;

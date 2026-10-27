@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { AccessibilityInfo, Share } from "react-native";
 import { type MockInstance, vi } from "vitest";
-import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { renderScreen } from "./screenHarness";
 
@@ -24,6 +24,13 @@ export function createSignedInScreenHarness() {
     exportResult: Promise.resolve<AccountExportResult>({ ok: true, json: EXPORT_JSON }),
     codeResult: Promise.resolve<AccountCodeResult>({ ok: true }),
     deleteResult: Promise.resolve<AccountDeletionResult>({ ok: true }),
+    ageReads: 0,
+    adultConfirmations: 0,
+    ageStatusResult: Promise.resolve<AgeConfirmationResult>({
+      ok: true,
+      status: { age16Confirmed: true, age18Confirmed: false, canPurchase: false },
+    }),
+    adultResult: Promise.resolve<AgeConfirmationResult>({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } }),
     shareSpy: undefined as unknown as MockInstance<typeof Share.share>,
   };
   state.shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
@@ -46,6 +53,14 @@ export function createSignedInScreenHarness() {
           return state.deleteResult;
         },
         onAccountDeleted: () => (state.deletedCalls += 1),
+        onReadAgeConfirmation: () => {
+          state.ageReads += 1;
+          return state.ageStatusResult;
+        },
+        onConfirmAdult: () => {
+          state.adultConfirmations += 1;
+          return state.adultResult;
+        },
       }),
     );
 

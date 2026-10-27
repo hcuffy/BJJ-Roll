@@ -27,6 +27,8 @@ const signedIn = () =>
     onRequestDeleteCode: () => Promise.resolve({ ok: true } as const),
     onDeleteAccount: () => Promise.resolve({ ok: true } as const),
     onAccountDeleted: () => undefined,
+    onReadAgeConfirmation: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: false, canPurchase: false } } as const),
+    onConfirmAdult: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } } as const),
   });
 const deleteCodeStep = () =>
   createElement(DeleteAccountCodeStep, {
@@ -172,10 +174,10 @@ describe("email entry design details", () => {
     expect(flattenStyle(label?.props.style)).toMatchObject({ fontSize: 13, lineHeight: 18, fontWeight: "500" });
   });
 
-  it("makes the whole 17+ row (box and label) one 48dp target with a 24pt, 2pt-bordered box that fills lime when ticked", async () => {
+  it("makes the whole 16+ row (box and label) one 48dp target with a 24pt, 2pt-bordered box that fills lime when ticked", async () => {
     const screen = await renderScreen(emailEntry());
     const row = screen.getByRole("checkbox");
-    expect(textOf(row)).toContain("I am 17 or older");
+    expect(textOf(row)).toContain("I am 16 or older");
     expect(flattenStyle(row.props.style).minHeight).toBeGreaterThanOrEqual(48);
     const box = () => screen.findAllByType("View").find((view) => flattenStyle(view.props.style).width === 24);
     expect(flattenStyle(box()?.props.style)).toMatchObject({ height: 24, borderWidth: 2, borderColor: colours.textSecondary });
@@ -188,7 +190,7 @@ describe("email entry design details", () => {
 
   it("gives the checkbox an explicit screen-reader label and hides the ✓ glyph from screen readers", async () => {
     const screen = await renderScreen(emailEntry());
-    expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 17 or older");
+    expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 16 or older");
     await screen.pressRole("checkbox");
     const tick = screen.findAllByType("Text").find((text) => textOf(text) === "✓");
     expect(tick?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });

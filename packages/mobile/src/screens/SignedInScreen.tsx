@@ -1,8 +1,10 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
-import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
+import { AdultConfirmStep } from "./AdultConfirmStep";
+import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
@@ -17,14 +19,19 @@ export interface SignedInScreenProps {
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   /** Called once the backend confirmed the deletion and the local session is gone. */
   readonly onAccountDeleted: () => void;
+  /** Reads whether the account confirmed 18+ (HEN-263). */
+  readonly onReadAgeConfirmation: () => Promise<AgeConfirmationResult>;
+  /** Records a new 18+ confirmation; only deleting the account undoes it. */
+  readonly onConfirmAdult: () => Promise<AgeConfirmationResult>;
 }
 
-type AccountTask = "export" | "code";
+type AccountTask = "export" | "code" | "adult";
 type DeleteStep = "none" | "confirm" | "code";
 
 const styles = StyleSheet.create({
-  // 16 margin + the layout's 16 gap = 32 above the section.
-  accountSection: { marginTop: spacing.medium, gap: spacing.medium },
+  // 16 margin + the layout's 16 gap = 32 above the section; 8 from the label to its items, 16 between items.
+  accountSection: { marginTop: spacing.medium, gap: spacing.small },
+  accountItems: { gap: spacing.medium },
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
 });
 
@@ -35,16 +42,31 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
 }
 
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
-export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, onDeleteAccount, onAccountDeleted }: SignedInScreenProps) {
+export function SignedInScreen({
+  onSignOut,
+  onExportData,
+  onRequestDeleteCode,
+  onDeleteAccount,
+  onAccountDeleted,
+  onReadAgeConfirmation,
+  onConfirmAdult,
+}: SignedInScreenProps) {
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
+  const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
+  const [adultError, setAdultError] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntry = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToDeleteEntry = useRef(false);
+  const [adultDialogOpen, setAdultDialogOpen] = useState(false);
+  const adultEntry = useRef<ComponentRef<typeof View>>(null);
+  const returnFocusToAdultEntry = useRef(false);
+  // Set when this visit's confirm saved; cleared once focus has moved to the confirmed row (Vera round 4 item 3).
+  const [adultJustConfirmed, setAdultJustConfirmed] = useState(false);
 
   // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
   // The code step moves focus to its own heading.
@@ -56,6 +78,28 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
       moveScreenReaderFocus(deleteEntry.current);
     }
   }, [deleteStep]);
+
+  useEffect(() => {
+    if (!adultDialogOpen && returnFocusToAdultEntry.current) {
+      returnFocusToAdultEntry.current = false;
+      moveScreenReaderFocus(adultEntry.current);
+    }
+  }, [adultDialogOpen]);
+
+  // Read once per visit to this screen; the parent passes a fresh callback on every render.
+  const readAgeConfirmation = useRef(onReadAgeConfirmation);
+  useEffect(() => {
+    let active = true;
+    void readAgeConfirmation.current().then((result) => {
+      if (active) {
+        // A failed read still offers the button: each confirm adds a new record, so confirming twice is harmless.
+        setAge18Confirmed(result.ok ? result.status.age18Confirmed : "failed");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const runOnce = async (task: AccountTask, work: () => Promise<void>) => {
     if (inFlight.current) {
@@ -86,6 +130,18 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
       }
     });
 
+  const confirmAdultAge = () =>
+    runOnce("adult", async () => {
+      setAdultError(null);
+      const result = await onConfirmAdult();
+      if (result.ok) {
+        setAge18Confirmed(result.status.age18Confirmed);
+        setAdultJustConfirmed(result.status.age18Confirmed);
+      } else {
+        setAdultError(`We could not save that. ${result.message}`);
+      }
+    });
+
   const requestCode = () =>
     runOnce("code", async () => {
       setCodeRequestError(null);
@@ -112,6 +168,19 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
     loadingTitle: "Preparing export…",
     onPress: () => void exportData(),
   };
+
+  if (adultDialogOpen) {
+    return (
+      <AdultConfirmStep
+        // Either way out, focus goes back to the 18+ slot: the button on Cancel, "Saving…" on Yes, then the confirmed row once saved.
+        onConfirm={() => {
+          setAdultDialogOpen(false);
+          void confirmAdultAge();
+        }}
+        onCancel={() => setAdultDialogOpen(false)}
+      />
+    );
+  }
 
   if (deleteStep === "code") {
     return (
@@ -171,24 +240,40 @@ export function SignedInScreen({ onSignOut, onExportData, onRequestDeleteCode, o
         <Text accessibilityRole="header" style={styles.sectionLabel}>
           Account
         </Text>
-        <AuthButton
-          {...exportButtonProps}
-          title="Export my data"
-          variant="secondary"
-          accessibilityHint="Opens the share sheet with a copy of your account data."
-        />
-        <StatusText message={exportError} style={authStyles.fieldError} />
-        <AuthButton
-          ref={deleteEntry}
-          title="Delete account"
-          variant="dangerText"
-          disabled={isBusy}
-          accessibilityHint="Asks you to confirm before anything is deleted."
-          onPress={() => {
-            setExportError(null);
-            setDeleteStep("confirm");
-          }}
-        />
+        <View style={styles.accountItems}>
+          <AuthButton
+            {...exportButtonProps}
+            title="Export my data"
+            variant="secondary"
+            accessibilityHint="Opens the share sheet with a copy of your account data."
+          />
+          <StatusText message={exportError} style={authStyles.fieldError} />
+          <AdultStatusItem
+            status={age18Confirmed}
+            buttonRef={adultEntry}
+            focusConfirmedRow={adultJustConfirmed}
+            onConfirmedRowFocused={() => setAdultJustConfirmed(false)}
+            disabled={isBusy && runningTask !== "adult"}
+            loading={runningTask === "adult"}
+            onConfirmPress={() => {
+              setAdultError(null);
+              returnFocusToAdultEntry.current = true;
+              setAdultDialogOpen(true);
+            }}
+          />
+          <StatusText message={adultError} style={authStyles.fieldError} />
+          <AuthButton
+            ref={deleteEntry}
+            title="Delete account"
+            variant="dangerText"
+            disabled={isBusy}
+            accessibilityHint="Asks you to confirm before anything is deleted."
+            onPress={() => {
+              setExportError(null);
+              setDeleteStep("confirm");
+            }}
+          />
+        </View>
       </View>
     </AuthScreenLayout>
   );

@@ -21,6 +21,8 @@ import {
 export interface CreateEncryptedRlsAuthAdapterOptions {
   readonly pool: Pool;
   readonly codec: AuthCryptoCodec;
+  /** Runs in the same transaction as the user insert; throwing rolls the user row back. */
+  readonly onUserCreated?: (transaction: AuthTransaction, user: { id: string; email: string }) => Promise<void>;
 }
 
 type RunInTransaction = <TResult>(work: (transaction: AuthTransaction) => Promise<TResult>) => Promise<TResult>;
@@ -43,7 +45,7 @@ function serializeOnTransaction(transaction: AuthTransaction): RunInTransaction 
 export function createEncryptedRlsAuthAdapter(
   adapterContext: CreateEncryptedRlsAuthAdapterOptions,
 ): (options: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
-  const { pool, codec } = adapterContext;
+  const { pool, codec, onUserCreated } = adapterContext;
   const kyselyDb = new Kysely<RowRecord>({
     dialect: new PostgresDialect({ pool }),
     plugins: [new CamelCasePlugin()],
@@ -68,14 +70,10 @@ export function createEncryptedRlsAuthAdapter(
     const buildAdapter = (run: RunInTransaction, sharedTransaction: AuthTransaction | null): DBAdapter<BetterAuthOptions> => {
       const scoped = <TResult>(
         { model, where }: { model: string; where: Where[] | undefined },
-        whenUnmatched: TResult,
         operation: (adapter: DBAdapter<BetterAuthOptions>, scope: ResolvedWhereScope) => Promise<TResult>,
       ): Promise<TResult> =>
         run(async (transaction) => {
           const scope = await resolveWhereScope(transaction, { model, where }, codec);
-          if (scope.unmatched) {
-            return whenUnmatched;
-          }
           return await operation(kyselyAdapter(transaction, { type: "postgres" })(options), scope);
         });
 
@@ -112,11 +110,10 @@ export function createEncryptedRlsAuthAdapter(
             } else if (modelKey === "verification") {
               settings.verificationIdentifier = typeof encoded.identifier === "string" ? encoded.identifier : null;
               if (emailHmac !== null) {
+                // Set even when null, so a code for an unknown email writes the same columns as one for a known email.
                 const userId = await lookupUserIdByEmailHmacInTransaction(transaction, emailHmac);
-                if (userId !== null) {
-                  encoded.userId = userId;
-                  settings.userId = userId;
-                }
+                encoded.userId = userId;
+                settings.userId = userId;
               } else if (typeof encoded.userId === "string") {
                 settings.userId = encoded.userId;
               }
@@ -127,12 +124,15 @@ export function createEncryptedRlsAuthAdapter(
               data: encoded,
               forceAllowId: true,
             });
+            if (modelKey === "user" && onUserCreated) {
+              await onUserCreated(transaction, { id: String(encoded.id), email: String(data.email) });
+            }
             return decodeRow(model, created, rawSessionToken);
           })) as never;
         },
         async findOne({ model, where, join }) {
           const modelKey = normalizeModelKey(model);
-          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+          return (await scoped<RowRecord | null>({ model, where }, async (adapter, scope) => {
             const row = await adapter.findOne<RowRecord>({ model, where: scope.clauses ?? [], join });
             if (row && modelKey === "session" && isSessionPastLifetime(row, Date.now())) {
               await adapter.delete({ model, where: [{ field: "id", operator: "eq", value: String(row.id), connector: "AND" }] });
@@ -143,7 +143,7 @@ export function createEncryptedRlsAuthAdapter(
         },
         async findMany({ model, where, limit, sortBy, offset, join }) {
           const modelKey = normalizeModelKey(model);
-          return (await scoped<RowRecord[]>({ model, where }, [], async (adapter, scope) => {
+          return (await scoped<RowRecord[]>({ model, where }, async (adapter, scope) => {
             const rows = await adapter.findMany<RowRecord>({ model, where: scope.clauses, limit, sortBy, offset, join });
             const nowMs = Date.now();
             const live = modelKey === "session" ? rows.filter((row) => !isSessionPastLifetime(row, nowMs)) : rows;
@@ -153,7 +153,7 @@ export function createEncryptedRlsAuthAdapter(
         async update({ model, where, update }) {
           const modelKey = normalizeModelKey(model);
           const encodedUpdate = encodeUpdateData(model, update as RowRecord, codec);
-          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+          return (await scoped<RowRecord | null>({ model, where }, async (adapter, scope) => {
             const clauses = scope.clauses ?? [];
             const updated =
               modelKey === "session"
@@ -164,27 +164,25 @@ export function createEncryptedRlsAuthAdapter(
         },
         async updateMany({ model, where, update }) {
           const encodedUpdate = encodeUpdateData(model, update, codec);
-          return await scoped({ model, where }, 0, (adapter, scope) =>
-            adapter.updateMany({ model, where: scope.clauses ?? [], update: encodedUpdate }),
-          );
+          return await scoped({ model, where }, (adapter, scope) => adapter.updateMany({ model, where: scope.clauses ?? [], update: encodedUpdate }));
         },
         async delete({ model, where }) {
-          await scoped({ model, where }, undefined, (adapter, scope) => adapter.delete({ model, where: scope.clauses ?? [] }));
+          await scoped({ model, where }, (adapter, scope) => adapter.delete({ model, where: scope.clauses ?? [] }));
         },
         async deleteMany({ model, where }) {
-          return await scoped({ model, where }, 0, (adapter, scope) => adapter.deleteMany({ model, where: scope.clauses ?? [] }));
+          return await scoped({ model, where }, (adapter, scope) => adapter.deleteMany({ model, where: scope.clauses ?? [] }));
         },
         async count({ model, where }) {
-          return await scoped({ model, where }, 0, (adapter, scope) => adapter.count({ model, where: scope.clauses }));
+          return await scoped({ model, where }, (adapter, scope) => adapter.count({ model, where: scope.clauses }));
         },
         async consumeOne({ model, where }) {
-          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+          return (await scoped<RowRecord | null>({ model, where }, async (adapter, scope) => {
             const consumed = await adapter.consumeOne<RowRecord>({ model, where: scope.clauses ?? [] });
             return decodeRow(model, consumed, scope.rawSessionToken);
           })) as never;
         },
         async incrementOne({ model, where, increment, set }) {
-          return (await scoped<RowRecord | null>({ model, where }, null, async (adapter, scope) => {
+          return (await scoped<RowRecord | null>({ model, where }, async (adapter, scope) => {
             const incremented = await adapter.incrementOne<RowRecord>({ model, where: scope.clauses ?? [], increment, set });
             return decodeRow(model, incremented, scope.rawSessionToken);
           })) as never;

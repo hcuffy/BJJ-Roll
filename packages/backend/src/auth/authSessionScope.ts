@@ -50,10 +50,11 @@ export function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): st
   return isHashedSessionToken(value) ? value : codec.hashSessionToken(value);
 }
 
+/** The nil UUID: no user row has it, so a lookup for an unknown email matches nothing. */
+const NO_USER_ID = "00000000-0000-0000-0000-000000000000";
+
 export interface ResolvedWhereScope {
   readonly clauses: Where[] | undefined;
-  /** True when an email lookup proved no row can match. */
-  readonly unmatched: boolean;
   /** Raw session token from the where clause, restored on rows returned to Better Auth. */
   readonly rawSessionToken: string | null;
 }
@@ -76,12 +77,9 @@ export async function resolveWhereScope(
     const { field, value } = clause;
     if (modelKey === "user" && field === "email" && typeof value === "string") {
       const userId = await lookupUserIdByEmailHmacInTransaction(transaction, codec.computeEmailHmac(value));
-      if (userId === null) {
-        await applyScopeSettings(transaction, settings);
-        return { clauses: [], unmatched: true, rawSessionToken: null };
-      }
+      // HEN-263: an unknown email still runs the same query, on an id no row has, so it does the same work as a known one.
       settings.userId = userId;
-      transformed.push({ ...clause, field: "id", value: userId });
+      transformed.push({ ...clause, field: "id", value: userId ?? NO_USER_ID });
       continue;
     }
     if (modelKey === "user" && field === "id" && typeof value === "string") {
@@ -138,7 +136,7 @@ export async function resolveWhereScope(
       await applyScopeSettings(transaction, settings);
     }
   }
-  return { clauses: where ? transformed : undefined, unmatched: false, rawSessionToken };
+  return { clauses: where ? transformed : undefined, rawSessionToken };
 }
 
 export function isSessionPastLifetime(row: Record<string, unknown>, nowMs: number): boolean {

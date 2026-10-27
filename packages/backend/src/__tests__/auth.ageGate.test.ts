@@ -1,212 +1,138 @@
 import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
+import { createAgeGateTestContext, magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
+import { extractSessionCookie, getAuthPath, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import {
-  dumpRawAuthTables,
-  extractSessionCookie,
-  getAuthPath,
-  postAuthJson,
-  startAuthTestEnvironment,
-  type StartedAuthTestEnvironment,
-} from "./authTestHelper.js";
 
-const otpSendPath = "/email-otp/send-verification-otp";
-const magicLinkSendPath = "/sign-in/magic-link";
-const ageColumnPattern = "(^|_)age($|_)|age_?confirm|birth|dob|adult|minor";
+describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (replaces the HEN-77 send-time refusal)", () => {
+  const {
+    current,
+    capturedLogs,
+    latestOtpFor,
+    latestMagicLinkFor,
+    countRows,
+    consentRowsFor,
+    rateLimitCounts,
+    changedRateLimitKeys,
+    sendOtp,
+    signUpWithOtp,
+  } = createAgeGateTestContext();
 
-describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-77 age gate on account creation", () => {
-  let environment: StartedAuthTestEnvironment | undefined;
-  const capturedLogs: string[] = [];
+  describe("AC 1: the send step answers every email the same way", () => {
+    const ageAnswerVariants = [
+      { name: "no age answer", answers: {} },
+      { name: "age16Confirmed false", answers: { age16Confirmed: false } },
+      { name: "age16Confirmed as a string", answers: { age16Confirmed: "true" } },
+      { name: "age16Confirmed true", answers: { age16Confirmed: true } },
+      { name: "age16Confirmed and age18Confirmed true", answers: { age16Confirmed: true, age18Confirmed: true } },
+    ];
 
-  const current = (): StartedAuthTestEnvironment => {
-    if (!environment) {
-      throw new Error("Auth test environment not initialized");
-    }
-    return environment;
-  };
-
-  const latestOtpFor = (email: string): string => {
-    const sent = current()
-      .emailSender.sentMessages.filter((message) => message.kind === "one_time_code" && message.to.toLowerCase() === email.toLowerCase())
-      .at(-1);
-    if (!sent || sent.kind !== "one_time_code") {
-      throw new Error(`No OTP sent for ${email}`);
-    }
-    return sent.code;
-  };
-
-  const latestMagicLinkFor = (email: string): string => {
-    const sent = current()
-      .emailSender.sentMessages.filter((message) => message.kind === "magic_link" && message.to.toLowerCase() === email.toLowerCase())
-      .at(-1);
-    if (!sent || sent.kind !== "magic_link") {
-      throw new Error(`No magic link sent for ${email}`);
-    }
-    return sent.url;
-  };
-
-  const countRows = async (table: "users" | "sessions" | "verifications"): Promise<number> => {
-    const result = await current().pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM public.${table}`);
-    return result.rows[0]?.count ?? 0;
-  };
-
-  const countEmailRateLimitRows = async (email: string): Promise<number> => {
-    const { pool, codec } = current();
-    const result = await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM public.rate_limits WHERE key = $1", [
-      `email:${codec.computeEmailHmac(email)}`,
-    ]);
-    return result.rows[0]?.count ?? 0;
-  };
-
-  const signUpWithOtp = async (email: string, ipAddress: string): Promise<{ userId: string; cookie: string }> => {
-    const sendResponse = await postAuthJson(current().app, otpSendPath, { body: { email, type: "sign-in", ageConfirmed: true }, ipAddress });
-    expect(sendResponse.status).toBe(200);
-    const signInResponse = await postAuthJson(current().app, "/sign-in/email-otp", { body: { email, otp: latestOtpFor(email) }, ipAddress });
-    expect(signInResponse.status).toBe(200);
-    const payload = (await signInResponse.json()) as { user: { id: string } };
-    return { userId: payload.user.id, cookie: extractSessionCookie(signInResponse) };
-  };
-
-  beforeAll(async () => {
-    const recordLog = (...entries: unknown[]): void => {
-      capturedLogs.push(entries.map((entry) => (typeof entry === "string" ? entry : JSON.stringify(entry))).join(" "));
-    };
-    for (const method of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, method).mockImplementation(recordLog);
-    }
-    environment = await startAuthTestEnvironment({ logger: { disabled: false, level: "debug" } });
-  }, 60_000);
-
-  afterAll(async () => {
-    vi.restoreAllMocks();
-    await environment?.stop();
-  }, 30_000);
-
-  it.each([
-    { name: "OTP send without ageConfirmed", path: otpSendPath, body: { email: "no.flag.otp@example.com", type: "sign-in" } },
-    {
-      name: "OTP send with ageConfirmed false",
-      path: otpSendPath,
-      body: { email: "false.flag.otp@example.com", type: "sign-in", ageConfirmed: false },
-    },
-    {
-      name: "OTP send with ageConfirmed as a string",
-      path: otpSendPath,
-      body: { email: "string.flag.otp@example.com", type: "sign-in", ageConfirmed: "true" },
-    },
-    {
-      name: "magic link without ageConfirmed",
-      path: magicLinkSendPath,
-      body: { email: "no.flag.link@example.com", callbackURL: DEEP_LINK_CALLBACK_URL },
-    },
-    {
-      name: "magic link with ageConfirmed false",
-      path: magicLinkSendPath,
-      body: { email: "false.flag.link@example.com", callbackURL: DEEP_LINK_CALLBACK_URL, ageConfirmed: false },
-    },
-  ])("AC 1 & 4: refuses $name with 400 and leaves no user, session, OTP, email or per-email counter", async ({ path, body }) => {
-    const { app, emailSender } = current();
-    const before = { users: await countRows("users"), sessions: await countRows("sessions"), verifications: await countRows("verifications") };
-    const sentBefore = emailSender.sentMessages.length;
-
-    const response = await postAuthJson(app, path, { body, ipAddress: "198.51.100.170" });
-
-    expect(response.status).toBe(400);
-    expect(((await response.json()) as { message?: string }).message).toBe(AGE_GATE_REFUSAL_MESSAGE);
-    expect(extractSessionCookie(response)).toBe("");
-    expect(await countRows("users")).toBe(before.users);
-    expect(await countRows("sessions")).toBe(before.sessions);
-    expect(await countRows("verifications")).toBe(before.verifications);
-    expect(emailSender.sentMessages.length).toBe(sentBefore);
-    expect(await countEmailRateLimitRows(body.email)).toBe(0);
-  });
-
-  it("AC 1: an OTP for a refused email cannot be used to create the account", async () => {
-    const { app } = current();
-    const email = "refused.then.guess@example.com";
-    await postAuthJson(app, otpSendPath, { body: { email, type: "sign-in" }, ipAddress: "198.51.100.171" });
-    const usersBefore = await countRows("users");
-    const signInResponse = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: "123456" }, ipAddress: "198.51.100.171" });
-    expect(signInResponse.status).toBe(400);
-    expect(await countRows("users")).toBe(usersBefore);
-  });
-
-  it("AC 4: repeated refusals never lock out the email; a later confirmed sign-up succeeds", async () => {
-    const { app } = current();
-    const email = "refused.often@example.com";
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const refused = await postAuthJson(app, otpSendPath, { body: { email, type: "sign-in" }, ipAddress: "198.51.100.172" });
-      expect(refused.status).toBe(400);
-    }
-    expect(await countEmailRateLimitRows(email)).toBe(0);
-    const { userId } = await signUpWithOtp(email, "198.51.100.173");
-    expect(userId).toBeTruthy();
-  });
-
-  it("AC 2: account creation with ageConfirmed true succeeds over OTP and magic link", async () => {
-    const { app } = current();
-    const usersBefore = await countRows("users");
-    const { userId, cookie } = await signUpWithOtp("confirmed.otp@example.com", "198.51.100.174");
-    expect(userId).toBeTruthy();
-    expect(cookie).toContain("=");
-
-    const linkEmail = "confirmed.link@example.com";
-    const sendResponse = await postAuthJson(app, magicLinkSendPath, {
-      body: { email: linkEmail, callbackURL: DEEP_LINK_CALLBACK_URL, ageConfirmed: true },
-      ipAddress: "198.51.100.175",
-    });
-    expect(sendResponse.status).toBe(200);
-    const verifyResponse = await getAuthPath(app, latestMagicLinkFor(linkEmail), { ipAddress: "198.51.100.175" });
-    const exchangeCode = new URL(verifyResponse.headers.get("location") ?? "").searchParams.get("code") ?? "";
-    const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", { body: { code: exchangeCode }, ipAddress: "198.51.100.175" });
-    expect(exchangeResponse.status).toBe(200);
-    expect(await countRows("users")).toBe(usersBefore + 2);
-  });
-
-  it("AC 5: an existing user signs in again without sending ageConfirmed", async () => {
-    const { app } = current();
-    const email = "returning.member@example.com";
-    const { userId } = await signUpWithOtp(email, "198.51.100.176");
-
-    const sendResponse = await postAuthJson(app, otpSendPath, { body: { email, type: "sign-in" }, ipAddress: "198.51.100.177" });
-    expect(sendResponse.status).toBe(200);
-    const signInResponse = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.177" });
-    expect(signInResponse.status).toBe(200);
-    expect(((await signInResponse.json()) as { user: { id: string } }).user.id).toBe(userId);
-
-    const linkResponse = await postAuthJson(app, magicLinkSendPath, {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL },
-      ipAddress: "198.51.100.177",
-    });
-    expect(linkResponse.status).toBe(200);
-  });
-
-  it("AC 3: no table or column holds an age answer, and no stored row mentions it", async () => {
-    const { pool } = current();
-    const columns = await pool.query<{ table_name: string; column_name: string }>(
-      "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' AND (column_name ~* $1 OR table_name ~* $1)",
-      [ageColumnPattern],
+    it.each([
+      { name: "OTP send", path: otpSendPath, extraBody: { type: "sign-in" } },
+      { name: "magic link send", path: magicLinkSendPath, extraBody: { callbackURL: DEEP_LINK_CALLBACK_URL } },
+    ])(
+      "$name: known and unknown emails get the same status and body, with or without the 16+ tick, and each gets an email",
+      async ({ path, extraBody }) => {
+        const { app, emailSender } = current();
+        const responses: { status: number; body: string }[] = [];
+        for (const [index, variant] of ageAnswerVariants.entries()) {
+          for (const email of ["known.member@example.com", `unknown.${path.length}.${index}@example.com`]) {
+            // The known email is sent to ten times here; clear only its per-email counter so the 3-per-15-min limit does not answer instead.
+            await current().pool.query("DELETE FROM public.rate_limits WHERE key LIKE 'email:%'");
+            const sentBefore = emailSender.sentMessages.length;
+            const response = await postAuthJson(app, path, {
+              body: { email, ...extraBody, ...variant.answers },
+              ipAddress: `198.51.100.${100 + index}`,
+            });
+            responses.push({ status: response.status, body: await response.text() });
+            expect(emailSender.sentMessages.length).toBe(sentBefore + 1);
+            expect(extractSessionCookie(response)).toBe("");
+          }
+        }
+        expect(new Set(responses.map((response) => response.status))).toEqual(new Set([200]));
+        expect(new Set(responses.map((response) => response.body)).size).toBe(1);
+        expect(responses[0]?.body).not.toContain(AGE_GATE_REFUSAL_MESSAGE);
+      },
     );
-    expect(columns.rows).toEqual([]);
-    const rawDump = (await dumpRawAuthTables(pool)).toLowerCase();
-    expect(rawDump).not.toContain("ageconfirmed");
-    expect(rawDump).not.toContain("age_confirmed");
   });
 
-  it("AC 3 & 4: logs carry no age answer, refusal or email, for confirmed and refused attempts", () => {
+  describe("AC 1 & 2: the age check runs where the account is created, and a refusal never touches the send counters", () => {
+    it.each([
+      { name: "no age answer", answers: {} },
+      { name: "age16Confirmed false", answers: { age16Confirmed: false } },
+      { name: "only age18Confirmed true", answers: { age18Confirmed: true } },
+    ])("OTP: a valid code for a new email sent with $name is refused with the 16+ message and creates nothing", async ({ answers }) => {
+      const { app } = current();
+      const email = `refused.otp.${Object.keys(answers).join("-") || "none"}@example.com`.toLowerCase();
+      expect((await sendOtp(email, "198.51.100.181", answers)).status).toBe(200);
+      const before = { users: await countRows("users"), sessions: await countRows("sessions"), consent: await countRows("consent_records") };
+      const rateLimitsBefore = await rateLimitCounts();
+
+      // The answer counts only from the send; a tick sent with the code itself cannot get past the gate.
+      const refused = await postAuthJson(app, otpSignInPath, {
+        body: { email, otp: latestOtpFor(email), age16Confirmed: true },
+        ipAddress: "198.51.100.181",
+      });
+
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
+      expect(extractSessionCookie(refused)).toBe("");
+      expect(await countRows("users")).toBe(before.users);
+      expect(await countRows("sessions")).toBe(before.sessions);
+      expect(await countRows("consent_records")).toBe(before.consent);
+      for (const key of changedRateLimitKeys(rateLimitsBefore, await rateLimitCounts())) {
+        expect(key).not.toMatch(/send-verification-otp|\/sign-in\/magic-link|^email:/u);
+      }
+    });
+
+    it("magic link: verifying a link for a new email sent without the tick is refused and creates no user, session or exchange code", async () => {
+      const { app } = current();
+      const email = "refused.link@example.com";
+      const sendResponse = await postAuthJson(app, magicLinkSendPath, {
+        body: { email, callbackURL: DEEP_LINK_CALLBACK_URL },
+        ipAddress: "198.51.100.182",
+      });
+      expect(sendResponse.status).toBe(200);
+      const before = { users: await countRows("users"), sessions: await countRows("sessions") };
+      const rateLimitsBefore = await rateLimitCounts();
+
+      const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.182" });
+
+      expect(verifyResponse.status).toBe(400);
+      expect(await verifyResponse.json()).toMatchObject({ code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
+      expect(new URL(verifyResponse.headers.get("location") ?? "bjjroll://auth").searchParams.get("code")).toBeNull();
+      expect(await countRows("users")).toBe(before.users);
+      expect(await countRows("sessions")).toBe(before.sessions);
+      for (const key of changedRateLimitKeys(rateLimitsBefore, await rateLimitCounts())) {
+        expect(key).not.toMatch(/send-verification-otp|\/sign-in\/magic-link|^email:/u);
+      }
+    });
+
+    it("a refusal never locks the email out: the same email can tick the box, get a new code and sign up", async () => {
+      const email = "refused.then.ticked@example.com";
+      expect((await sendOtp(email, "198.51.100.183", {})).status).toBe(200);
+      const refused = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.183" });
+      expect(refused.status).toBe(400);
+      const user = await signUpWithOtp(email, "198.51.100.183", { age16Confirmed: true });
+      expect(await consentRowsFor(user.userId)).toHaveLength(1);
+    });
+
+    it("the latest send wins: an unticked resend withdraws an earlier tick for the same email", async () => {
+      const email = "ticked.then.unticked@example.com";
+      expect((await sendOtp(email, "198.51.100.184", { age16Confirmed: true })).status).toBe(200);
+      expect((await sendOtp(email, "198.51.100.184", {})).status).toBe(200);
+      const refused = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.184" });
+      expect(refused.status).toBe(400);
+    });
+  });
+
+  it("logs carry no email, age answer or refusal", () => {
     expect(capturedLogs.length).toBeGreaterThan(0);
     const allLogs = capturedLogs.join("\n").toLowerCase();
-    expect(allLogs).not.toContain("ageconfirmed");
+    expect(allLogs).not.toContain("age16confirmed");
+    expect(allLogs).not.toContain("age18confirmed");
     expect(allLogs).not.toContain(AGE_GATE_REFUSAL_MESSAGE.toLowerCase());
-    for (const email of [
-      "no.flag.otp@example.com",
-      "false.flag.link@example.com",
-      "refused.often@example.com",
-      "confirmed.otp@example.com",
-      "returning.member@example.com",
-    ]) {
-      expect(allLogs).not.toContain(email);
-    }
+    expect(allLogs).not.toContain("@example.com");
   });
 });

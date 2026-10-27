@@ -2,9 +2,16 @@ import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, StatusBar, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { deleteAccount, exportAccountData, requestAccountDeletionCode, type AccountSession } from "./auth/accountActions";
+import {
+  confirmAdult,
+  deleteAccount,
+  exportAccountData,
+  readAgeConfirmation,
+  requestAccountDeletionCode,
+  type AccountSession,
+} from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
-import { cancelPendingSignOut, completeMagicLink, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -12,11 +19,15 @@ import { authStyles } from "./screens/authStyles";
 import { colours, textStyles } from "./theme/tokens";
 
 type AuthScreen =
-  { readonly name: "loading" } | { readonly name: "email" } | { readonly name: "code"; readonly email: string } | { readonly name: "signedIn" };
+  | { readonly name: "loading" }
+  | { readonly name: "email" }
+  | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
+  | { readonly name: "signedIn" };
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
-  const [linkError, setLinkError] = useState<string | null>(null);
+  // The reason travels with the message so the card can key extra guidance on it, not on the copy (Vera round 4 item 4).
+  const [linkError, setLinkError] = useState<{ readonly message: string; readonly reason: FailureReason } | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const [serverUnreachable, setServerUnreachable] = useState(false);
   // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
@@ -63,7 +74,7 @@ export function App() {
         if (result.reason === "network") {
           setServerUnreachable(true);
         } else if (result.message) {
-          setLinkError(result.message);
+          setLinkError({ message: result.message, reason: result.reason });
         }
         showStartupScreen();
       })
@@ -119,6 +130,8 @@ export function App() {
             onExportData={() => exportAccountData(accountSession())}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+            onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
+            onConfirmAdult={() => confirmAdult(accountSession())}
             onAccountDeleted={() => {
               // A note from a link that failed while signed in must not sit next to the deleted card.
               setServerUnreachable(false);
@@ -130,20 +143,27 @@ export function App() {
       }
       case "code": {
         return (
-          <CodeEntryScreen client={appAuthClient} email={screen.email} onSignedIn={handleSignedIn} onBack={() => setScreen({ name: "email" })} />
+          <CodeEntryScreen
+            client={appAuthClient}
+            email={screen.email}
+            age18Confirmed={screen.age18Confirmed}
+            onSignedIn={handleSignedIn}
+            onBack={() => setScreen({ name: "email" })}
+          />
         );
       }
       case "email": {
         return (
           <EmailEntryScreen
             client={appAuthClient}
-            linkError={linkError}
+            linkError={linkError?.message ?? null}
+            linkErrorReason={linkError?.reason ?? null}
             onClearLinkError={() => setLinkError(null)}
             accountNotice={accountNotice}
             onClearAccountNotice={() => setAccountNotice(null)}
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
-            onCodeSent={(email) => setScreen({ name: "code", email })}
+            onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
           />
         );
       }

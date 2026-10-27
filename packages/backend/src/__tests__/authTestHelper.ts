@@ -108,7 +108,7 @@ export function extractSessionCookie(response: Response): string {
 }
 
 export async function dumpRawAuthTables(pool: Pool): Promise<string> {
-  const tables = ["users", "sessions", "accounts", "verifications", "rate_limits"];
+  const tables = ["users", "sessions", "accounts", "verifications", "rate_limits", "consent_records"];
   const parts: string[] = [];
   for (const table of tables) {
     const existsResult = await pool.query<{ exists: boolean }>("SELECT to_regclass($1) IS NOT NULL AS exists", [`public.${table}`]);

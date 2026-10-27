@@ -28,7 +28,11 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     expect(secondRunResults).toEqual([]);
 
     const migrationRows = await pool.query<{ name: string }>("SELECT name FROM public.kysely_migration ORDER BY name");
-    expect(migrationRows.rows).toEqual([{ name: "001_users_sessions_handles_rls" }, { name: "002_auth_rate_limits_and_rls" }]);
+    expect(migrationRows.rows).toEqual([
+      { name: "001_users_sessions_handles_rls" },
+      { name: "002_auth_rate_limits_and_rls" },
+      { name: "003_age_confirmation_consent_records" },
+    ]);
     expect(betterAuthTelemetryDisabledConfig).toEqual({ enabled: false });
   });
 
@@ -95,6 +99,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
 
     expect(tableSecurityResult.rows).toEqual([
       { table_name: "accounts", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
+      { table_name: "consent_records", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "sessions", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "users", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },
       { table_name: "verifications", owner_name: "bjj_owner", rls_enabled: true, rls_forced: true },

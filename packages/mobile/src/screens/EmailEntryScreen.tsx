@@ -1,25 +1,36 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { AGE_CONFIRMATION_LABEL, isEmailAddress } from "../auth/ageConfirmation";
+import { Text, View } from "react-native";
+import {
+  AGE_ADULT_CONFIRMATION_LABEL,
+  AGE_ADULT_CONFIRMATION_NOTE,
+  AGE_ADULT_NEEDS_16_HINT,
+  AGE_CONFIRMATION_LABEL,
+  isEmailAddress,
+  missingHint,
+} from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
+import { AgeCheckbox } from "./AgeCheckbox";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { type LinkErrorCardProps, LinkErrorCard } from "./LinkErrorCard";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
-export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 17 or older.";
+export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 16 or older.";
 export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
-  readonly onCodeSent: (email: string) => void;
+  readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
+  /** Why the link failed; see LinkErrorCard. */
+  readonly linkErrorReason?: LinkErrorCardProps["reason"];
   readonly onClearLinkError?: () => void;
   /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
@@ -31,21 +42,11 @@ export interface EmailEntryScreenProps {
 
 type Sending = "code" | "link" | null;
 
-/** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
-function missingHint(emailValid: boolean, ageConfirmed: boolean): string | undefined {
-  if (!emailValid && !ageConfirmed) {
-    return "Enter your email and tick the 17 or older box first.";
-  }
-  if (!emailValid) {
-    return "Enter your email first.";
-  }
-  return ageConfirmed ? undefined : "Tick the 17 or older box first.";
-}
-
 export function EmailEntryScreen({
   client,
   onCodeSent,
   linkError = null,
+  linkErrorReason = null,
   onClearLinkError,
   accountNotice = null,
   onClearAccountNotice,
@@ -53,18 +54,21 @@ export function EmailEntryScreen({
   onClearServerUnreachable,
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [age16Confirmed, setAge16Confirmed] = useState(false);
+  const [age18Confirmed, setAge18Confirmed] = useState(false);
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
+  // False only when this submit also brought up a new email error, which is then the one announced (Vera items 8 and delta 6).
+  const [announceAgeError, setAnnounceAgeError] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   // This screen's own send failed on the network; App's serverUnreachable covers startup and links.
   const [offline, setOffline] = useState(false);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
-  const ready = ageConfirmed && isEmailAddress(email);
-  const sendHint = missingHint(isEmailAddress(email), ageConfirmed);
+  const ready = age16Confirmed && isEmailAddress(email);
+  const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -89,8 +93,10 @@ export function EmailEntryScreen({
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
     setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
-    setAgeError(ageConfirmed ? null : TICK_AGE_BOX_MESSAGE);
-    return emailValid && ageConfirmed;
+    // An email error already showing from blur is not read again, so the age error must be heard instead.
+    setAnnounceAgeError(emailValid || emailError !== null);
+    setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
+    return emailValid && age16Confirmed;
   };
 
   const send = async (kind: "code" | "link") => {
@@ -102,12 +108,12 @@ export function EmailEntryScreen({
     }
     setSending(kind);
     const action = kind === "code" ? sendEmailCode : sendMagicLink;
-    const result = await action(client, { email, ageConfirmed });
+    const result = await action(client, { email, age16Confirmed, age18Confirmed });
     setSending(null);
     if (!result.ok) {
       showFailure(result);
     } else if (kind === "code") {
-      onCodeSent(email.trim());
+      onCodeSent(email.trim(), age18Confirmed);
     } else if (linkSentTo === null) {
       setLinkSentTo(email.trim());
       linkCooldown.restart();
@@ -161,11 +167,7 @@ export function EmailEntryScreen({
 
   return (
     <AuthScreenLayout>
-      {linkError ? (
-        <View style={[authStyles.card, authStyles.errorCard]}>
-          <StatusText message={linkError} style={authStyles.cardError} />
-        </View>
-      ) : null}
+      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
       {accountNotice ? (
         <View style={authStyles.card}>
           <StatusText message={accountNotice} style={authStyles.notice} />
@@ -203,28 +205,38 @@ export function EmailEntryScreen({
         onSubmitEditing={() => void send("code")}
       />
       <ServerUnreachableNote visible={serverUnreachable || offline} />
-      <View>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityLabel={AGE_CONFIRMATION_LABEL}
-          accessibilityState={{ checked: ageConfirmed }}
-          accessibilityHint={ageError ?? undefined}
-          style={authStyles.checkboxRow}
-          onPress={() => {
-            startAction();
-            setAgeConfirmed(!ageConfirmed);
-            setAgeError(null);
-          }}>
-          <View style={[authStyles.checkbox, ageConfirmed && authStyles.checkboxTicked]}>
-            {ageConfirmed ? (
-              <Text style={authStyles.checkmark} accessibilityElementsHidden importantForAccessibility="no">
-                ✓
-              </Text>
-            ) : null}
-          </View>
-          <Text style={authStyles.checkboxLabel}>{AGE_CONFIRMATION_LABEL}</Text>
-        </Pressable>
-        <StatusText message={ageError} style={authStyles.fieldError} />
+      <View style={authStyles.ageGroup}>
+        <View>
+          <AgeCheckbox
+            label={AGE_CONFIRMATION_LABEL}
+            checked={age16Confirmed}
+            hint={ageError ?? undefined}
+            onPress={() => {
+              startAction();
+              // Unticking 16+ also unticks 18+; ticking 18+ never ticks 16+ for the user (Vera item 2).
+              if (age16Confirmed) {
+                setAge18Confirmed(false);
+              }
+              setAge16Confirmed(!age16Confirmed);
+              setAgeError(null);
+            }}
+          />
+          {/* After an empty submit the new email error is read first; this one stays visible but is not announced over it. */}
+          <StatusText message={ageError} style={authStyles.fieldError} announce={announceAgeError ? "alert" : "quiet"} />
+        </View>
+        <View style={authStyles.ageOptional}>
+          <AgeCheckbox
+            label={AGE_ADULT_CONFIRMATION_LABEL}
+            checked={age18Confirmed}
+            disabled={!age16Confirmed}
+            hint={age16Confirmed ? undefined : AGE_ADULT_NEEDS_16_HINT}
+            onPress={() => {
+              startAction();
+              setAge18Confirmed(!age18Confirmed);
+            }}
+          />
+          <Text style={textStyles.bodyMuted}>{AGE_ADULT_CONFIRMATION_NOTE}</Text>
+        </View>
       </View>
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>

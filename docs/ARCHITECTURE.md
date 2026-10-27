@@ -37,7 +37,7 @@ kit recommendation for HEN-46.
 | Planning D22             | Every person other than the tapped user is masked in all rendered or shared output and in clips sent to the LLM                                    |
 | Repo D24                 | The owner can see their own footage unmasked (Henry, 2026-10-17). See the numbering note below                                                     |
 | A2, A3                   | Testcontainers with `postgres:18.6`; Ruff + pytest for `packages/workers`                                                                          |
-| H5                       | 17+ minimum age                                                                                                                                    |
+| H5                       | 16+ minimum age; optional 18+ for purchases (HEN-263)                                                                                              |
 | H9                       | Gi and no-gi at equal weight, so every video carries `style: "gi" \| "no-gi"`                                                                      |
 | HEN-44 label set         | Level 1: 18 positions and 9 events, with level 2 as a pick list (Henry, 2026-10-17)                                                                |
 | M6-14 baseline (HEN-197) | Sara's baseline is no E2E in v1: server-side per-object encryption, no operator read path, audit log. Henry decides in HEN-201                     |

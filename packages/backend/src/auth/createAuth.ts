@@ -13,8 +13,9 @@ import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
-import { ageGateRefusalForNewUser } from "./ageGate.js";
+import { assertPendingAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
+import { enqueueSignInEmail } from "./signInEmailQueue.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
   DEEP_LINK_SCHEME,
@@ -97,7 +98,12 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     telemetry: betterAuthTelemetryDisabledConfig,
     logger: options.logger ?? { disabled: true },
     trustedOrigins: [`${DEEP_LINK_SCHEME}://`, `${DEEP_LINK_SCHEME}://*`, baseURL, ...(options.trustedOrigins ?? [])],
-    database: createEncryptedRlsAuthAdapter({ pool: options.pool, codec }),
+    database: createEncryptedRlsAuthAdapter({
+      pool: options.pool,
+      codec,
+      // HEN-263: the consent record is written in the user insert's own transaction, so neither row can exist without the other.
+      onUserCreated: (transaction, user) => storeAgeConfirmationInUserTransaction(transaction, codec, user),
+    }),
     user: {
       modelName: "users",
       additionalFields: {
@@ -131,15 +137,19 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       database: { generateId: () => randomUUID() },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send.
+          before: async (user) => {
+            await assertPendingAgeConfirmation(options.pool, codec, user.email);
+          },
+        },
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
-        const ageGateRefusal = await ageGateRefusalForNewUser(middlewareContext.path, middlewareContext.body, (email) =>
-          middlewareContext.context.internalAdapter.findUserByEmail(email),
-        );
-        if (ageGateRefusal) {
-          return ageGateRefusal;
-        }
         // Over HTTP, check-verification-otp may only test sign-in codes: a public check of a delete code would be a guessing oracle
         // outside the DELETE /account try budget.
         if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
@@ -157,6 +167,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
           }
+          // HEN-263: no refusal here. Every email gets the same answer; the 16+ check runs when the account is created.
+          if (isAccountCreatingSend(middlewareContext.path, body) && middlewareContext.request) {
+            await recordPendingAgeAnswers(options.pool, codec, body);
+          }
         }
       }),
     },
@@ -168,18 +182,22 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         allowedAttempts: OTP_MAX_ATTEMPTS,
         generateOTP: () => generateCsprngOtpCode(),
         storeOTP: { hash: (otp) => Promise.resolve(codec.hashOtpCode(otp)) },
-        sendVerificationOTP: ({ email, otp, type }) =>
-          options.emailSender.sendOneTimeCode({
-            to: email,
-            code: otp,
-            expiresInMinutes: OTP_EXPIRY_MINUTES,
-            ...(type === "email-verification" ? { purpose: "account_deletion" as const } : {}),
-          }),
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          const input = { to: email, code: otp, expiresInMinutes: OTP_EXPIRY_MINUTES };
+          if (type === "email-verification") {
+            // Account-deletion codes come from POST /account/delete-code, a signed-in server call: it still waits for the send.
+            await options.emailSender.sendOneTimeCode({ ...input, purpose: "account_deletion" });
+            return;
+          }
+          enqueueSignInEmail(() => options.emailSender.sendOneTimeCode(input));
+        },
       }),
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
         storeToken: { type: "custom-hasher", hash: (token) => Promise.resolve(codec.hashMagicLinkToken(token)) },
-        sendMagicLink: ({ email, url }) => options.emailSender.sendMagicLink({ to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES }),
+        sendMagicLink: ({ email, url }) => {
+          enqueueSignInEmail(() => options.emailSender.sendMagicLink({ to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES }));
+        },
       }),
       createMagicLinkExchangePlugin({ pool: options.pool, codec }),
     ],

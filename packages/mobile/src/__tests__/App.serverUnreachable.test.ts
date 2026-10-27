@@ -24,6 +24,7 @@ vi.mock("../auth/signInActions", async (importOriginal) => {
 const { App } = await import("../App");
 const { completeMagicLink, signOut } = await import("../auth/signInActions");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
+const { AGE_CONFIRMATION_LABEL } = await import("../auth/ageConfirmation");
 
 describe("App when the server cannot be reached (HEN-285)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
@@ -79,9 +80,9 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     // Muted body text, not the red error style.
     expect(flattenStyle(note?.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22, color: colours.textSecondary });
     expect(flattenStyle(note?.props.style).color).not.toBe(colours.danger);
-    // Under the email field, above the 17+ box.
+    // Under the email field, above the age box.
     expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeGreaterThan(screen.text().indexOf("Email"));
-    expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeLessThan(screen.text().indexOf("17 or older"));
+    expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeLessThan(screen.text().indexOf(AGE_CONFIRMATION_LABEL));
   });
 
   it("field errors next to the note are still announced as alerts", async () => {
