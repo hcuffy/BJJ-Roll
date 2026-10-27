@@ -1,0 +1,3 @@
+# Payment link allow-list (HEN-278). False positives of paymentLinkDenyList.txt only. One entry per line:
+#   <path relative to packages/mobile> | <exact matched text> | <reason>
+# The reason is required. Keep this list short; a real payment, tip or donation link is never allowed. See docs/release.md.

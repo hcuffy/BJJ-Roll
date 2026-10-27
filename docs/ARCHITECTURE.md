@@ -10,8 +10,9 @@ kit recommendation for HEN-46.
 
 ## 0. How to read this doc
 
-- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A3 and repo D24 in
-  [`DECISIONS.md`](../DECISIONS.md), D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear issue.
+- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A4, D17–D19 (revised), D20, D24, D25
+  and D26 in [`DECISIONS.md`](../DECISIONS.md), the other D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear
+  issue.
 - **[Proposal]** means a technical choice made in this doc. Sara approves or changes it in review. Once approved, durable choices go into `DECISIONS.md`.
 - **OPEN (owner)** means not decided anywhere. The owner decides: Henry (product, money), Sara (tech) or the lawyer (legal). This doc does not pick an
   answer for these.
@@ -33,7 +34,7 @@ kit recommendation for HEN-46.
 | D12, HEN-227             | GPU on Modal `eu`. HEN-227 (M3-12) sets the EU residency rules: job ID + object key payloads, no `.spawn()`, short-lived presigned URLs            |
 | D14                      | Deletion cascades to storage, derived tracks and the training manifest (SillyRabbit `cascadeDelete.ts` pattern)                                    |
 | D15                      | No face or body re-identification across videos                                                                                                    |
-| D17, D18, D19            | Better Auth with email OTP; email encrypted at field level (AES-256-GCM + HMAC lookup); the account holds only an email and a handle               |
+| D17, D18, D19, D25       | Better Auth: email OTP, magic link, Apple, Google; no passwords; emails field-encrypted (AES-256-GCM + HMAC); account: email, handle, provider ids |
 | Planning D22             | Every person other than the tapped user is masked in all rendered or shared output and in clips sent to the LLM                                    |
 | Repo D24                 | The owner can see their own footage unmasked (Henry, 2026-10-17). See the numbering note below                                                     |
 | A2, A3                   | Testcontainers with `postgres:18.6`; Ruff + pytest for `packages/workers`                                                                          |
@@ -559,6 +560,7 @@ Deletion is one orchestrated `video_delete` job (HEN-95) built on the SillyRabbi
 | --------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User row (handle, `email_ciphertext`, `email_hash`)                         | Postgres                      | –                                         | delete                                    | –                                                                                                                                                               |
 | Sessions, OTP codes                                                         | Postgres                      | –                                         | delete                                    | –                                                                                                                                                               |
+| Provider accounts (`accounts`: provider id, `sub`, encrypted Apple token)   | Postgres                      | –                                         | revoke Apple token, then delete           | – (D19, HEN-239: a failed Apple revoke is logged with the user id only; the delete still goes through)                                                          |
 | Per-email OTP send counter (`rate_limits`, hash-only key)                   | Postgres                      | –                                         | keep until its 15-min window ends         | – (Sara, 25 Oct, HEN-65: deleting it would let delete + re-signup bypass the send limit)                                                                        |
 | Video row, tap point                                                        | Postgres                      | delete                                    | delete                                    | –                                                                                                                                                               |
 | Source video, transcode, masked renders, thumbnails                         | Object storage `videos/{id}/` | delete                                    | delete                                    | –                                                                                                                                                               |
@@ -592,14 +594,18 @@ Rules that are not open:
 - Until the lawyer answers, nothing in an **OPEN FOR LAWYER** row is decided. If the answer is to keep something, the kept row should hold only the fields
   the legal reason needs and be unlinked from the video and the handle where possible [Proposal].
 
+Play web deletion-request URL and owner: OPEN (Henry). TODO: ticket to be created (related: the HEN-185 web-URL deletion criterion, HEN-65).
+
 ## 6. Encryption inventory (input to M4-26, HEN-191)
 
-**No card data anywhere:** payments go through the App Store, Google Play or a payment provider. We store only their transaction, product and receipt
-references. Payouts: provider account references only; no bank or ID documents (HEN-214).
+**No card data anywhere:** digital goods are paid through Apple IAP or Google Play Billing; a payment provider is used only for physical goods and
+payouts. We store only their transaction, product and receipt references. Payouts: provider account references only; no bank or ID documents (HEN-214).
 
 | Data                                           | Where                           | At-rest protection                                                                         | Status                               | E2E (M6-14) changes it?                                                                             |
 | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Email                                          | Postgres                        | AES-256-GCM field encryption + HMAC-SHA256 lookup hash, envelope keys, `key_version` (D18) | Decided (design); KMS OPEN (HEN-191) | No                                                                                                  |
+| Email (incl. Apple/Google and private relay)   | Postgres                        | AES-256-GCM + HMAC-SHA256 lookup hash, `key_version` (D18); two deploy-time secrets (D26). | Decided (D26, interim); KMS: HEN-191 | No                                                                                                  |
+| Linked provider ids (provider id + `sub`)      | Postgres (`accounts`)           | Disk/volume encryption; opaque ids only, no name, photo or profile fields (D19)            | Decided (D19)                        | No                                                                                                  |
+| Apple refresh token (only provider token kept) | Postgres (`accounts`)           | Field encryption with the D18 data key; used only to revoke on account deletion (D19)      | Decided (D19)                        | No                                                                                                  |
 | Handle                                         | Postgres                        | Disk/volume encryption only (needs a unique index; shown to groups)                        | Proposal                             | No                                                                                                  |
 | Sessions, OTP codes                            | Postgres                        | Disk/volume encryption; OTP stored hashed if Better Auth supports it (HEN-47 spike)        | OPEN (Sara)                          | No                                                                                                  |
 | Source videos, transcodes, renders, thumbnails | Hetzner Object Storage          | Hetzner server-side encryption or client-side encryption: A4                               | OPEN (A4, owned by HEN-191)          | No: server-side analysis and masked renders need the plaintext                                      |

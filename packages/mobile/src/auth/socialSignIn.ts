@@ -111,10 +111,13 @@ export async function signInWithProvider(
     age18Confirmed: answers.age18Confirmed === true,
     signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
   };
-  if (provider === "apple" && dependencies.platform === "ios" && dependencies.appleNative) {
-    return await signInWithAppleNative(dependencies, dependencies.appleNative, ages);
+  if (provider === "google") {
+    return await signInWithGoogle(dependencies, ages);
   }
-  return await signInWithBrowser(dependencies, provider, ages);
+  // Apple is iOS-only (visibleSocialProviders), so there is no Apple browser flow to fall back to.
+  return dependencies.platform === "ios" && dependencies.appleNative
+    ? await signInWithAppleNative(dependencies, dependencies.appleNative, ages)
+    : failure("unknown");
 }
 
 async function signInWithAppleNative(
@@ -145,14 +148,14 @@ async function signInWithAppleNative(
   });
 }
 
-async function signInWithBrowser(dependencies: SocialSignInDependencies, provider: SocialProvider, ages: SocialAgeAnswers): Promise<ActionResult> {
+async function signInWithGoogle(dependencies: SocialSignInDependencies, ages: SocialAgeAnswers): Promise<ActionResult> {
   let authorizationUrl: unknown;
   try {
     const { data, error } = await dependencies.client.$fetch<{ url?: unknown }>("/sign-in/social", {
       method: "POST",
       // disableRedirect: the app opens the browser itself so it can read the one-time code (the Expo plugin only reads cookies).
       body: {
-        provider,
+        provider: "google",
         callbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         errorCallbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         disableRedirect: true,
@@ -177,7 +180,7 @@ async function signInWithBrowser(dependencies: SocialSignInDependencies, provide
     return ignored;
   }
   dependencies.onReturned?.();
-  return await completeSocialSignIn(dependencies.client, result.url, provider);
+  return await completeSocialSignIn(dependencies.client, result.url, "google");
 }
 
 /** Reads the browser's return URL: a one-time code becomes a session; a backend error becomes plain copy. */
