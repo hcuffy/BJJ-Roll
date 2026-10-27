@@ -50,6 +50,14 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
   }
 }
 
+/** Sets `flag` while the request runs, so Android back is ignored like the code step's disabled Cancel (Vera #74 round 5). */
+function whileFlagged<Inputs extends unknown[], Result>(flag: { current: boolean }, request: (...inputs: Inputs) => Promise<Result>) {
+  return (...inputs: Inputs): Promise<Result> => {
+    flag.current = true;
+    return request(...inputs).finally(() => (flag.current = false));
+  };
+}
+
 const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
 
 /** True only for a status the server confirmed: anything else keeps the gate closed. */
@@ -76,6 +84,7 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   const [deleteCodeError, setDeleteCodeError] = useState<string | null>(null);
   const [deleteOffline, setDeleteOffline] = useState(false);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a code.
+  // The code step's DELETE and "Send a new code" set it too, so Android back is ignored while they run.
   const codeInFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntryButton = useRef<ComponentRef<typeof View>>(null);
@@ -123,7 +132,7 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     setDeleteStep("none");
   };
 
-  // Android back on a delete step acts like its Cancel (Vera #74 round 4 item 4); ignored while a code is being sent.
+  // Android back on a delete step acts like its Cancel (Vera #74 round 4 item 4); ignored while a request is in flight.
   useEffect(() => {
     if (deleteStep === "none") {
       return undefined;
@@ -213,8 +222,8 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   if (deleteStep === "code") {
     return (
       <DeleteAccountCodeStep
-        onRequestDeleteCode={onRequestDeleteCode}
-        onDeleteAccount={onDeleteAccount}
+        onRequestDeleteCode={whileFlagged(codeInFlight, onRequestDeleteCode)}
+        onDeleteAccount={whileFlagged(codeInFlight, onDeleteAccount)}
         onAccountDeleted={onAccountDeleted}
         onCancel={cancelDelete}
       />

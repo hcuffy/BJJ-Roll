@@ -2,13 +2,14 @@ import { SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bj
 import { createElement } from "react";
 import { AccessibilityInfo, Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountCodeResult, SignUpAttestationResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, SignUpAttestationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { SignUpAttestationGate, TRY_AGAIN } from "../screens/SignUpAttestationGate";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { colours } from "../theme/tokens";
 import { pressHardwareBack, resetBackListeners } from "./backHandlerHarness";
 import { flattenStyle, type HostNode, renderScreen } from "./screenHarness";
+import { deferred } from "./signedInScreenHarness";
 
 const DELETE_ENTRY = "Delete account";
 const CONFIRM_TITLE = "Delete your account?";
@@ -27,7 +28,11 @@ const gateScreens = [
 ] as const;
 
 /** A gated account (prompt or read error) with recording delete callbacks; each code request takes the next result. */
-async function renderGate(read: SignUpAttestationResult, codeResults: AccountCodeResult[] = [{ ok: true }]) {
+async function renderGate(
+  read: SignUpAttestationResult,
+  codeResults: (AccountCodeResult | Promise<AccountCodeResult>)[] = [{ ok: true }],
+  deleteResult: Promise<AccountDeletionResult> = Promise.resolve({ ok: true }),
+) {
   const calls = { accepts: 0, deleteCodes: 0, deletes: [] as string[], deleted: 0 };
   const screen = await renderScreen(
     createElement(
@@ -39,10 +44,11 @@ async function renderGate(read: SignUpAttestationResult, codeResults: AccountCod
           return Promise.resolve(prompt);
         },
         onSignOut: () => undefined,
-        onRequestDeleteCode: () => Promise.resolve(codeResults[Math.min(calls.deleteCodes++, codeResults.length - 1)] as AccountCodeResult),
+        onRequestDeleteCode: () =>
+          Promise.resolve(codeResults[Math.min(calls.deleteCodes++, codeResults.length - 1)] as AccountCodeResult | Promise<AccountCodeResult>),
         onDeleteAccount: (code: string) => {
           calls.deletes.push(code);
-          return Promise.resolve({ ok: true as const });
+          return deleteResult;
         },
         onAccountDeleted: () => {
           calls.deleted += 1;
@@ -166,5 +172,61 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(screen.text()).toContain(SIGN_UP_ATTESTATION_LABEL);
     expect(screen.text()).not.toContain(CODE_TITLE);
     expect(pressHardwareBack()).toBe(false);
+  });
+
+  // Vera #74 round 5: back never does more than the visible Cancel, which is disabled while a request is in flight.
+  it("Android back while the first code is sending is ignored; the send then opens the code step", async () => {
+    const send = deferred<AccountCodeResult>();
+    const { screen } = await renderGate(prompt, [send.promise]);
+    await screen.press(DELETE_ENTRY);
+    await screen.press(EMAIL_CODE);
+    expect(screen.text()).toContain("Sending code…");
+
+    expect(pressHardwareBack()).toBe(true);
+    await screen.rerender();
+    expect(screen.text()).toContain(CONFIRM_TITLE);
+    send.resolve({ ok: true });
+    await screen.rerender();
+    expect(screen.text()).toContain(CODE_TITLE);
+  });
+
+  it("Android back during Send a new code is ignored", async () => {
+    const resend = deferred<AccountCodeResult>();
+    const { screen } = await renderGate(prompt, [{ ok: true }, resend.promise]);
+    await screen.press(DELETE_ENTRY);
+    await screen.press(EMAIL_CODE);
+    await screen.press("Send a new code");
+
+    expect(pressHardwareBack()).toBe(true);
+    await screen.rerender();
+    expect(screen.text()).toContain(CODE_TITLE);
+    resend.resolve({ ok: true });
+    await screen.rerender();
+    expect(screen.text()).toContain("We sent a new code to your email.");
+  });
+
+  it("Android back during a pending delete stays on the code step; a failed delete shows its red error there", async () => {
+    const deletion = deferred<AccountDeletionResult>();
+    const { calls, screen } = await renderGate(prompt, [{ ok: true }], deletion.promise);
+    await screen.press(DELETE_ENTRY);
+    await screen.press(EMAIL_CODE);
+    await screen.changeText("6-digit code", "654321");
+    await screen.press("Delete my account");
+    expect(screen.text()).toContain("Deleting account…");
+
+    expect(pressHardwareBack()).toBe(true);
+    await screen.rerender();
+    expect(screen.text()).toContain(CODE_TITLE);
+    deletion.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    await screen.rerender();
+
+    const error = `Your account was not deleted. ${FAILURE_MESSAGES.unknown}`;
+    expect(flattenStyle(screen.queryByText(error)?.props.style).color).toBe(colours.danger);
+    expect(screen.text()).toContain(CODE_TITLE);
+    expect(calls.deleted).toBe(0);
+    // Once nothing is in flight, back is Cancel again.
+    expect(pressHardwareBack()).toBe(true);
+    await screen.rerender();
+    expect(screen.text()).toContain(SIGN_UP_ATTESTATION_LABEL);
   });
 });
