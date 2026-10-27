@@ -88,6 +88,24 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect((await exchangeForSession(again.location.searchParams.get("code") ?? "")).userId).toBe(userId);
   });
 
+  it("HEN-183: a returning Google user who ticks the duties gets a record at the current version (no second prompt)", async () => {
+    const googleUser = { subject: "google-sub-refresh", email: "refresh.google.member@example.com", emailVerified: true };
+    const ticked = { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false };
+    const { userId } = await exchangeForSession(
+      (await signInWithGoogle(googleUser, { additionalData: ticked })).location.searchParams.get("code") ?? "",
+    );
+    // An account made before HEN-183 has no attestation record.
+    await current().pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [userId]);
+
+    const again = await signInWithGoogle(googleUser, { additionalData: ticked });
+    expect((await exchangeForSession(again.location.searchParams.get("code") ?? "")).userId).toBe(userId);
+    const rows = await current().pool.query(
+      "SELECT text_version_id FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'",
+      [userId],
+    );
+    expect(rows.rows).toEqual([{ text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id }]);
+  });
+
   it("links Google to an existing email account when Google has verified the same address", async () => {
     const email = "email.first.member@example.com";
     const sendResponse = await postAuthJson(current().app, "/email-otp/send-verification-otp", {

@@ -22,7 +22,7 @@ export const SIGN_UP_ATTESTATION_DUTIES = [
   "If I breach these duties, liability follows the Terms and the law.",
 ] as const;
 export const SIGN_UP_ATTESTATION_LABEL = "I accept these duties";
-export const SIGN_UP_ATTESTATION_REFUSAL_MESSAGE = "You must accept the sign-up duties to continue.";
+export const SIGN_UP_ATTESTATION_REFUSAL_MESSAGE = "Tick the box to accept the duties.";
 
 /** GET /account/signup-attestation: `required` until the user accepted the current text version. */
 export const signUpAttestationStatusSchema = z.strictObject({

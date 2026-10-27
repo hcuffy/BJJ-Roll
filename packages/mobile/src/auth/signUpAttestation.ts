@@ -13,3 +13,6 @@ export const ATTESTATION_LINK_REFUSAL_NEXT_STEP = "Tick I accept these duties an
 export const ATTESTATION_PROMPT_TITLE = "Accept the sign-up duties";
 export const ATTESTATION_PROMPT_BODY = "To keep using BJJ Roll, accept these duties.";
 export const ATTESTATION_PROMPT_ACCEPT = "Accept and continue";
+/** Draft copy (Vera #74 item 4); the final duty text comes from the lawyer (HEN-189). */
+export const ATTESTATION_LEAD = "Before you upload, you agree to:";
+export const ATTESTATION_SAVING = "Saving…";

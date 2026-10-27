@@ -1,5 +1,6 @@
 import { getOAuthState, type createAuthMiddleware } from "better-auth/api";
-import { readSocialSignUpAgeAnswers, type SocialSignUpAgeAnswers } from "./ageGate.js";
+import type { Pool } from "pg";
+import { readSocialSignUpAgeAnswers, refreshSignUpAttestationAfterSignIn, type SocialSignUpAgeAnswers } from "./ageGate.js";
 import {
   exchangeNativeAppleAuthorizationCode,
   openAppleRefreshToken,
@@ -11,7 +12,7 @@ import type { AuthCryptoCodec } from "./authSecrets.js";
 import { createAppleClientSecretSource, type AppleProviderConfig } from "./socialProviders.js";
 import { neutralizeAccountNotLinkedRedirect } from "./socialSignInSafety.js";
 
-export type AuthEventName = "apple_refresh_token_missing";
+export type AuthEventName = "apple_refresh_token_missing" | "signup_attestation_refresh_failed";
 
 export type AuthEventLogger = (event: AuthEventName, userId: string) => void;
 
@@ -69,10 +70,28 @@ export async function revokeSealedAppleRefreshToken(capture: AppleSignInCapture,
  * After-hook for native iOS Apple sign-in: the id token proves who it is; the authorization code is exchanged once for the refresh
  * token that account deletion revokes. A failed exchange never blocks sign-in; it is logged by user id only.
  */
-/** The after hook: neutral account_not_linked redirects first (HEN-239), then the Apple refresh-token capture. */
-export async function afterAuthRequest(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture): Promise<void> {
+/**
+ * The after hook: neutral account_not_linked redirects first (HEN-239), then the Apple refresh-token capture, then (HEN-183) the
+ * sign-in duties tick for an existing account.
+ */
+export async function afterAuthRequest(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture, pool: Pool): Promise<void> {
   neutralizeAccountNotLinkedRedirect(middlewareContext);
   await captureAppleRefreshToken(middlewareContext, capture);
+  await refreshSignUpAttestation(middlewareContext, capture, pool);
+}
+
+/** A failed write never undoes the sign-in: the app's status read then shows the re-accept prompt. Logged by user id only. */
+async function refreshSignUpAttestation(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture, pool: Pool): Promise<void> {
+  const user = middlewareContext.context.newSession?.user;
+  if (!user) {
+    return;
+  }
+  try {
+    const oauthState = middlewareContext.path.startsWith("/callback/") ? await getOAuthState() : null;
+    await refreshSignUpAttestationAfterSignIn(pool, capture.codec, { path: middlewareContext.path, user, body: middlewareContext.body, oauthState });
+  } catch {
+    capture.logAuthEvent("signup_attestation_refresh_failed", user.id);
+  }
 }
 
 export async function captureAppleRefreshToken(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture): Promise<void> {

@@ -111,7 +111,8 @@ async function withAppRole<Result>(
 /**
  * Same work for every email: drop any earlier pending answer, then store this send's answer, ticked or not, so a send that will
  * be refused runs the same SQL as one that will not. The latest send wins, so an unticked resend withdraws an earlier tick.
- * Known emails get the row too (linked to the user so it goes with the account); it is never read for them and expires with the code.
+ * Known emails get the row too (linked to the user so it goes with the account). HEN-183: after their sign-in, its attestation
+ * answer becomes their acceptance record (refreshSignUpAttestationAfterSignIn), then the row is deleted.
  * HEN-183: the attestation text version id is stored with the age answers (null unless it is the current version).
  */
 export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec, body: Record<string, unknown> & { email: string }): Promise<void> {
@@ -222,4 +223,50 @@ export async function assertSignUpAgeConfirmation(
     return;
   }
   await recordPendingAgeAnswers(pool, codec, { email, ...requireAcceptedSignUpAnswers(social.answers) });
+}
+
+const EMAIL_SIGN_IN_PATHS: ReadonlySet<string> = new Set(["/sign-in/email-otp", "/magic-link/verify"]);
+
+/** What a finished sign-in knows: its path, the session's user, the request body and (browser social flow) the OAuth state. */
+export interface FinishedSignIn {
+  readonly path: string;
+  readonly user: { readonly id: string; readonly email: string };
+  readonly body: unknown;
+  readonly oauthState: unknown;
+}
+
+/**
+ * HEN-183 (Sara, 27 Oct): the duties tick on the sign-in screen also counts for an existing account, so it is not asked again
+ * right after sign-in. This runs after a sign-in made a session, so the send's answer never depends on whether the account exists.
+ * Email sign-in uses the answers its latest send stored (every email stores them); Apple and Google use the ones sent with the
+ * sign-in. Only the current text version counts, and an account that already accepted it gets no second row. A new account got
+ * its record in the user transaction and its pending row is gone, so nothing is added for it.
+ */
+export async function refreshSignUpAttestationAfterSignIn(pool: Pool, codec: AuthCryptoCodec, signIn: FinishedSignIn): Promise<void> {
+  const social = readSocialSignUpAgeAnswers(signIn.path, signIn.body, signIn.oauthState);
+  if (!social.social && !EMAIL_SIGN_IN_PATHS.has(signIn.path)) {
+    return;
+  }
+  const identifier = pendingIdentifier(codec, signIn.user.email);
+  await withAppRole(pool, { verificationIdentifier: identifier, userId: signIn.user.id }, async (client) => {
+    let textVersionId: string | null;
+    if (social.social) {
+      textVersionId = readSignUpAnswers(
+        signIn.path === "/sign-in/social" ? readRecordField(signIn.body, "additionalData") : signIn.oauthState,
+      ).signUpAttestationTextVersionId;
+    } else {
+      textVersionId = (await selectPendingAgeAnswers(client, codec, identifier))?.signUpAttestationTextVersionId ?? null;
+      await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
+    }
+    if (textVersionId === null) {
+      return;
+    }
+    await client.query(
+      `INSERT INTO public.consent_records (id, user_id, consent_type, text_version_id)
+       SELECT $1, $2, 'attestation_signup', $3
+       WHERE NOT EXISTS (SELECT 1 FROM public.consent_records
+         WHERE user_id = $2 AND consent_type = 'attestation_signup' AND text_version_id = $3 AND withdrawn_at IS NULL)`,
+      [randomUUID(), signIn.user.id, textVersionId],
+    );
+  });
 }
