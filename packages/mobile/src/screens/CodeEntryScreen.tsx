@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { MobileAuthClient } from "../auth/authClient";
-import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode } from "../auth/signInActions";
+import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
@@ -26,11 +27,20 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const resendCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
   // Refs, not state: the 6th digit and the Done key can arrive in the same tick, before a re-render,
   // so both handlers must see the latest digits and the in-flight request immediately.
   const latestCode = useRef("");
   const inFlight = useRef(false);
+
+  const showFailure = (result: Extract<ActionResult, { ok: false }>) => {
+    if (result.reason === "network") {
+      setOffline(true);
+    } else {
+      setFormError(result.message);
+    }
+  };
 
   const verify = async (candidate: string) => {
     if (inFlight.current) {
@@ -41,6 +51,7 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
     setCodeError(null);
     setFormError(null);
     setNotice(null);
+    setOffline(false);
     // The user ticked the 17+ box on the email screen; it is required to get here.
     const result = await verifyEmailCode(client, { email, code: candidate, ageConfirmed: true });
     inFlight.current = false;
@@ -50,7 +61,7 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
     } else if (result.reason === "invalidCode") {
       setCodeError(result.message);
     } else {
-      setFormError(result.message);
+      showFailure(result);
     }
   };
 
@@ -59,13 +70,14 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
     setCodeError(null);
     setFormError(null);
     setNotice(null);
+    setOffline(false);
     const result = await sendEmailCode(client, { email, ageConfirmed: true });
     setIsResending(false);
     if (result.ok) {
       setNotice(`We sent a new code to ${email}.`);
       resendCooldown.restart();
     } else {
-      setFormError(result.message);
+      showFailure(result);
     }
   };
 
@@ -103,6 +115,7 @@ export function CodeEntryScreen({ client, email, onSignedIn, onBack }: CodeEntry
         }}
         onSubmitEditing={() => void verify(latestCode.current)}
       />
+      <ServerUnreachableNote visible={offline} />
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
