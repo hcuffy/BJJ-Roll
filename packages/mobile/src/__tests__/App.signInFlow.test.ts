@@ -52,7 +52,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "new.member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     expect(screen.text()).toContain("Enter your code");
 
     // The 6th digit submits on its own.
@@ -80,7 +80,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
       await screen.pressRole("checkbox");
       await screen.press("I am 18 or older");
       await screen.changeText("Email", "new.member@example.test");
-      await screen.press("Continue");
+      await screen.press("Continue with email");
       await vi.advanceTimersByTimeAsync(30_000);
       await screen.rerender();
       await screen.press("Resend code");
@@ -96,7 +96,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "new.member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain("You are signed in");
 
@@ -111,7 +111,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain("You are signed in");
 
@@ -143,7 +143,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     await screen.press("Delete account");
     await screen.press("Email me a code");

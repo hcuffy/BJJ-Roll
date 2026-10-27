@@ -55,7 +55,13 @@ export const TEST_DELETE_CODE = "654321";
 /** What the fake GET /account/export returns for the signed-in fake user. */
 export const TEST_ACCOUNT_EXPORT = {
   exportedAt: "2026-10-25T08:00:00.000Z",
-  user: { id: "01964c3a-7f00-7000-8000-000000000001", email: "member@example.test", handle: "roller_1", createdAt: "2026-10-01T08:00:00.000Z" },
+  user: {
+    id: "01964c3a-7f00-7000-8000-000000000001",
+    email: "member@example.test",
+    handle: "roller_1",
+    createdAt: "2026-10-01T08:00:00.000Z",
+    linkedProviders: [],
+  },
   consentRecords: [
     {
       id: "01964c3a-7f00-7000-8000-000000000002",
@@ -70,8 +76,12 @@ export const TEST_ACCOUNT_EXPORT = {
   ],
 } as const;
 
+/** Where the fake backend's browser sign-in starts (a stand-in for Google's or Apple's consent page). */
+export const TEST_PROVIDER_AUTHORIZATION_URL = "https://provider.example.test/authorize?state=fake-state";
+
 /** Fake backend: sign-in endpoints set a session cookie; get-session answers only when that cookie is sent. */
-export function createFakeBackend() {
+/** `nativeSignInRefusal`: how the backend answers a native (id token) social sign-in instead of signing in. */
+export function createFakeBackend(options: { nativeSignInRefusal?: { status: number; body: unknown } } = {}) {
   const requests: RecordedRequest[] = [];
   let adultConfirmed = false;
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -84,6 +94,17 @@ export function createFakeBackend() {
       cookie: request.headers.get("cookie"),
       body: bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null,
     });
+    if (pathname.endsWith("/sign-in/social")) {
+      const body = requests.at(-1)?.body;
+      // Native Apple sign-in posts an identity token and gets the session cookie; the browser flow gets the provider URL.
+      if (body?.idToken !== undefined) {
+        if (options.nativeSignInRefusal) {
+          return jsonResponse(options.nativeSignInRefusal.body, {}, options.nativeSignInRefusal.status);
+        }
+        return jsonResponse({ redirect: false, token: "raw-session-token", user: { id: "user-1" } }, { "set-cookie": TEST_SESSION_COOKIE });
+      }
+      return jsonResponse({ url: `${TEST_PROVIDER_AUTHORIZATION_URL}&provider=${String(body?.provider)}`, redirect: false });
+    }
     if (pathname.endsWith("/sign-in/email-otp") || pathname.endsWith("/magic-link/exchange")) {
       return jsonResponse({ token: "raw-session-token", user: { id: "user-1" } }, { "set-cookie": TEST_SESSION_COOKIE });
     }

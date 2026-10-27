@@ -32,6 +32,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       { name: "001_users_sessions_handles_rls" },
       { name: "002_auth_rate_limits_and_rls" },
       { name: "003_age_confirmation_consent_records" },
+      { name: "004_apple_nonce_cleanup" },
     ]);
     expect(betterAuthTelemetryDisabledConfig).toEqual({ enabled: false });
   });

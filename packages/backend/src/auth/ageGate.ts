@@ -148,3 +148,50 @@ export async function storeAgeConfirmationInUserTransaction(
     transaction,
   );
 }
+
+/** What the user-create hook knows about an Apple or Google sign-up: not social at all, or social with its answers (null = no 16+ tick). */
+export type SocialSignUpAgeAnswers = { readonly social: false } | { readonly social: true; readonly answers: PendingAgeAnswers | null };
+
+/**
+ * HEN-239: Apple or Google sign-in may create a user only with the same 16+ tick as email sign-up (HEN-263), and sends the 18+
+ * answer the same way. The native token path reads them from the request body; the browser path from the OAuth state saved when
+ * the flow started. An existing user (found by provider account or linked by verified email) never reaches the user-create hook.
+ */
+export function readSocialSignUpAgeAnswers(path: string | undefined, body: unknown, oauthStateAdditionalData: unknown): SocialSignUpAgeAnswers {
+  if (path === "/sign-in/social") {
+    return { social: true, answers: parseSocialAgeAnswers(readRecordField(body, "additionalData")) };
+  }
+  if (path?.startsWith("/callback/")) {
+    return { social: true, answers: parseSocialAgeAnswers(oauthStateAdditionalData) };
+  }
+  return { social: false };
+}
+
+function readRecordField(source: unknown, field: string): unknown {
+  return typeof source === "object" && source !== null ? (source as Record<string, unknown>)[field] : undefined;
+}
+
+function parseSocialAgeAnswers(source: unknown): PendingAgeAnswers | null {
+  return age16ConfirmedSchema.safeParse(readRecordField(source, "age16Confirmed")).success
+    ? { age16Confirmed: true, age18Confirmed: readRecordField(source, "age18Confirmed") === true }
+    : null;
+}
+
+/**
+ * The user-create hook. Email sign-up needs the 16+ tick from this email's latest send. Social sign-up has no send, so its own
+ * ticked answers are stored as the pending row for the provider's email, and the user insert moves them onto the consent record.
+ */
+export async function assertSignUpAgeConfirmation(
+  pool: Pool,
+  codec: AuthCryptoCodec,
+  { email, social }: { readonly email: string; readonly social: SocialSignUpAgeAnswers },
+): Promise<void> {
+  if (!social.social) {
+    await assertPendingAgeConfirmation(pool, codec, email);
+    return;
+  }
+  if (!social.answers) {
+    throw ageConfirmationRequiredError();
+  }
+  await recordPendingAgeAnswers(pool, codec, { email, ...social.answers });
+}

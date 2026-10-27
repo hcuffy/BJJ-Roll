@@ -232,7 +232,10 @@ export async function renderScreen(element: ReactNode, onRender?: (text: string)
 
   const nodes = () => allNodes(renderer.root);
   const pressableWithText = (text: string): HostNode => {
-    const matches = nodes().filter((node) => typeof node.props.onPress === "function" && textOf(node).includes(text));
+    // By visible text, or by exact accessibility label for a button that is an image (the official Google button).
+    const matches = nodes().filter(
+      (node) => typeof node.props.onPress === "function" && (textOf(node).includes(text) || node.props.accessibilityLabel === text),
+    );
     const deepest = matches.at(-1);
     if (!deepest) {
       throw new Error(`No pressable with text "${text}" in: ${screen.text()}`);
@@ -243,6 +246,7 @@ export async function renderScreen(element: ReactNode, onRender?: (text: string)
   const screen = {
     text: () => renderer.root.map(textOf).join(" "),
     queryByText: (text: string) => nodes().find((node) => node.type === "Text" && textOf(node).includes(text)) ?? null,
+    queryByLabelText: (label: string) => nodes().find((node) => node.props.accessibilityLabel === label) ?? null,
     getByLabelText: (label: string): HostNode => {
       const match = nodes().find((node) => node.props.accessibilityLabel === label);
       if (!match) {

@@ -16,10 +16,14 @@ export const AGE_ADULT_NEEDS_16_HINT = "Tick I am 16 or older first.";
 /** Second line of the link error card after an age refusal: the link is used up, so say what to do next (Vera delta item 2). */
 export const AGE_LINK_REFUSAL_NEXT_STEP = "Tick I am 16 or older and send a new link.";
 
-export interface EmailEntry {
-  readonly email: string;
+/** The 16+ and 18+ answers, sent the same way by email, code and social sign-in. */
+export interface AgeAnswers {
   readonly age16Confirmed: boolean;
   readonly age18Confirmed?: boolean;
+}
+
+export interface EmailEntry extends AgeAnswers {
+  readonly email: string;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -29,7 +33,7 @@ export function isEmailAddress(email: string): boolean {
 }
 
 /** True only for a ticked box, checked with the shared `age16ConfirmedSchema` the backend uses. */
-export function isAgeConfirmed(entry: EmailEntry): boolean {
+export function isAgeConfirmed(entry: AgeAnswers): boolean {
   return age16ConfirmedSchema.safeParse(entry.age16Confirmed).success;
 }
 

@@ -49,7 +49,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     return screen;
   };
@@ -105,7 +105,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.text()).toContain("Enter your code");
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
@@ -115,7 +115,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     expect(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.accessibilityRole).toBeUndefined();
@@ -249,7 +249,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
 
     await screen.changeText("Email", "not-an-email");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.text()).toContain("Enter a valid email address.");
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);

@@ -96,7 +96,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
   it("an empty submit shows both errors but announces only the first: the second is a polite live region without role alert", async () => {
     Platform.OS = "ios";
     const screen = await render();
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
     expect(screen.queryByText(FAILURE_MESSAGES.invalidEmail)?.props).toMatchObject({ accessibilityLiveRegion: "polite", accessibilityRole: "alert" });
@@ -110,7 +110,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     Platform.OS = "ios";
     const screen = await render();
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.queryByText(TICK_AGE_BOX_MESSAGE)?.props.accessibilityRole).toBe("alert");
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[TICK_AGE_BOX_MESSAGE]]);
@@ -123,7 +123,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     await screen.fire("Email", "onBlur");
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail]]);
 
-    await screen.press("Continue");
+    await screen.press("Continue with email");
     expect(screen.queryByText(TICK_AGE_BOX_MESSAGE)?.props.accessibilityRole).toBe("alert");
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
   });

@@ -7,6 +7,11 @@ import { handleSchema } from "./handle.js";
  * GET /account/export (HEN-65): everything M2 stores about the signed-in user, and nothing else.
  * Later features add their own keys next to `user` when they ship (ARCHITECTURE.md §5).
  */
+/** HEN-239: the sign-in providers an account can link, by name. */
+export const socialProviderNames = ["apple", "google"] as const;
+export const socialProviderNameSchema = z.enum(socialProviderNames);
+export type SocialProviderName = z.infer<typeof socialProviderNameSchema>;
+
 export const accountExportSchema = z.strictObject({
   exportedAt: timestampSchema,
   user: z.strictObject({
@@ -14,6 +19,8 @@ export const accountExportSchema = z.strictObject({
     email: z.email(),
     handle: handleSchema.nullable(),
     createdAt: timestampSchema,
+    /** Linked Apple or Google sign-in, by provider name only. Empty for email-only accounts. */
+    linkedProviders: z.array(socialProviderNameSchema),
   }),
   consentRecords: z.array(ageConfirmationRecordSchema), // HEN-263: deleted with the account, exported like HEN-183
 });

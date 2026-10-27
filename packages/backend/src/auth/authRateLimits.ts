@@ -26,6 +26,15 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
     window: RATE_LIMIT_WINDOW_SECONDS,
     max: MAX_SENDS_PER_IP_PER_WINDOW,
   },
+  // HEN-239: starting Apple or Google sign-in, and the provider callback (wildcard: /callback/apple, /callback/google).
+  "/sign-in/social": {
+    window: RATE_LIMIT_WINDOW_SECONDS,
+    max: MAX_VERIFIES_PER_IP_PER_WINDOW,
+  },
+  "/callback/*": {
+    window: RATE_LIMIT_WINDOW_SECONDS,
+    max: MAX_VERIFIES_PER_IP_PER_WINDOW,
+  },
   "/sign-in/email-otp": {
     window: RATE_LIMIT_WINDOW_SECONDS,
     max: MAX_VERIFIES_PER_IP_PER_WINDOW,

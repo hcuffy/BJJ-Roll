@@ -2,7 +2,8 @@ import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { Pool } from "pg";
 import { mountAccountRoutes } from "./accountRoutes.js";
-import { createAuth, mountAuthRoutes, readSocketAddress, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
+import { mountAuthRoutes, readSocketAddress } from "./auth/authRoutes.js";
+import { createAuth, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
 import { createDatabase } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
 import { LettermintEmailSender } from "./email/index.js";
@@ -13,7 +14,14 @@ export interface CreateAppOptions {
   readonly auth?:
     | Pick<
         AuthInstance,
-        "handler" | "resolveSessionUserId" | "codec" | "accountDeletionCodes" | "accountDeletionAttempts" | "resolveClientIp" | "emailSender"
+        | "handler"
+        | "resolveSessionUserId"
+        | "codec"
+        | "accountDeletionCodes"
+        | "accountDeletionAttempts"
+        | "resolveClientIp"
+        | "emailSender"
+        | "revokeAppleRefreshToken"
       >
     | CreateAuthOptions;
   /** When set together with auth, mounts the handle and account routes with the auth session as the user resolver. */
@@ -39,6 +47,7 @@ export function createApp(options?: CreateAppOptions): Hono {
         accountDeletionAttempts: authInstance.accountDeletionAttempts,
         resolveClientIp: (context) => authInstance.resolveClientIp(context.req.raw.headers, { remoteAddress: readSocketAddress(context) }),
         emailSender: authInstance.emailSender,
+        revokeAppleRefreshToken: (sealedRefreshToken) => authInstance.revokeAppleRefreshToken(sealedRefreshToken),
       });
     }
   }
@@ -62,6 +71,7 @@ export function createAppFromEnvironment(env: ServerEnvironment = process.env): 
       keyring: config.keyring,
       baseURL: config.authBaseUrl,
       trustedProxyIpHeaders: config.trustedProxyIpHeaders,
+      socialProviders: config.socialProviders,
       emailSender: new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress }),
     },
     database: createDatabase(pool),

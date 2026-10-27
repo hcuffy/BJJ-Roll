@@ -134,6 +134,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
       email: "export.alpha@example.com",
       handle: "export_alpha",
       createdAt: createdAtRow.rows[0]?.created_at.toISOString(),
+      linkedProviders: [],
     });
     expect(rawBody).not.toContain(bravo.userId);
     expect(rawBody).not.toContain("export.bravo@example.com");

@@ -11,6 +11,7 @@ import {
   type AccountSession,
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
+import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -164,6 +165,9 @@ export function App() {
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
+            socialProviders={appSocialProviders}
+            socialSignIn={appSocialSignIn}
+            onSignedIn={handleSignedIn}
           />
         );
       }

@@ -1,19 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { expo } from "@better-auth/expo";
-import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { emailOTP, magicLink } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { Context, Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
-import { assertPendingAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
+import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { enqueueSignInEmail } from "./signInEmailQueue.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
@@ -48,6 +45,17 @@ import {
   TRUSTABLE_PROXY_IP_HEADERS,
   type TrustableProxyIpHeader,
 } from "./authRequestGuards.js";
+import { refuseUnsafeAppleIdToken, refuseUnverifiedProviderEmail } from "./socialSignInSafety.js";
+import { buildSocialProviders, type SocialProviderConfig } from "./socialProviders.js";
+import {
+  afterAuthRequest,
+  createAppleSignInCapture,
+  revokeSealedAppleRefreshToken,
+  socialSignUpAgeAnswers,
+  type AuthEventLogger,
+} from "./socialSignInHooks.js";
+
+export type { AuthEventLogger, AuthEventName } from "./socialSignInHooks.js";
 
 export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
@@ -62,6 +70,10 @@ export interface CreateAuthOptions {
   readonly trustedProxyIpHeaders?: readonly TrustableProxyIpHeader[];
   /** Better Auth logger config. Default: disabled. */
   readonly logger?: BetterAuthOptions["logger"];
+  /** Apple and Google sign-in (HEN-239). A provider is offered only when it is configured here. Default: none. */
+  readonly socialProviders?: SocialProviderConfig;
+  /** One line per social sign-in event: the event and the user id, never a token or email. Default: JSON on stdout. */
+  readonly logAuthEvent?: AuthEventLogger;
 }
 
 export interface AuthConnectionInfo {
@@ -83,6 +95,11 @@ export interface AuthInstance {
   readonly resolveClientIp: (headers: Headers, connection?: AuthConnectionInfo) => string;
   readonly emailSender: EmailSender;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
+  /**
+   * Revokes a stored, sealed Apple refresh token (HEN-239, App Store rule 5.1.1(v)). Throws when Apple is not configured, the value
+   * cannot be opened, or Apple refuses; the caller logs the failure and still deletes the account.
+   */
+  readonly revokeAppleRefreshToken: (sealedRefreshToken: string) => Promise<void>;
 }
 
 export function createAuth(options: CreateAuthOptions): AuthInstance {
@@ -90,6 +107,8 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
   const codec = createAuthCryptoCodec(keyring);
   const baseURL = options.baseURL;
   const trustedProxyIpHeaders = options.trustedProxyIpHeaders ?? [];
+  const socialProviderConfig = options.socialProviders ?? {};
+  const appleSignIn = createAppleSignInCapture(socialProviderConfig.apple, codec, options.logAuthEvent);
 
   const betterAuthInstance = betterAuth({
     baseURL,
@@ -112,13 +131,23 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         keyVersion: { type: "number", required: false, input: false },
         handle: { type: "string", required: false, input: false },
       },
+      validateUserInfo: refuseUnverifiedProviderEmail,
     },
     session: {
       modelName: "sessions",
       expiresIn: SESSION_SLIDING_EXPIRY_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
     },
-    account: { modelName: "accounts" },
+    account: {
+      modelName: "accounts",
+      // Link an Apple or Google sign-in to an existing user only when the provider says the email is verified (no trusted-provider bypass).
+      // HEN-239: provider tokens are not kept (only Apple's refresh token, sealed, for revoke on delete), so sign-in never rewrites them.
+      updateAccountOnSignIn: false,
+      accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: false },
+    },
+    socialProviders: buildSocialProviders(socialProviderConfig, appleSignIn.appleTokenClient?.clientSecretFor),
+    // Provider tokens are not stored (see authCodecTransform), so the endpoints that hand them out or refresh them stay off.
+    disabledPaths: ["/refresh-token", "/get-access-token", "/account-info"],
     verification: {
       modelName: "verifications",
       additionalFields: {
@@ -140,9 +169,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     databaseHooks: {
       user: {
         create: {
-          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send.
-          before: async (user) => {
-            await assertPendingAgeConfirmation(options.pool, codec, user.email);
+          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send;
+          // HEN-239: an Apple or Google sign-up needs the same tick, sent with the sign-in request.
+          before: async (user, hookContext) => {
+            await assertSignUpAgeConfirmation(options.pool, codec, { email: user.email, social: await socialSignUpAgeAnswers(hookContext) });
           },
         },
       },
@@ -150,6 +180,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     hooks: {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
+        await refuseUnsafeAppleIdToken(middlewareContext, options.pool);
         // Over HTTP, check-verification-otp may only test sign-in codes: a public check of a delete code would be a guessing oracle
         // outside the DELETE /account try budget.
         if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
@@ -173,6 +204,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           }
         }
       }),
+      after: createAuthMiddleware(async (middlewareContext) => await afterAuthRequest(middlewareContext, appleSignIn)),
     },
     plugins: [
       expo(),
@@ -211,6 +243,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
     telemetry: betterAuthTelemetryDisabledConfig,
+    revokeAppleRefreshToken: async (sealedRefreshToken) => await revokeSealedAppleRefreshToken(appleSignIn, sealedRefreshToken),
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
       const headers = new Headers(rawRequest.headers);
       const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);
@@ -234,28 +267,4 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       }
     },
   };
-}
-
-export function readSocketAddress(context: Context): string | undefined {
-  try {
-    return getConnInfo(context).remote.address;
-  } catch {
-    return undefined;
-  }
-}
-
-// 32 KiB covers an email, a one-time code, and a short deep link, and still rejects oversized auth bodies.
-export const AUTH_REQUEST_BODY_LIMIT_BYTES = 32 * 1024;
-
-export function mountAuthRoutes(app: Hono, auth: Pick<AuthInstance, "handler">): void {
-  app.use(
-    `${AUTH_BASE_PATH}/*`,
-    bodyLimit({
-      maxSize: AUTH_REQUEST_BODY_LIMIT_BYTES,
-      onError: (context) => context.text("Payload Too Large", 413),
-    }),
-  );
-  app.on(["GET", "POST"], `${AUTH_BASE_PATH}/*`, async (context) => {
-    return await auth.handler(context.req.raw, { remoteAddress: readSocketAddress(context) });
-  });
 }

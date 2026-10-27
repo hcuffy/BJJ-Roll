@@ -14,7 +14,7 @@ const timestamp = "2026-10-25T08:00:00.000Z";
 
 const validExport = {
   exportedAt: timestamp,
-  user: { id: userId, email: "member@example.test", handle: "roller_1", createdAt: timestamp },
+  user: { id: userId, email: "member@example.test", handle: "roller_1", createdAt: timestamp, linkedProviders: [] },
   consentRecords: [
     {
       id: "01964c3a-7f00-7000-8000-000000000002",
@@ -44,6 +44,15 @@ describe("account export and deletion schemas (HEN-65)", () => {
     expect(accountExportSchema.safeParse({ ...validExport, user: { ...validExport.user, email: "not-an-email" } }).success).toBe(false);
     expect(accountExportSchema.safeParse({ ...validExport, user: { ...validExport.user, id: "user-1" } }).success).toBe(false);
     expect(accountExportSchema.safeParse({ ...validExport, exportedAt: "yesterday" }).success).toBe(false);
+  });
+
+  it("lists linked sign-in providers by name only (HEN-239)", () => {
+    expect(
+      accountExportSchema.parse({ ...validExport, user: { ...validExport.user, linkedProviders: ["apple", "google"] } }).user.linkedProviders,
+    ).toEqual(["apple", "google"]);
+    for (const linkedProviders of [["github"], [{ providerId: "google", accountId: "123" }], undefined]) {
+      expect(accountExportSchema.safeParse({ ...validExport, user: { ...validExport.user, linkedProviders } }).success).toBe(false);
+    }
   });
 
   it("accepts only deleted: true as the deletion response", () => {

@@ -2,8 +2,10 @@ import {
   AGE_CONFIRMATION_TEXT_VERSION_ID,
   accountExportSchema,
   adultConfirmationRequestSchema,
+  socialProviderNames,
   type AccountExport,
   type AgeConfirmationStatus,
+  type SocialProviderName,
 } from "@bjj-roll/shared";
 import { randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
@@ -16,7 +18,7 @@ import type { BjjRollDatabase } from "./database/schema.js";
 import type { EmailSender } from "./email/index.js";
 import type { AuthenticatedUserIdResolver } from "./handleRoutes.js";
 
-export type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed";
+export type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
 
 /** One log line per account event: the user id and, for failures, a reason. Never the email or its hash (HEN-65 AC 6, A5). */
 export type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
@@ -32,6 +34,8 @@ export interface AccountRoutesOptions {
   resolveClientIp: (context: Context) => string;
   emailSender: Pick<EmailSender, "sendAccountDeletedNotice">;
   logAccountEvent: AccountEventLogger;
+  /** Revokes a stored Apple refresh token before the account is deleted (HEN-239). Absent when Apple is not wired in. */
+  revokeAppleRefreshToken?: (sealedRefreshToken: string) => Promise<void>;
 }
 
 export type AccountRoutesInput = Omit<AccountRoutesOptions, "logAccountEvent"> & { logAccountEvent?: AccountEventLogger };
@@ -40,6 +44,10 @@ export type AccountRoutesInput = Omit<AccountRoutesOptions, "logAccountEvent"> &
 const defaultLogAccountEvent: AccountEventLogger = (event, userId, details) => {
   process.stdout.write(`${JSON.stringify({ event, userId, ...details })}\n`);
 };
+
+function isSocialProviderName(providerId: string): providerId is SocialProviderName {
+  return (socialProviderNames as readonly string[]).includes(providerId);
+}
 
 function formatTimestamp(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -61,6 +69,11 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
   if (!row) {
     return context.json({ error: "User not found" }, 404);
   }
+  // HEN-239: linked sign-in providers by name only; no provider ids, tokens or profile data.
+  const providerRows = await withUserContext(options.db, authenticatedUserId, (transaction) =>
+    transaction.selectFrom("accounts").select(["providerId"]).where("userId", "=", authenticatedUserId).execute(),
+  );
+  const linkedProviders = [...new Set(providerRows.map((providerRow) => providerRow.providerId))].filter(isSocialProviderName).sort();
   // Parsing with the strict schema keeps the export to the listed M2 fields.
   const exported: AccountExport = accountExportSchema.parse({
     exportedAt: new Date().toISOString(),
@@ -69,6 +82,7 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
       email: options.decryptUserEmail(row.emailCiphertext, row.keyVersion),
       handle: row.handle,
       createdAt: formatTimestamp(row.createdAt),
+      linkedProviders,
     },
     consentRecords: consentRecords.map((record) => ({
       ...record,

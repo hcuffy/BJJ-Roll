@@ -58,13 +58,13 @@ describe("EmailEntryScreen", () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
 
-    expect(flattenStyle(screen.getPressable("Continue").props.style).backgroundColor).toBe(colours.surfaceRaised);
-    expect(flattenStyle(screen.queryByText("Continue")?.props.style).color).toBe(colours.textSecondary);
+    expect(flattenStyle(screen.getPressable("Continue with email").props.style).backgroundColor).toBe(colours.surfaceRaised);
+    expect(flattenStyle(screen.queryByText("Continue with email")?.props.style).color).toBe(colours.textSecondary);
     // Dimmed, but still pressable, so it must not tell screen readers it is disabled; the hint explains what is missing.
-    expect(screen.getPressable("Continue").props.disabled).toBe(false);
-    expect(screen.getPressable("Continue").props.accessibilityState).toMatchObject({ disabled: false });
-    expect(screen.getPressable("Continue").props.accessibilityHint).toBe("Tick the 16 or older box first.");
-    await screen.press("Continue");
+    expect(screen.getPressable("Continue with email").props.disabled).toBe(false);
+    expect(screen.getPressable("Continue with email").props.accessibilityState).toMatchObject({ disabled: false });
+    expect(screen.getPressable("Continue with email").props.accessibilityHint).toBe("Tick the 16 or older box first.");
+    await screen.press("Continue with email");
     expect(screen.text()).toContain("Tick the box to confirm you are 16 or older.");
     expect(screen.getByRole("checkbox").props.accessibilityHint).toBe("Tick the box to confirm you are 16 or older.");
     await screen.press("Email me a sign-in link instead");
@@ -74,12 +74,12 @@ describe("EmailEntryScreen", () => {
 
     await screen.pressRole("checkbox");
     expect(screen.text()).not.toContain("Tick the box to confirm");
-    expect(flattenStyle(screen.getPressable("Continue").props.style).backgroundColor).toBe(colours.primary);
+    expect(flattenStyle(screen.getPressable("Continue with email").props.style).backgroundColor).toBe(colours.primary);
   });
 
   it("hints only what is missing, on both dimmed send buttons, and drops the hint once ready", async () => {
     const hints = (screen: Awaited<ReturnType<typeof renderEmailEntry>>) => [
-      screen.getPressable("Continue").props.accessibilityHint,
+      screen.getPressable("Continue with email").props.accessibilityHint,
       screen.getPressable("Email me a sign-in link instead").props.accessibilityHint,
     ];
     const screen = await renderEmailEntry();
@@ -114,7 +114,7 @@ describe("EmailEntryScreen", () => {
   it("tells the user to fix the email when they tap Continue with the box ticked but no valid email", async () => {
     const screen = await renderEmailEntry();
     await screen.pressRole("checkbox");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.text()).toContain("Enter a valid email address.");
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
@@ -144,8 +144,8 @@ describe("EmailEntryScreen", () => {
     const screen = await renderEmailEntry();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    const idleHeight = flattenStyle(screen.getPressable("Continue").props.style).minHeight;
-    await screen.press("Continue");
+    const idleHeight = flattenStyle(screen.getPressable("Continue with email").props.style).minHeight;
+    await screen.press("Continue with email");
 
     const busyButton = screen.getPressable("Sending code…");
     expect(busyButton.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
@@ -163,8 +163,8 @@ describe("EmailEntryScreen", () => {
     await screen.changeText("Email", " member@example.test ");
     await screen.pressRole("checkbox");
 
-    expect(screen.isDisabled("Continue")).toBe(false);
-    await screen.press("Continue");
+    expect(screen.isDisabled("Continue with email")).toBe(false);
+    await screen.press("Continue with email");
 
     expect(backend.requests.map((request) => [new URL(request.url).pathname, request.body])).toEqual([
       ["/api/auth/email-otp/send-verification-otp", { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false }],
@@ -181,7 +181,7 @@ describe("EmailEntryScreen", () => {
     await screen.rerender();
     await screen.press("Email me a sign-in link instead");
     await screen.press("Use a different email");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(backend.requests.map((request) => request.body)).toEqual([
       { email: "member@example.test", callbackURL: "bjjroll://auth", age16Confirmed: true, age18Confirmed: true },
@@ -198,7 +198,7 @@ describe("EmailEntryScreen", () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
     await screen.pressRole("checkbox");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     expect(screen.queryByText(AGE_GATE_REFUSAL_MESSAGE)).not.toBeNull();
     expect(sentTo).toEqual([]);
@@ -210,7 +210,7 @@ describe("EmailEntryScreen", () => {
     const screen = await renderEmailEntry();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
-    await screen.press("Continue");
+    await screen.press("Continue with email");
 
     const errorText = screen.queryByText("Too many tries. Wait a minute and try again.");
     expect(errorText?.props).toMatchObject({ accessibilityLiveRegion: "polite", accessibilityRole: "alert" });
@@ -219,7 +219,7 @@ describe("EmailEntryScreen", () => {
     const iosScreen = await renderEmailEntry();
     await iosScreen.pressRole("checkbox");
     await iosScreen.changeText("Email", "member@example.test");
-    await iosScreen.press("Continue");
+    await iosScreen.press("Continue with email");
     expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith("Too many tries. Wait a minute and try again.");
   });
 

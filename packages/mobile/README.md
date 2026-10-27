@@ -32,6 +32,20 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
    | `LETTERMINT_API_KEY`, `EMAIL_FROM_ADDRESS` | The email sender. `server.js` always sends real email through Lettermint, so use an inbox you can open                   |
    | `PORT` (optional)                          | Defaults to `3000`                                                                                                       |
 
+   Apple and Google sign-in (HEN-239) also read these. The server refuses to start without the Google pair, and Apple is on only when all five Apple variables are set (a partial set fails at startup with the missing name):
+
+   | Variable                                   | What it is                                                                                          |
+   | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth web client; its redirect URI is `<AUTH_BASE_URL>/api/auth/callback/google`             |
+   | `APPLE_SERVICE_ID`                         | Apple Services ID for the browser flow; its return URL is `<AUTH_BASE_URL>/api/auth/callback/apple` |
+   | `APPLE_APP_BUNDLE_IDENTIFIER`              | The iOS bundle id (`com.bjj.roll`), the audience of native Sign in with Apple tokens                |
+   | `APPLE_TEAM_ID`, `APPLE_KEY_ID`            | Apple developer team id and the id of the Sign in with Apple key                                    |
+   | `APPLE_PRIVATE_KEY`                        | That key's PKCS#8 PEM; `\n` escapes are accepted for one-line values                                |
+
+   The app shows the buttons from `app.json` → `expo.extra.socialSignIn` (`appleEnabled`, `googleEnabled`). iOS shows Google only next to Apple; Android never shows Apple. Apple is off for now (Android first).
+   The buttons need the same **I am 16 or older** tick as email sign-in and send the 18+ answer the same way. The server refuses a new account without the 16+ tick and stores both answers in its consent record.
+   The server accepts a provider email only when the provider marks it verified; otherwise it refuses with the same answer for every email. Native Apple sign-in sends Apple SHA-256 of a one-time random nonce, and the server refuses a nonce it has seen.
+
 3. Build, run the migrations once, then start the server:
 
    ```sh
@@ -58,10 +72,10 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 
 ### 4. Code path (AC1)
 
-1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue** looks dimmed but still responds.
-2. Tap **Continue** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
-3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue** turns lime.
-4. Tap **Continue** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
+1. Start screen: dark background, "Sign in to BJJ Roll", "New here? We'll create your account." **Continue with email** looks dimmed but still responds.
+2. Tap **Continue with email** with nothing filled in. Expect an inline message saying what is missing; no email is sent.
+3. Type your email and tap **I am 16 or older**. The box shows ✓ and **Continue with email** turns lime.
+4. Tap **Continue with email** (or the keyboard's Go key). It shows "Sending code…" with a spinner, then the "Enter your code" screen with "We emailed a 6-digit code to <your email>." and "Code expires in 10 minutes."
 5. The code field is focused with the number pad. Type the 6 digits. Sign-in starts on its own at the 6th digit ("Signing in…").
 6. Expect "You are signed in".
 7. Optional: type a wrong code. Expect "That code didn't work. Check the email or send a new code." under the field with a red border. After 30 seconds **Resend code** turns on and sends a new code.
@@ -87,7 +101,7 @@ Checks the unit tests cannot cover. Run them on one small and one large phone pe
 
 **Keyboard**
 
-- [ ] The keyboard never covers **Continue**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView `padding`, with a 24 gap above the keyboard; Android: KeyboardAvoidingView `height`, which shrinks the view by the keyboard height on edge-to-edge). On Android, check the content does not shift twice (once from the view, once from the window resizing).
+- [ ] The keyboard never covers **Continue with email**, the code field or **Resend code**, on a small phone in portrait. Content scrolls up while the keyboard is open (iOS: KeyboardAvoidingView `padding`, with a 24 gap above the keyboard; Android: KeyboardAvoidingView `height`, which shrinks the view by the keyboard height on edge-to-edge). On Android, check the content does not shift twice (once from the view, once from the window resizing).
 - [ ] A tap on a button while the keyboard is open works the first time (no tap spent just closing the keyboard).
 - [ ] Email field: Go submits. Code field: number pad, Done submits, and iOS/Android offer the emailed code for autofill.
 
