@@ -12,6 +12,7 @@ vi.mock("react-native", async () => ({
   Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })) },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
+  Image: "Image",
   Pressable: "Pressable",
   Text: "Text",
   TextInput: "TextInput",
@@ -37,6 +38,9 @@ vi.mock("expo-linking", async () => {
 vi.mock("expo-web-browser", () => ({ openAuthSessionAsync: vi.fn(() => Promise.resolve({ type: "cancel" })), dismissAuthSession: vi.fn() }));
 vi.mock("expo-apple-authentication", () => ({
   AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+  AppleAuthenticationButton: "AppleAuthenticationButton",
+  AppleAuthenticationButtonType: { SIGN_IN: 0, CONTINUE: 1, SIGN_UP: 2 },
+  AppleAuthenticationButtonStyle: { WHITE: 0, WHITE_OUTLINE: 1, BLACK: 2 },
   signInAsync: vi.fn(() => Promise.reject(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }))),
 }));
 // expo-crypto backed by Node's crypto, so nonces are really random and hashes really SHA-256.
