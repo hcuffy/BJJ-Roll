@@ -43,6 +43,9 @@ jobs:
         run: pnpm typecheck
       - name: Typecheck mobile
         run: pnpm --filter @bjj-roll/mobile typecheck
+      # expo-doctor from the pinned devDependency; patch-behind Expo packages warn, major/minor mismatches fail (HEN-272).
+      - name: Expo doctor (mobile)
+        run: pnpm --filter @bjj-roll/mobile run doctor
       - name: Frontend build (mobile Android bundle)
         run: pnpm --filter @bjj-roll/mobile bundle
       - name: Frontend build (mobile iOS bundle)
