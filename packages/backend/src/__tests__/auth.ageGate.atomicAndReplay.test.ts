@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { recordPendingAgeAnswers } from "../auth/ageGate.js";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { getAuthPath, postAuthJson } from "./authTestHelper.js";
+import { getAuthPath, postAuthJson, currentSignUpAttestation } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const failConsentInsertSql = [
@@ -29,11 +29,19 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
   };
 
   const sendMagicLink = (email: string, ipAddress: string, ageAnswers: Record<string, unknown>): Promise<Response> =>
-    postAuthJson(current().app, magicLinkSendPath, { body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, ...ageAnswers }, ipAddress });
+    postAuthJson(current().app, magicLinkSendPath, {
+      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, ...currentSignUpAttestation, ...ageAnswers },
+      ipAddress,
+    });
 
   /** After a refusal: the email now has a ticked answer, so only a burned code or link can still fail. */
   const tickLater = (email: string): Promise<void> =>
-    recordPendingAgeAnswers(current().appLogin.pool, current().codec, { email, age16Confirmed: true, age18Confirmed: false });
+    recordPendingAgeAnswers(current().appLogin.pool, current().codec, {
+      email,
+      age16Confirmed: true,
+      ...currentSignUpAttestation,
+      age18Confirmed: false,
+    });
 
   describe("item 2: the user row and its consent record are written in one transaction", () => {
     it.each([

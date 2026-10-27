@@ -51,14 +51,17 @@ export interface VerificationsTable {
   updatedAt: Generated<Date>;
 }
 
-/** HEN-263: append-only for the app (SELECT and INSERT only); rows go with the user via ON DELETE CASCADE. */
+/**
+ * HEN-263 age confirmations and HEN-183 sign-up attestations: append-only for the app (SELECT and INSERT only); rows go
+ * with the user via ON DELETE CASCADE. The age answers are set on age_confirmation rows and null on attestation_signup rows.
+ */
 export interface ConsentRecordsTable {
   id: string;
   userId: string;
-  consentType: "age_confirmation";
+  consentType: "age_confirmation" | "attestation_signup";
   textVersionId: string;
-  age16Confirmed: boolean;
-  age18Confirmed: boolean;
+  age16Confirmed: boolean | null;
+  age18Confirmed: boolean | null;
   acceptedAt: TimestampColumn;
   withdrawnAt: TimestampColumn | null;
 }

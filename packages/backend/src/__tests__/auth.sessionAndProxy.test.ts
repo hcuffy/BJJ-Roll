@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { MAX_SENDS_PER_IP_PER_WINDOW, SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { extractSessionCookie, getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import {
+  extractSessionCookie,
+  getAuthPath,
+  postAuthJson,
+  startAuthTestEnvironment,
+  type StartedAuthTestEnvironment,
+  currentSignUpAttestation,
+} from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 session lifetime (AC 8)", () => {
   let environment: StartedAuthTestEnvironment | undefined;
@@ -33,7 +40,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 session lifetime 
 
   const signInWithOtp = async (email: string, ipAddress: string): Promise<{ cookie: string; token: string; userId: string }> => {
     const { app } = current();
-    await postAuthJson(app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", age16Confirmed: true }, ipAddress });
+    await postAuthJson(app, "/email-otp/send-verification-otp", {
+      body: { email, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
+      ipAddress,
+    });
     const response = await postAuthJson(app, "/sign-in/email-otp", { body: { email, otp: latestOtpFor(email) }, ipAddress });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { token: string; user: { id: string } };
@@ -132,7 +142,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 opt-in proxy head
     const proxySocket = "10.0.0.5";
     for (let count = 1; count <= 15; count += 1) {
       const response = await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: `trusted.client.${String(count)}@example.com`, type: "sign-in", age16Confirmed: true },
+        body: { email: `trusted.client.${String(count)}@example.com`, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
         ipAddress: proxySocket,
         headers: { "x-forwarded-for": `203.0.113.${String(count)}` },
       });
@@ -142,7 +152,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 opt-in proxy head
     const statuses: number[] = [];
     for (let count = 1; count <= 12; count += 1) {
       const response = await postAuthJson(app, "/email-otp/send-verification-otp", {
-        body: { email: `trusted.spoof.${String(count)}@example.com`, type: "sign-in", age16Confirmed: true },
+        body: { email: `trusted.spoof.${String(count)}@example.com`, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
         ipAddress: proxySocket,
         headers: { "x-forwarded-for": `192.0.2.${String(count)}, 203.0.113.200` },
       });

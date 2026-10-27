@@ -215,7 +215,7 @@ const consentRecordBaseSchema = z.object({
 });
 
 export const consentRecordSchema = z.discriminatedUnion("consentType", [
-  consentRecordBaseSchema.extend({ consentType: z.literal("attestation_signup") }), // M2-13, HEN-183 (type name proposed)
+  consentRecordBaseSchema.extend({ consentType: z.literal("attestation_signup") }), // M2-13, HEN-183 (built: migration 005)
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_upload"), videoId: identifierSchema }), // M4-25, HEN-190
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_share"), videoId: identifierSchema }), // M6-11 (type name proposed)
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_review_request"), videoId: identifierSchema }), // M10-09 (type name proposed)
@@ -230,7 +230,7 @@ export const consentRecordSchema = z.discriminatedUnion("consentType", [
 ]);
 ```
 
-`attestation_upload` and `consent_third_party` are the names recorded in Linear. The other type names are proposals.
+`attestation_signup` (HEN-183), `attestation_upload` and `consent_third_party` are the names recorded in Linear. The other type names are proposals.
 
 ### 2.5 Notes (text and voice)
 

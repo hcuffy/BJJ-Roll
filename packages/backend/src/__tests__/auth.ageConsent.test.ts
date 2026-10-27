@@ -2,7 +2,7 @@ import { AGE_CONFIRMATION_TEXT_VERSION_ID, accountExportSchema, ageConfirmationS
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { ageConfirmationPath, createAgeGateTestContext, magicLinkSendPath } from "./ageGateTestContext.js";
-import { dumpRawAuthTables, getAuthPath, postAuthJson } from "./authTestHelper.js";
+import { dumpRawAuthTables, getAuthPath, postAuthJson, currentSignUpAttestation } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const ageOrBirthColumnPattern = "(^|_)age($|_)|age_?confirm|age1[68]|birth|dob|adult|minor";
@@ -36,7 +36,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age consent reco
       const { app, pool } = current();
       const email = "consent.link@example.com";
       const sendResponse = await postAuthJson(app, magicLinkSendPath, {
-        body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, age18Confirmed: true },
+        body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: true },
         ipAddress: "198.51.100.186",
       });
       expect(sendResponse.status).toBe(200);
@@ -107,13 +107,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age consent reco
       const exportResponse = await flow.accountRequest("GET", "/account/export", { cookie: user.cookie, ipAddress: user.ipAddress });
       expect(exportResponse.status).toBe(200);
       const exported = accountExportSchema.parse(await exportResponse.json());
-      expect(exported.consentRecords.map((record) => [record.consentType, record.age16Confirmed, record.age18Confirmed])).toEqual([
+      const ageRecords = exported.consentRecords.filter((record) => record.consentType === "age_confirmation");
+      expect(ageRecords.map((record) => [record.consentType, record.age16Confirmed, record.age18Confirmed])).toEqual([
         ["age_confirmation", true, false],
         ["age_confirmation", true, true],
       ]);
-      expect(
-        exported.consentRecords.every((record) => record.userId === user.userId && record.textVersionId === AGE_CONFIRMATION_TEXT_VERSION_ID),
-      ).toBe(true);
+      expect(ageRecords.every((record) => record.userId === user.userId && record.textVersionId === AGE_CONFIRMATION_TEXT_VERSION_ID)).toBe(true);
 
       expect((await flow.deleteAccount(user)).status).toBe(200);
       expect(await consentRowsFor(user.userId)).toEqual([]);
