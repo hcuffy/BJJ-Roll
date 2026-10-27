@@ -145,7 +145,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     { name: "no age answer", additionalData: undefined },
     { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
     { name: "16+ as a string", additionalData: { age16Confirmed: "true" } },
-    { name: "only the old ageConfirmed field", additionalData: { age16Confirmed: true, age18Confirmed: false } },
+    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true } },
   ])("refuses a new Google account with $name: error back to the app, no user or session", async ({ additionalData }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions"), accounts: await countRows("accounts") };
     const { location } = await signInWithGoogle(

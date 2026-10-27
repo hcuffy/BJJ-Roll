@@ -150,7 +150,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
   it.each([
     { name: "no age answer", additionalData: undefined },
     { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
-    { name: "only the old ageConfirmed field", additionalData: { age16Confirmed: true, age18Confirmed: false } },
+    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true } },
   ])("refuses a new Apple account with $name and leaves no user or session", async ({ additionalData }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions") };
     const response = await signInWithApple({
