@@ -53,6 +53,9 @@ jobs:
           pnpm --filter @bjj-roll/frontend build
       - name: Lint
         run: pnpm lint
+      # No outside payment, tip or donation links in the mobile app (HEN-278; lists and docs in docs/release.md).
+      - name: Payment link guard (mobile)
+        run: pnpm --filter @bjj-roll/mobile run payment-guard
       - name: Format check
         run: pnpm format:check
       - name: Lint Python workers (Ruff)

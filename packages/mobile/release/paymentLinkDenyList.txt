@@ -1,0 +1,23 @@
+# Payment link deny-list (HEN-278). The mobile app must not link to outside payment, tip or donation pages
+# (Apple App Review 3.1.1, Google Play Payments policy). One JavaScript regular expression per line, matched
+# case-insensitively against mobile source, app config and assets. Blank lines and lines starting with # are skipped.
+# False positives go in paymentLinkAllowList.txt with a reason. See docs/release.md.
+buymeacoffee(?:\.com)?
+buymeacoff\.ee
+ko-fi(?:\.com)?
+paypal\.me
+paypal\.com/donate
+paypal\.com/paypalme
+patreon(?:\.com)?
+checkout\.stripe\.com
+buy\.stripe\.com
+donate\.stripe\.com
+liberapay\.com
+opencollective\.com
+github\.com/sponsors
+gofundme\.com
+venmo\.com
+cash\.app
+streamlabs\.com/[^\s"'`]*tip
+https?://(?:donate|donation|donations|tip|tips)[.-][^\s"'`<>)]*
+https?://[^\s"'`<>)]*?/(?:donate|donation|donations|tip|tips|tipjar|tip-jar)(?=[/?#"'`\s<>)]|$)
