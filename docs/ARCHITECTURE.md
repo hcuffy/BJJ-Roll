@@ -593,10 +593,12 @@ Rules that are not open:
 - Until the lawyer answers, nothing in an **OPEN FOR LAWYER** row is decided. If the answer is to keep something, the kept row should hold only the fields
   the legal reason needs and be unlinked from the video and the handle where possible [Proposal].
 
+Play web deletion-request URL and owner: OPEN (Henry). TODO: ticket to be created (related: the HEN-185 web-URL deletion criterion, HEN-65).
+
 ## 6. Encryption inventory (input to M4-26, HEN-191)
 
-**No card data anywhere:** payments go through the App Store, Google Play or a payment provider. We store only their transaction, product and receipt
-references. Payouts: provider account references only; no bank or ID documents (HEN-214).
+**No card data anywhere:** digital goods are paid through Apple IAP or Google Play Billing; a payment provider is used only for physical goods and
+payouts. We store only their transaction, product and receipt references. Payouts: provider account references only; no bank or ID documents (HEN-214).
 
 | Data                                           | Where                           | At-rest protection                                                                         | Status                               | E2E (M6-14) changes it?                                                                             |
 | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |

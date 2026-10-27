@@ -84,8 +84,12 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 
 ## D25: Sign-in mix: Apple and Google on top of email OTP; SMS only as a one-time phone check
 
-- **Decision:** Sign in with Apple and Google sign-in are added on top of email OTP, not as a replacement. Both ship at launch. SMS is only a one-time
-  phone check (one account per phone, against fake ranks), never a login method.
+- **Decision:** Sign in with Apple and Google sign-in are added on top of email OTP, not as a replacement. SMS is only a one-time phone check (one
+  account per phone, against fake ranks), never a login method.
+- **Launch:** Apple is built at launch, with `appleEnabled` false until the Apple developer account exists (HEN-181). Android shows email and Google,
+  with Apple hidden. iOS shows email only while Apple is off, then email, native Apple and Google once it's on
+  (`packages/mobile/src/auth/socialSignIn.ts:44`, Apple rule 4.8).
+- Apple sign-in is iOS-only and hidden on Android.
 - **Rejected alternative:** Replacing email OTP with Apple/Google; SMS as a login method.
 - **Date:** 2026-10-22 and 2026-10-25
 - **Decided by:** Henry
