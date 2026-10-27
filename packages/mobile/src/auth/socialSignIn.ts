@@ -1,12 +1,15 @@
-import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed } from "./ageConfirmation";
+import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed, isSignUpAttestationAccepted } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import type { ExpoConfigWithExtra } from "./authConfig";
 import {
   AGE_CONFIRMATION_REQUIRED_CODE,
+  ATTESTATION_REQUIRED,
   failure,
   FAILURE_MESSAGES,
   MAGIC_LINK_CALLBACK_URL,
   postAuth,
+  SIGN_UP_ATTESTATION_REQUIRED_CODE,
   SOCIAL_SIGN_IN_CALLBACK_PATH,
   type ActionResult,
 } from "./signInActions";
@@ -84,10 +87,11 @@ export function socialFailureMessage(provider: SocialProvider, result: { readonl
 const ignored: ActionResult = { ok: false, reason: "ignored", message: null };
 const ageRequired: ActionResult = { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
 
-/** The age answers the backend stores for a new account (HEN-263); sent only once the 16+ box is ticked. */
+/** The answers the backend stores for a new account (HEN-263, HEN-183); sent only once the 16+ and attestation boxes are ticked. */
 interface SocialAgeAnswers {
   readonly age16Confirmed: true;
   readonly age18Confirmed: boolean;
+  readonly signUpAttestationTextVersionId: string;
 }
 
 /** Signs in with Apple (native sheet on iOS) or Google (browser). Nothing is sent unless the 16+ box is ticked. Closing the sheet is not an error. */
@@ -99,7 +103,14 @@ export async function signInWithProvider(
   if (!isAgeConfirmed(answers)) {
     return ageRequired;
   }
-  const ages: SocialAgeAnswers = { age16Confirmed: true, age18Confirmed: answers.age18Confirmed === true };
+  if (!isSignUpAttestationAccepted(answers)) {
+    return ATTESTATION_REQUIRED;
+  }
+  const ages: SocialAgeAnswers = {
+    age16Confirmed: true,
+    age18Confirmed: answers.age18Confirmed === true,
+    signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+  };
   if (provider === "apple" && dependencies.platform === "ios" && dependencies.appleNative) {
     return await signInWithAppleNative(dependencies, dependencies.appleNative, ages);
   }
@@ -183,6 +194,9 @@ export async function completeSocialSignIn(client: MobileAuthClient, url: string
   const error = parsed.searchParams.get("error");
   if (error === AGE_CONFIRMATION_REQUIRED_CODE) {
     return ageRequired;
+  }
+  if (error === SIGN_UP_ATTESTATION_REQUIRED_CODE) {
+    return ATTESTATION_REQUIRED;
   }
   if (error === ACCOUNT_NOT_LINKED_ERROR) {
     return socialNotLinked(provider);

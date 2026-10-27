@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
@@ -56,6 +57,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     const screen = await render();
 
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.press("Sign in with Google");
 
     expect(onClearServerUnreachable).toHaveBeenCalled();
@@ -65,6 +67,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     const { render, control } = setUp();
     const screen = await render();
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     control.offline = true;
     await screen.press("Continue with email");
@@ -84,6 +87,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     control.holdExchange = new Promise((resolve) => (finishExchange = resolve));
     const screen = await render();
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.press("Sign in with Google");
 
     const texts = () => screen.findAllByType("Text").map(textOf);
@@ -108,6 +112,7 @@ describe("HEN-239 social sign-in status on the sign-in screen (Vera interim item
     browser.openAuthSessionAsync.mockResolvedValueOnce({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=server_error` });
     const screen = await render();
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.press("Sign in with Google");
 
     const texts = screen.findAllByType("Text");

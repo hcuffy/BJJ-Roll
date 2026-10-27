@@ -13,7 +13,9 @@ describe("session storage", () => {
     const options = { backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation: backend.fetchImplementation };
     const client = createMobileAuthClient(options);
 
-    expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true })).toEqual({ ok: true });
+    expect(
+      await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true }),
+    ).toEqual({ ok: true });
     expect(secureStore.items.get(COOKIE_STORAGE_KEY)).toContain("signed-session-value");
 
     const restartedClient = createMobileAuthClient(options);
@@ -38,7 +40,7 @@ describe("session storage", () => {
     const backend = createFakeBackend();
     const secureStore = createMemorySecureStore();
     const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation: backend.fetchImplementation });
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true });
+    await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true });
     expect(secureStore.items.get(COOKIE_STORAGE_KEY)).toContain("signed-session-value");
 
     backend.fetchImplementation.mockRejectedValue(new TypeError("Network request failed"));

@@ -1,6 +1,6 @@
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 /// <reference types="node" />
 import { createHash } from "node:crypto";
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { completeMagicLink } from "../auth/signInActions";
@@ -19,7 +19,7 @@ const sha256Hex = (value: string): string => createHash("sha256").update(value).
 const NEUTRAL_GOOGLE_COPY = "We couldn't sign you in with Google. Sign in with your email instead.";
 const NEUTRAL_COPY = "We couldn't sign you in this way. Sign in with your email instead.";
 /** The same answers the email and code screens send (HEN-263): 16+ ticked, 18+ not. */
-const AGE_16 = { age16Confirmed: true, age18Confirmed: false } as const;
+const AGE_16 = { age16Confirmed: true, age18Confirmed: false, signUpAttestationAccepted: true } as const;
 
 /** A fake Apple sheet with a fixed raw nonce; hashing is real SHA-256 so the test sees what Apple would get. */
 function fakeAppleNative(signInAsync: AppleNativeSignIn["signInAsync"], rawNonce = "raw-nonce-0123456789abcdef") {
@@ -66,8 +66,12 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
   it("sends the 18+ answer as given, like the email screen", async () => {
     const { backend, dependencies } = createTestDependencies();
 
-    expect(await signInWithProvider(dependencies, "google", { age16Confirmed: true, age18Confirmed: true })).toEqual({ ok: true });
-    expect(backend.requests[0]?.body).toMatchObject({ additionalData: { age16Confirmed: true, age18Confirmed: true } });
+    expect(await signInWithProvider(dependencies, "google", { age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true })).toEqual(
+      { ok: true },
+    );
+    expect(backend.requests[0]?.body).toMatchObject({
+      additionalData: { age16Confirmed: true, age18Confirmed: true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
+    });
   });
 
   it("Google: sends the 16+ and 18+ answers, opens the provider URL through the Expo proxy, and swaps the returned code for a session", async () => {
@@ -81,7 +85,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       callbackURL: "bjjroll://auth/social",
       errorCallbackURL: "bjjroll://auth/social",
       disableRedirect: true,
-      additionalData: { age16Confirmed: true, age18Confirmed: false },
+      additionalData: { age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
     });
     const [proxyUrl, redirectUrl] = browser.openAuthSessionAsync.mock.calls[0] ?? [];
     const proxy = new URL(proxyUrl ?? "");
@@ -119,7 +123,12 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     expect(backend.requests[0]?.body).toEqual({
       provider: "apple",
       idToken: { token: "fake.identity.token", nonce: "raw-nonce-0123456789abcdef" },
-      additionalData: { age16Confirmed: true, age18Confirmed: false, appleAuthorizationCode: "fake-apple-code" },
+      additionalData: {
+        age16Confirmed: true,
+        age18Confirmed: false,
+        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        appleAuthorizationCode: "fake-apple-code",
+      },
     });
     expect(browser.openAuthSessionAsync).not.toHaveBeenCalled();
     expect(storage.items.get("bjjroll_cookie")).toContain("signed-session-value");
@@ -169,7 +178,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     expect(backend.requests[0]?.body).toMatchObject({
       provider: "apple",
       disableRedirect: true,
-      additionalData: { age16Confirmed: true, age18Confirmed: false },
+      additionalData: { age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
     });
     expect(browser.openAuthSessionAsync).toHaveBeenCalledOnce();
   });

@@ -1,12 +1,14 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, StatusBar, Text, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
+  acceptSignUpAttestation,
   confirmAdult,
   deleteAccount,
   exportAccountData,
   readAgeConfirmation,
+  readSignUpAttestation,
   requestAccountDeletionCode,
   type AccountSession,
 } from "./auth/accountActions";
@@ -15,9 +17,10 @@ import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
+import { LoadingScreen } from "./screens/LoadingScreen";
+import { SignUpAttestationGate } from "./screens/SignUpAttestationGate";
 import { SignedInScreen } from "./screens/SignedInScreen";
-import { authStyles } from "./screens/authStyles";
-import { colours, textStyles } from "./theme/tokens";
+import { colours } from "./theme/tokens";
 
 type AuthScreen =
   | { readonly name: "loading" }
@@ -114,32 +117,30 @@ export function App() {
   function renderScreen(): ReactNode {
     switch (screen.name) {
       case "loading": {
-        return (
-          <SafeAreaView style={authStyles.safeArea}>
-            <View style={authStyles.centred}>
-              {/* Muted spinner (lime is for the primary action); the visible word is the one thing screen readers read. */}
-              <ActivityIndicator size="large" color={colours.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-              <Text style={textStyles.bodyMuted}>Loading</Text>
-            </View>
-          </SafeAreaView>
-        );
+        return <LoadingScreen />;
       }
       case "signedIn": {
+        // HEN-183: an account without the current sign-up attestation stays on the prompt until it accepts.
         return (
-          <SignedInScreen
-            onSignOut={handleSignOut}
-            onExportData={() => exportAccountData(accountSession())}
-            onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
-            onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
-            onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
-            onConfirmAdult={() => confirmAdult(accountSession())}
-            onAccountDeleted={() => {
-              // A note from a link that failed while signed in must not sit next to the deleted card.
-              setServerUnreachable(false);
-              setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
-              setScreen({ name: "email" });
-            }}
-          />
+          <SignUpAttestationGate
+            onReadStatus={() => readSignUpAttestation(accountSession())}
+            onAccept={() => acceptSignUpAttestation(accountSession())}
+            onSignOut={handleSignOut}>
+            <SignedInScreen
+              onSignOut={handleSignOut}
+              onExportData={() => exportAccountData(accountSession())}
+              onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
+              onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+              onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
+              onConfirmAdult={() => confirmAdult(accountSession())}
+              onAccountDeleted={() => {
+                // A note from a link that failed while signed in must not sit next to the deleted card.
+                setServerUnreachable(false);
+                setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
+                setScreen({ name: "email" });
+              }}
+            />
+          </SignUpAttestationGate>
         );
       }
       case "code": {

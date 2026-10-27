@@ -24,6 +24,8 @@ const styles = StyleSheet.create({
 export interface SocialSignInButtonsProps {
   readonly providers: readonly SocialProvider[];
   readonly age16Confirmed: boolean;
+  /** The sign-up duties box is ticked (HEN-183); until then the muted line says so. */
+  readonly attestationAccepted?: boolean;
   /** What the screen is sending right now; the other buttons are disabled meanwhile. */
   readonly sending: string | null;
   readonly onPress: (provider: SocialProvider) => void;
@@ -38,8 +40,16 @@ export interface SocialSignInButtonsProps {
  * Order: "or", the 16+ line, the buttons, progress, then a social error. Brand buttons are never dimmed: until the 16+ box
  * is ticked a muted line says why (screen readers get the same words as the buttons' hint) and a tap explains instead of signing in.
  */
-export function SocialSignInButtons({ providers, age16Confirmed, sending, onPress, progress = "opening", error = null }: SocialSignInButtonsProps) {
-  const hint = missingHint(true, age16Confirmed);
+export function SocialSignInButtons({
+  providers,
+  age16Confirmed,
+  attestationAccepted = true,
+  sending,
+  onPress,
+  progress = "opening",
+  error = null,
+}: SocialSignInButtonsProps) {
+  const hint = missingHint(true, age16Confirmed, attestationAccepted);
   const running = providers.find((provider) => provider === sending);
   return (
     <>

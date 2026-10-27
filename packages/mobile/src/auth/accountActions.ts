@@ -3,7 +3,10 @@ import {
   accountDeletionResponseSchema,
   accountExportSchema,
   ageConfirmationStatusSchema,
+  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationStatusSchema,
   type AgeConfirmationStatus,
+  type SignUpAttestationStatus,
 } from "@bjj-roll/shared";
 import type { MobileAuthClient } from "./authClient";
 import { FAILURE_MESSAGES, SESSION_STORAGE_KEYS, type SessionKeyStore } from "./signInActions";
@@ -25,6 +28,7 @@ export type AccountCodeResult = { readonly ok: true } | AccountFailure;
 export type AccountDeletionResult = { readonly ok: true } | AccountFailure;
 export type AccountExportResult = { readonly ok: true; readonly json: string } | AccountFailure;
 export type AgeConfirmationResult = { readonly ok: true; readonly status: AgeConfirmationStatus } | AccountFailure;
+export type SignUpAttestationResult = { readonly ok: true; readonly status: SignUpAttestationStatus } | AccountFailure;
 
 function failure(reason: AccountFailure["reason"]): AccountFailure {
   return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
@@ -93,6 +97,25 @@ export async function readAgeConfirmation(session: AccountSession): Promise<AgeC
 /** POST /account/age-confirmation: records a new 18+ confirmation. Only deleting the account undoes it. */
 export async function confirmAdult(session: AccountSession): Promise<AgeConfirmationResult> {
   return parseAgeStatus(await requestAccount(session, { method: "POST", path: "/account/age-confirmation", body: { age18Confirmed: true } }));
+}
+
+function parseAttestationStatus(response: AccountResponse): SignUpAttestationResult {
+  if (!response.ok) {
+    return response;
+  }
+  const parsed = signUpAttestationStatusSchema.safeParse(response.data);
+  return parsed.success ? { ok: true, status: parsed.data } : failure("unknown");
+}
+
+/** GET /account/signup-attestation: `required` until the account accepted the current text version (HEN-183). */
+export async function readSignUpAttestation(session: AccountSession): Promise<SignUpAttestationResult> {
+  return parseAttestationStatus(await requestAccount(session, { method: "GET", path: "/account/signup-attestation" }));
+}
+
+/** POST /account/signup-attestation: accepts the text version the app shows; the server takes the current one only. */
+export async function acceptSignUpAttestation(session: AccountSession): Promise<SignUpAttestationResult> {
+  const body = { textVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+  return parseAttestationStatus(await requestAccount(session, { method: "POST", path: "/account/signup-attestation", body }));
 }
 
 /** POST /account/delete-code: the backend emails a fresh 6-digit code to the signed-in user's own address. */
