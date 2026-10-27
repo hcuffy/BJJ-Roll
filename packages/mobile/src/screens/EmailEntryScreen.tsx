@@ -6,6 +6,7 @@ import {
   AGE_ADULT_NEEDS_16_HINT,
   AGE_CONFIRMATION_LABEL,
   isEmailAddress,
+  missingHint,
 } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, MAGIC_LINK_EXPIRY_MINUTES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
@@ -14,14 +15,14 @@ import { AgeCheckbox } from "./AgeCheckbox";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { type LinkErrorCardProps, LinkErrorCard } from "./LinkErrorCard";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 16 or older.";
-/** Calm note when the backend could not be reached (copy per Vera, HEN-285). Cleared by the next submit attempt. */
-export const SERVER_UNREACHABLE_NOTE = "Can't reach the server right now. Check your connection and try again.";
+export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 
 export interface EmailEntryScreenProps {
   readonly client: MobileAuthClient;
@@ -40,17 +41,6 @@ export interface EmailEntryScreenProps {
 }
 
 type Sending = "code" | "link" | null;
-
-/** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
-function missingHint(emailValid: boolean, age16Confirmed: boolean): string | undefined {
-  if (!emailValid && !age16Confirmed) {
-    return "Enter your email and tick the 16 or older box first.";
-  }
-  if (!emailValid) {
-    return "Enter your email first.";
-  }
-  return age16Confirmed ? undefined : "Tick the 16 or older box first.";
-}
 
 export function EmailEntryScreen({
   client,
@@ -74,6 +64,8 @@ export function EmailEntryScreen({
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  // This screen's own send failed on the network; App's serverUnreachable covers startup and links.
+  const [offline, setOffline] = useState(false);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
   const ready = age16Confirmed && isEmailAddress(email);
   const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
@@ -90,6 +82,8 @@ export function EmailEntryScreen({
       setAgeError(result.message);
     } else if (result.reason === "invalidEmail") {
       setEmailError(result.message);
+    } else if (result.reason === "network") {
+      setOffline(true);
     } else {
       setFormError(result.message);
     }
@@ -108,6 +102,7 @@ export function EmailEntryScreen({
   const send = async (kind: "code" | "link") => {
     startAction();
     onClearServerUnreachable?.();
+    setOffline(false);
     if (sending !== null || !validate()) {
       return;
     }
@@ -144,6 +139,7 @@ export function EmailEntryScreen({
             <StatusText message={notice} style={textStyles.bodyMuted} />
           </View>
         </View>
+        <ServerUnreachableNote visible={serverUnreachable || offline} />
         <StatusText message={formError} style={authStyles.fieldError} />
         <View style={authStyles.actions}>
           <AuthButton
@@ -160,6 +156,7 @@ export function EmailEntryScreen({
             disabled={sending !== null}
             onPress={() => {
               startAction();
+              setOffline(false);
               setLinkSentTo(null);
             }}
           />
@@ -207,7 +204,7 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <StatusText message={serverUnreachable ? SERVER_UNREACHABLE_NOTE : null} style={textStyles.bodyMuted} announce="polite" />
+      <ServerUnreachableNote visible={serverUnreachable || offline} />
       <View style={authStyles.ageGroup}>
         <View>
           <AgeCheckbox

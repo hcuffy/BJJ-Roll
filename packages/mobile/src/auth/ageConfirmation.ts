@@ -37,3 +37,14 @@ export function isAgeConfirmed(entry: EmailEntry): boolean {
 export function canContinue(entry: EmailEntry): boolean {
   return isAgeConfirmed(entry) && isEmailAddress(entry.email);
 }
+
+/** Screen-reader hint for the dimmed send buttons: names only what is still missing. */
+export function missingHint(emailValid: boolean, age16Confirmed: boolean): string | undefined {
+  if (!emailValid && !age16Confirmed) {
+    return "Enter your email and tick the 16 or older box first.";
+  }
+  if (!emailValid) {
+    return "Enter your email first.";
+  }
+  return age16Confirmed ? undefined : "Tick the 16 or older box first.";
+}

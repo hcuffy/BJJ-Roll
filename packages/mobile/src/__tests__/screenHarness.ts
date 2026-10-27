@@ -113,6 +113,9 @@ class ScreenRenderer {
   private rerenderRequested = false;
   root: (HostNode | string)[] = [];
 
+  /** Gets the text of every render, so a test can check what was shown in between. */
+  onRender?: (text: string) => void;
+
   constructor(private readonly element: ReactNode) {}
 
   rerender(): void {
@@ -133,6 +136,7 @@ class ScreenRenderer {
     this.visitedPaths = new Set();
     try {
       this.root = this.resolve(this.element, "root");
+      this.onRender?.(this.root.map(textOf).join(" "));
     } finally {
       activeRenderer = previousRenderer;
       this.rendering = false;
@@ -203,11 +207,7 @@ function allNodes(nodes: readonly (HostNode | string)[]): HostNode[] {
 /** Lets pending promises (fake fetch, SecureStore, state updates) settle. Works with real and with Vitest fake timers. */
 export async function settle(): Promise<void> {
   for (let round = 0; round < 20; round += 1) {
-    if (vi.isFakeTimers()) {
-      await vi.advanceTimersByTimeAsync(0);
-    } else {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    await (vi.isFakeTimers() ? vi.advanceTimersByTimeAsync(0) : new Promise((resolve) => setTimeout(resolve, 0)));
   }
 }
 
@@ -225,8 +225,8 @@ export function flattenStyle(style: unknown, pressed = false): Record<string, un
   return value ? { ...(value as Record<string, unknown>) } : {};
 }
 
-export async function renderScreen(element: ReactNode) {
-  const renderer = new ScreenRenderer(element);
+export async function renderScreen(element: ReactNode, onRender?: (text: string) => void) {
+  const renderer = Object.assign(new ScreenRenderer(element), { onRender });
   renderer.rerender();
   await settle();
 

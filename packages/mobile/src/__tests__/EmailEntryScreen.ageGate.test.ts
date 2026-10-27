@@ -205,13 +205,14 @@ describe("EmailEntryScreen", () => {
   });
 
   it("announces errors: polite live region on Android, an announcement on iOS", async () => {
-    backend.fetchImplementation.mockRejectedValue(new TypeError("Network request failed"));
+    const rateLimited = () => Promise.resolve(Response.json({ message: "Too many requests" }, { status: 429 }));
+    backend.fetchImplementation.mockImplementation(rateLimited);
     const screen = await renderEmailEntry();
     await screen.pressRole("checkbox");
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue");
 
-    const errorText = screen.queryByText("No connection. Check your internet and try again.");
+    const errorText = screen.queryByText("Too many tries. Wait a minute and try again.");
     expect(errorText?.props).toMatchObject({ accessibilityLiveRegion: "polite", accessibilityRole: "alert" });
 
     Platform.OS = "ios";
@@ -219,7 +220,7 @@ describe("EmailEntryScreen", () => {
     await iosScreen.pressRole("checkbox");
     await iosScreen.changeText("Email", "member@example.test");
     await iosScreen.press("Continue");
-    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith("No connection. Check your internet and try again.");
+    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith("Too many tries. Wait a minute and try again.");
   });
 
   it("keeps the link expiry copy in step with the backend's MAGIC_LINK_EXPIRY_MINUTES", () => {
