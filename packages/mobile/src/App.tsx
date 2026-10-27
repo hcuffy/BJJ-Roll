@@ -105,6 +105,13 @@ export function App() {
       .finally(() => setScreen({ name: "email" }));
   };
 
+  const handleAccountDeleted = () => {
+    // A note from a link that failed while signed in must not sit next to the deleted card.
+    setServerUnreachable(false);
+    setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
+    setScreen({ name: "email" });
+  };
+
   return (
     // One provider at the root measures the real insets (status bar, notch, home indicator) on iOS and Android.
     <SafeAreaProvider>
@@ -125,7 +132,10 @@ export function App() {
           <SignUpAttestationGate
             onReadStatus={() => readSignUpAttestation(accountSession())}
             onAccept={() => acceptSignUpAttestation(accountSession())}
-            onSignOut={handleSignOut}>
+            onSignOut={handleSignOut}
+            onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
+            onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+            onAccountDeleted={handleAccountDeleted}>
             <SignedInScreen
               onSignOut={handleSignOut}
               onExportData={() => exportAccountData(accountSession())}
@@ -133,12 +143,7 @@ export function App() {
               onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
               onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
               onConfirmAdult={() => confirmAdult(accountSession())}
-              onAccountDeleted={() => {
-                // A note from a link that failed while signed in must not sit next to the deleted card.
-                setServerUnreachable(false);
-                setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
-                setScreen({ name: "email" });
-              }}
+              onAccountDeleted={handleAccountDeleted}
             />
           </SignUpAttestationGate>
         );

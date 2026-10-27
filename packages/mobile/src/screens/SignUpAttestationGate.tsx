@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Text, View } from "react-native";
-import type { SignUpAttestationResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, SignUpAttestationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import {
   ATTESTATION_NEEDED_HINT,
@@ -13,6 +13,7 @@ import {
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { LoadingScreen } from "./LoadingScreen";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
@@ -23,6 +24,10 @@ export interface SignUpAttestationGateProps {
   readonly onReadStatus: () => Promise<SignUpAttestationResult>;
   readonly onAccept: () => Promise<SignUpAttestationResult>;
   readonly onSignOut: () => void;
+  /** Delete account stays reachable while gated (Apple 5.1.1(v), Play): the same code step as the signed-in screen. */
+  readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
+  readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
+  readonly onAccountDeleted: () => void;
   /** The signed-in app, shown only once the account accepted the current text version. */
   readonly children?: ReactNode;
 }
@@ -46,7 +51,8 @@ function isAccepted(result: SignUpAttestationResult): boolean {
  * duties before it reaches the app. The duties show only when the server says acceptance is needed; a failed read is an
  * error state with a retry. The only ways past are the server's "not required", accepting, or signing out.
  */
-export function SignUpAttestationGate({ onReadStatus, onAccept, onSignOut, children }: SignUpAttestationGateProps) {
+export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
+  const { onReadStatus, onAccept, onSignOut, onRequestDeleteCode, onDeleteAccount, onAccountDeleted, children } = props;
   const [state, setState] = useState<GateState>("checking");
   const [readOffline, setReadOffline] = useState(false);
   const [ticked, setTicked] = useState(false);
@@ -54,6 +60,8 @@ export function SignUpAttestationGate({ onReadStatus, onAccept, onSignOut, child
   const [formError, setFormError] = useState<string | null>(null);
   const [acceptOffline, setAcceptOffline] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"none" | "sendingCode" | "code">("none");
+  const [deleteCodeError, setDeleteCodeError] = useState<string | null>(null);
   // Each "Try again" bumps this to read again.
   const [attempt, setAttempt] = useState(0);
   // Read once per sign-in (plus explicit retries): the parent passes a fresh function on every render.
@@ -107,6 +115,44 @@ export function SignUpAttestationGate({ onReadStatus, onAccept, onSignOut, child
     }
   };
 
+  const startDelete = async () => {
+    if (sending || deleteStep !== "none") {
+      return;
+    }
+    setDeleteCodeError(null);
+    setDeleteStep("sendingCode");
+    const result = await onRequestDeleteCode().catch(unknownFailure);
+    setDeleteStep(result.ok ? "code" : "none");
+    if (!result.ok) {
+      setDeleteCodeError(`We could not send the code. ${result.message}`);
+    }
+  };
+
+  const deleteEntry = (
+    <>
+      <StatusText message={deleteCodeError} style={authStyles.fieldError} />
+      <AuthButton
+        title="Delete account"
+        variant="dangerText"
+        disabled={sending}
+        loading={deleteStep === "sendingCode"}
+        loadingTitle="Sending code…"
+        accessibilityHint="Emails you a code to confirm. Nothing is deleted yet."
+        onPress={() => void startDelete()}
+      />
+    </>
+  );
+
+  if (deleteStep === "code") {
+    return (
+      <DeleteAccountCodeStep
+        onRequestDeleteCode={onRequestDeleteCode}
+        onDeleteAccount={onDeleteAccount}
+        onAccountDeleted={onAccountDeleted}
+        onCancel={() => setDeleteStep("none")}
+      />
+    );
+  }
   if (state === "checking") {
     return <LoadingScreen />;
   }
@@ -121,6 +167,7 @@ export function SignUpAttestationGate({ onReadStatus, onAccept, onSignOut, child
         <View style={authStyles.actions}>
           <AuthButton title={TRY_AGAIN} onPress={retryRead} />
           <AuthButton title="Sign out" variant="tertiary" onPress={onSignOut} />
+          {deleteEntry}
         </View>
       </AuthScreenLayout>
     );
@@ -155,6 +202,7 @@ export function SignUpAttestationGate({ onReadStatus, onAccept, onSignOut, child
           onPress={() => void accept()}
         />
         <AuthButton title="Sign out" variant="tertiary" disabled={sending} onPress={onSignOut} />
+        {deleteEntry}
       </View>
     </AuthScreenLayout>
   );
