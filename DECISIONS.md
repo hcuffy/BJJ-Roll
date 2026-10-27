@@ -73,6 +73,15 @@ Revised from planning D19 on 2026-10-27 for HEN-238.
 - **Consequences:** HEN-239 drops provider profile fields and Google tokens after sign-in. Account deletion revokes the Apple token before the account
   rows are deleted (ARCHITECTURE §5). The encryption inventory lists the provider ids and the Apple token (ARCHITECTURE §6).
 
+## D20: Transactional email provider is Lettermint (NL)
+
+- **Decision:** Sign-in and notice emails are sent through Lettermint (Netherlands, EU-only infrastructure).
+- **Rejected alternatives:** Scaleway TEM (Paris) as the runner-up; Brevo/Mailjet (marketing-first platforms) and US providers (planning log D20).
+- **Date:** 2026-10-15
+- **Decided by:** Henry
+- **Consequences:** The Lettermint DPA is read before go-live (HEN-118). The account, sending domain and real-send check are Henry's (HEN-262). Tests
+  use a fake sender, so no Lettermint credentials are needed to build or test.
+
 ## D24: Owner can see their own footage unmasked
 
 Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
@@ -95,3 +104,15 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry
 - **Consequences:** App Store rule 4.8 is met by offering Sign in with Apple next to Google sign-in. Every sign-up path (email, Apple, Google) has the
   same 16+ gate (HEN-263). The phone check is built later in HEN-240 and stores the number per D18. HEN-239 builds the sign-in code.
+
+## D26: Interim key storage is two separate deploy-time secrets
+
+- **Decision:** Until a KMS is chosen, the email encryption keys are two separate secrets injected at deploy time: a data key (AES-256-GCM field
+  encryption, D18) and an HMAC key (email lookup hash). They are separate random keys; neither is derived from the other. No KMS and no key vendor for
+  now.
+- **Where the secrets must never appear:** the repo, CI secrets, logs and the database. Tests generate their own throwaway keys.
+- **Rejected alternative:** Picking a KMS or key vendor now (stays open).
+- **Date:** 2026-10-22
+- **Decided by:** Sara
+- **Consequences:** The encryption module (HEN-63) reads the keys through a keyring interface, so a KMS / KEK wrapping can replace the secrets later
+  without a schema change. The KMS choice stays OPEN under HEN-191 (M4). ARCHITECTURE §6 email row points here.

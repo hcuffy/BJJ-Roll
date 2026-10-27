@@ -10,8 +10,9 @@ kit recommendation for HEN-46.
 
 ## 0. How to read this doc
 
-- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A4, D17–D19 (revised), D24 and D25
-  in [`DECISIONS.md`](../DECISIONS.md), the other D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear issue.
+- **A decision id or issue key** (D-, A- or H-number, `HEN-n`) means the point is already recorded there: A1–A4, D17–D19 (revised), D20, D24, D25
+  and D26 in [`DECISIONS.md`](../DECISIONS.md), the other D1–D23 in Sara's planning decision log, H1–H13 in Henry's planning answers, or the Linear
+  issue.
 - **[Proposal]** means a technical choice made in this doc. Sara approves or changes it in review. Once approved, durable choices go into `DECISIONS.md`.
 - **OPEN (owner)** means not decided anywhere. The owner decides: Henry (product, money), Sara (tech) or the lawyer (legal). This doc does not pick an
   answer for these.
@@ -602,7 +603,7 @@ payouts. We store only their transaction, product and receipt references. Payout
 
 | Data                                           | Where                           | At-rest protection                                                                         | Status                               | E2E (M6-14) changes it?                                                                             |
 | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Email (incl. Apple/Google and private relay)   | Postgres                        | AES-256-GCM field encryption + HMAC-SHA256 lookup hash, envelope keys, `key_version` (D18) | Decided (design); KMS OPEN (HEN-191) | No                                                                                                  |
+| Email (incl. Apple/Google and private relay)   | Postgres                        | AES-256-GCM + HMAC-SHA256 lookup hash, `key_version` (D18); two deploy-time secrets (D26). | Decided (D26, interim); KMS: HEN-191 | No                                                                                                  |
 | Linked provider ids (provider id + `sub`)      | Postgres (`accounts`)           | Disk/volume encryption; opaque ids only, no name, photo or profile fields (D19)            | Decided (D19)                        | No                                                                                                  |
 | Apple refresh token (only provider token kept) | Postgres (`accounts`)           | Field encryption with the D18 data key; used only to revoke on account deletion (D19)      | Decided (D19)                        | No                                                                                                  |
 | Handle                                         | Postgres                        | Disk/volume encryption only (needs a unique index; shown to groups)                        | Proposal                             | No                                                                                                  |
