@@ -19,9 +19,11 @@ export const EMAIL_QUEUE_RETRY_DELAY_SECONDS = 1;
 export const EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS = 60;
 /** A try still running after this counts as failed. Well above the provider timeout (10 s), so a slow send is not retried while in flight. */
 export const EMAIL_QUEUE_EXPIRE_SECONDS = 60;
-/** A job not sent within a day is dropped; finished jobs are deleted after a day, which is also the window for duplicate requests. */
-export const EMAIL_QUEUE_RETENTION_SECONDS = 86_400;
-export const EMAIL_QUEUE_DELETE_AFTER_SECONDS = 86_400;
+/**
+ * Lifetime of a job that holds no code or link (the account-deleted notice): at most 6 hours. A code or magic-link job lives
+ * only as long as its code or link (`expiresInMinutes`). Every job row is deleted as soon as it is sent or finally fails.
+ */
+export const EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS = 6 * 60 * 60;
 
 export type QueuedEmail =
   | { readonly kind: "one_time_code"; readonly input: SendOneTimeCodeInput }
@@ -38,13 +40,15 @@ export interface EmailQueue {
   enqueue(email: QueuedEmail, options?: EnqueueEmailOptions): Promise<void>;
 }
 
-/** The dead-letter log line: what kind of email, why, after how many tries. Never the address, code, link or a token. */
+/**
+ * The final-failure log line: only the job id, the template and a fixed error class. Never the address, code, link,
+ * a token or any provider text.
+ */
 export interface EmailQueueLogLine {
   readonly event: "email_dead_lettered";
-  readonly kind: QueuedEmail["kind"];
-  readonly reason: EmailSendError["reason"] | "unknown";
-  readonly attempts: number;
-  readonly retried: boolean;
+  readonly jobId: string;
+  readonly template: QueuedEmail["kind"];
+  readonly errorClass: EmailSendError["reason"] | "unknown";
 }
 
 export type EmailQueueLogger = (line: EmailQueueLogLine) => void;
@@ -96,6 +100,28 @@ function jobIdFromKey(codec: AuthCryptoCodec, jobKey: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
+/** How long the job row may live: the code or link expiry, or 6 hours for the notice. */
+function jobLifetimeSeconds(email: QueuedEmail): number {
+  return email.kind === "account_deleted_notice" ? EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS : email.input.expiresInMinutes * 60;
+}
+
+const INSUFFICIENT_PRIVILEGE = "42501";
+
+/** Turns pg-boss failing to create its schema into a message that names the missing permission. */
+function describeStartupError(error: unknown, connectionString: string): unknown {
+  if (typeof error !== "object" || error === null || (error as { code?: unknown }).code !== INSUFFICIENT_PRIVILEGE) {
+    return error;
+  }
+  const url = new URL(connectionString);
+  const role = decodeURIComponent(url.username);
+  const database = decodeURIComponent(url.pathname.slice(1));
+  return new Error(
+    `Email queue cannot start: database role "${role}" needs the CREATE permission on database "${database}" ` +
+      `to create the "pgboss" schema (GRANT CREATE ON DATABASE "${database}" TO "${role}").`,
+    { cause: error },
+  );
+}
+
 function sendQueuedEmail(emailSender: EmailSender, email: QueuedEmail, idempotencyKey: string): Promise<void> {
   switch (email.kind) {
     case "one_time_code":
@@ -107,9 +133,10 @@ function sendQueuedEmail(emailSender: EmailSender, email: QueuedEmail, idempoten
   }
 }
 
-/** Durable email queue on pg-boss: jobs survive a restart, failed sends retry with backoff, then end in the dead-letter log. */
+/** Durable email queue on pg-boss: jobs survive a restart, failed sends retry with backoff, then end in the failure log. */
 export class PgBossEmailQueue implements EmailQueue {
   readonly #boss: PgBoss;
+  readonly #connectionString: string;
   readonly #codec: AuthCryptoCodec;
   readonly #emailSender: EmailSender;
   readonly #logEvent: EmailQueueLogger;
@@ -121,6 +148,7 @@ export class PgBossEmailQueue implements EmailQueue {
     this.#boss.on("error", (error: Error) => {
       process.stderr.write(`${JSON.stringify({ event: "email_queue_error", message: error.message })}\n`);
     });
+    this.#connectionString = options.connectionString;
     this.#codec = createAuthCryptoCodec(options.keyring);
     this.#emailSender = options.emailSender;
     this.#logEvent = options.logEvent ?? defaultLogEvent;
@@ -128,15 +156,19 @@ export class PgBossEmailQueue implements EmailQueue {
   }
 
   async start(options: StartEmailQueueOptions = {}): Promise<void> {
-    await this.#boss.start();
+    try {
+      await this.#boss.start();
+    } catch (error) {
+      throw describeStartupError(error, this.#connectionString);
+    }
     await this.#boss.createQueue(EMAIL_QUEUE_NAME, {
       retryLimit: EMAIL_QUEUE_RETRY_LIMIT,
       retryDelay: EMAIL_QUEUE_RETRY_DELAY_SECONDS,
       retryBackoff: true,
       retryDelayMax: EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS,
       expireInSeconds: EMAIL_QUEUE_EXPIRE_SECONDS,
-      retentionSeconds: EMAIL_QUEUE_RETENTION_SECONDS,
-      deleteAfterSeconds: EMAIL_QUEUE_DELETE_AFTER_SECONDS,
+      retentionSeconds: EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS,
+      deleteAfterSeconds: EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS,
     });
     if (options.worker ?? true) {
       await this.#boss.work(
@@ -159,8 +191,15 @@ export class PgBossEmailQueue implements EmailQueue {
   async enqueue(email: QueuedEmail, options: EnqueueEmailOptions = {}): Promise<void> {
     const jobKey = options.idempotencyKey ?? JSON.stringify([email.kind, email.input]);
     const job: SealedEmailJob = { sealed: this.#codec.encryptVerificationPayload(JSON.stringify(email)) };
-    // A repeated id is ignored by pg-boss (send returns null), so the same request twice stores one job.
-    await this.#boss.send(EMAIL_QUEUE_NAME, job, { id: jobIdFromKey(this.#codec, jobKey) });
+    // A repeated id is ignored by pg-boss while the job exists, so the same request twice stores one job. Once sent and deleted,
+    // a repeat gets the same id again, which is also the provider idempotency key, so the provider sends it once.
+    // The row lives no longer than the code or link it carries: unsent, it is dropped at keep_until; finished, it is deleted.
+    const lifetimeSeconds = jobLifetimeSeconds(email);
+    await this.#boss.send(EMAIL_QUEUE_NAME, job, {
+      id: jobIdFromKey(this.#codec, jobKey),
+      retentionSeconds: lifetimeSeconds,
+      deleteAfterSeconds: lifetimeSeconds,
+    });
   }
 
   async #deliver(job: JobWithMetadata<SealedEmailJob>): Promise<void> {
@@ -168,18 +207,16 @@ export class PgBossEmailQueue implements EmailQueue {
     try {
       await sendQueuedEmail(this.#emailSender, email, job.id);
     } catch (error) {
-      const reason = error instanceof EmailSendError ? error.reason : "unknown";
-      const attempts = job.retryCount + 1;
       const retryable = isRetryableEmailError(error);
-      if (!retryable || job.retryCount >= job.retryLimit) {
-        this.#logEvent({ event: "email_dead_lettered", kind: email.kind, reason, attempts, retried: attempts > 1 });
+      if (retryable && job.retryCount < job.retryLimit) {
+        // pg-boss stores this error on the job, so it carries only the reason, never the provider error text.
+        throw error instanceof EmailSendError ? new EmailSendError(error.reason, error.statusCode) : new Error("Email send failed (unknown)");
       }
-      if (!retryable) {
-        // Ends the job without a retry: the provider would refuse the same request again.
-        return;
-      }
-      // pg-boss stores this error on the job, so it carries only the reason, never the provider error text.
-      throw error instanceof EmailSendError ? new EmailSendError(error.reason, error.statusCode) : new Error("Email send failed (unknown)");
+      // Final failure (no retry left, or one the provider would refuse again): log it, then delete the row like a sent one.
+      const errorClass = error instanceof EmailSendError ? error.reason : "unknown";
+      this.#logEvent({ event: "email_dead_lettered", jobId: job.id, template: email.kind, errorClass });
     }
+    // Sent or finally failed: the encrypted payload is not kept a moment longer.
+    await this.#boss.deleteJob(EMAIL_QUEUE_NAME, job.id);
   }
 }

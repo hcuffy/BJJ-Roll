@@ -154,7 +154,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
       await vi.waitFor(() => expect(newLines()).toHaveLength(2), { timeout: 20_000, interval: 100 });
       expect(emailSender.sentMessages.length - sentBefore).toBe(6);
       for (const line of newLines()) {
-        expect(line).toEqual({ event: "email_dead_lettered", kind: "one_time_code", reason: "network", attempts: 3, retried: true });
+        expect(line).toEqual({
+          event: "email_dead_lettered",
+          jobId: expect.any(String) as unknown,
+          template: "one_time_code",
+          errorClass: "network",
+        });
         expect(JSON.stringify(line)).not.toContain(knownEmail);
         expect(JSON.stringify(line)).not.toContain(unknownEmail);
       }

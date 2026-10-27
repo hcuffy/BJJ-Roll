@@ -341,7 +341,7 @@ Each queue has a dead-letter queue named `<queue>_dead_letter`.
 
 ### 3.3 States and claim
 
-pg-boss job states (from the 12.38.0 schema): `created`, `retry`, `active`, `completed`, `cancelled`, `failed`.
+pg-boss job states (from the 12.38.0 schema; the same six in 12.37.1, the version the repo pins): `created`, `retry`, `active`, `completed`, `cancelled`, `failed`.
 
 | pg-boss state | Meaning here                                      | `videos.processing_status` shown in the app    |
 | ------------- | ------------------------------------------------- | ---------------------------------------------- |
@@ -431,17 +431,20 @@ export const jobResultSchema = z.discriminatedUnion("outcome", [
 ### 3.7 Email queue (HEN-284)
 
 Sign-in codes, magic links and the account-deleted notice go through the pg-boss queue `email_send` (`packages/backend/src/email/emailQueue.ts`, pg-boss
-12.37.1). The API process runs the worker; pg-boss creates its own `pgboss` schema on start, so the app role needs CREATE on the database. The
-account-deletion code is still sent directly, because DELETE /account waits for it.
+12.37.1, pinned; Sara, 2026-10-27: stay on it). The API process runs the worker; pg-boss creates its own `pgboss` schema on start, so the app role
+needs CREATE on the database (without it the server stops with a message naming the GRANT). Account-deletion codes are sent directly, not queued
+(Sara, 2026-10-27), because DELETE /account waits for them.
 
 - Retries: 3 tries in all (`retryLimit: 2`), first retry after 1 s, doubling, at most 60 s. A 4xx answer (except 408, 409, 429) or a configuration error
   is not retried. A try still running after 60 s counts as failed (the provider timeout is 10 s).
 - Duplicates: the job id is derived from a keyed hash of the email (or a caller key, such as the user id for the deleted notice), so the same request twice
   stores one job. The job id is sent to Lettermint as `Idempotency-Key`, so a retry after a slow or timed-out send does not send a second email.
-- Dead letter: after the last try, or at once for a non-retried error, the worker writes one JSON line `email_dead_lettered` to stdout (kind, reason,
-  tries; never the address, code or link). There is no `_dead_letter` queue for emails, so the payload is not kept.
-- Privacy: the job payload (address, code, link) is sealed with the app data key (D18). Jobs are dropped after a day unsent, and deleted a day after they
-  finish. The deleted notice job can outlive the account by up to that day.
+- No dead-letter queue (Sara, 2026-10-27): after the last try, or at once for a non-retried error, the worker writes one JSON line
+  `email_dead_lettered` to stdout with only the job id, the template and an error class (never the address, code, link or provider text), then deletes
+  the job. There is no `_dead_letter` queue for emails, so the payload is not kept.
+- Privacy: the job row holds only what the send needs (address, and the code or link), sealed with the app data key (D18). The row is deleted as soon as
+  the email is sent or finally fails. Unsent, a code or link job is dropped when the code or link expires; the deleted notice job, which has none, after
+  at most 6 hours (`EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS`), so it outlives the account by at most that.
 
 ## 4. Row-level security
 
@@ -629,7 +632,8 @@ references. Payouts: provider account references only; no bank or ID documents (
 | Ratings                                        | Postgres                        | Disk/volume encryption (public by design)                                                  | Proposal                             | No                                                                                                  |
 | Payment and payout references                  | Postgres                        | Disk/volume encryption; no card, bank or ID data (schema + log test, HEN-191)              | Decided (no card data)               | No                                                                                                  |
 | Reports and moderation records                 | Postgres                        | Field encryption for reporter text                                                         | Proposal                             | With E2E the reporter's client forwards content (HEN-198)                                           |
-| Job rows (pg-boss), audit log                  | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                             | No                                                                                                  |
+| Job rows (pg-boss, not email), audit log       | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                             | No                                                                                                  |
+| Email job rows (pg-boss `email_send`, §3.7)    | Postgres                        | Only what the send needs, sealed with the app data key (D18); deleted on send, 6 h max     | Decided (Sara, 2026-10-27)           | No                                                                                                  |
 | Disk/volume encryption for Postgres            | Hetzner Cloud VM                | Method not checked (for example LUKS on the volume)                                        | OPEN (owned by HEN-191)              | –                                                                                                   |
 | Backups                                        | Backup store                    | Encrypted before upload; method and key OPEN                                               | OPEN (owned by HEN-50)               | –                                                                                                   |
 | Session token on the phone                     | iOS Keychain / Android Keystore | `@better-auth/expo` keeps tokens in SecureStore (D17 research)                             | Decided (D17)                        | E2E would add device keys here                                                                      |

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { EMAIL_QUEUE_NAME, FakeEmailSender, type QueuedEmail } from "../email/index.js";
+import { EMAIL_QUEUE_NAME, EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS, FakeEmailSender, type QueuedEmail } from "../email/index.js";
 import { isPostgresTestEnvironmentAvailable, startMigratedTestDatabase, type MigratedTestDatabase } from "./databaseTestHarness.js";
 import { createTestEmailQueue, createTestKeyring, waitUntil } from "./emailQueueTestSupport.js";
 
@@ -67,14 +67,18 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 durable email qu
     }
   }, 30_000);
 
-  it("sends one email when the same request is enqueued twice, and passes one provider idempotency key", async () => {
+  it("sends one email when the same request is enqueued twice before it is sent, and passes one provider idempotency key", async () => {
+    const keyring = createTestKeyring();
     const emailSender = new FakeEmailSender();
-    const { queue } = createTestEmailQueue({ connectionString: current().connectionString, emailSender });
+    const producer = createTestEmailQueue({ connectionString: current().connectionString, emailSender, keyring });
+    await producer.queue.start({ worker: false });
+    await producer.queue.enqueue(signInCode("queue.twice@example.com", "111222"));
+    await producer.queue.enqueue(signInCode("queue.twice@example.com", "111222"));
+    await producer.queue.enqueue(signInCode("queue.twice@example.com", "333444"));
+    await producer.queue.stop();
+    const { queue } = createTestEmailQueue({ connectionString: current().connectionString, emailSender, keyring });
     await queue.start();
     try {
-      await queue.enqueue(signInCode("queue.twice@example.com", "111222"));
-      await queue.enqueue(signInCode("queue.twice@example.com", "111222"));
-      await queue.enqueue(signInCode("queue.twice@example.com", "333444"));
       await waitUntil(() => emailSender.sentMessages.filter((message) => message.to === "queue.twice@example.com").length >= 2);
       await new Promise((resolve) => setTimeout(resolve, 1_500));
       const sent = emailSender.sentMessages.filter((message) => message.to === "queue.twice@example.com");
@@ -105,6 +109,65 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 durable email qu
     expect(dump.length).toBeGreaterThan(0);
     for (const secret of ["queue.sealed", "example.com", "987123", "sealedtoken"]) {
       expect(dump).not.toContain(secret);
+    }
+  }, 30_000);
+
+  it("deletes the job row as soon as the send succeeds", async () => {
+    const emailSender = new FakeEmailSender();
+    const { queue } = createTestEmailQueue({ connectionString: current().connectionString, emailSender });
+    await queue.start();
+    try {
+      await queue.enqueue(signInCode("queue.deleted.row@example.com", "445566"));
+      await waitUntil(() => emailSender.sentMessages.some((message) => message.to === "queue.deleted.row@example.com"));
+      const jobId = emailSender.sentMessages.find((message) => message.to === "queue.deleted.row@example.com")?.idempotencyKey;
+      await waitUntil(async () => (await current().pool.query("SELECT 1 FROM pgboss.job WHERE id = $1", [jobId])).rows.length === 0, 5_000);
+      expect((await current().pool.query("SELECT 1 FROM pgboss.job WHERE id = $1", [jobId])).rows).toEqual([]);
+    } finally {
+      await queue.stop();
+    }
+  }, 30_000);
+
+  it("the same request enqueued again after it was sent carries the same provider key, so the provider sends it once", async () => {
+    const emailSender = new FakeEmailSender();
+    const { queue } = createTestEmailQueue({ connectionString: current().connectionString, emailSender });
+    await queue.start();
+    try {
+      const email = signInCode("queue.again@example.com", "778899");
+      await queue.enqueue(email);
+      await waitUntil(() => emailSender.sentMessages.some((message) => message.to === "queue.again@example.com"));
+      await queue.enqueue(email);
+      await waitUntil(() => emailSender.sentMessages.filter((message) => message.to === "queue.again@example.com").length === 2);
+      const keys = emailSender.sentMessages.filter((message) => message.to === "queue.again@example.com").map((message) => message.idempotencyKey);
+      expect(keys[1]).toBe(keys[0]);
+    } finally {
+      await queue.stop();
+    }
+  }, 30_000);
+
+  it("caps an unsent job at the code or link expiry; the deleted notice, which has none, at 6 hours", async () => {
+    const emailSender = new FakeEmailSender();
+    const { queue } = createTestEmailQueue({ connectionString: current().connectionString, emailSender });
+    await queue.start({ worker: false });
+    try {
+      await queue.enqueue(signInCode("queue.ttl.code@example.com", "135790"), { idempotencyKey: "ttl-code" });
+      await queue.enqueue(
+        { kind: "magic_link", input: { to: "queue.ttl.link@example.com", url: "https://example.test/verify?token=ttl", expiresInMinutes: 15 } },
+        { idempotencyKey: "ttl-link" },
+      );
+      await queue.enqueue({ kind: "account_deleted_notice", input: { to: "queue.ttl.gone@example.com" } }, { idempotencyKey: "ttl-notice" });
+    } finally {
+      await queue.stop();
+    }
+    const rows = await current().pool.query<{ lifetime: number; deletion: number }>(
+      `SELECT EXTRACT(EPOCH FROM keep_until - start_after)::int AS lifetime, deletion_seconds AS deletion
+         FROM pgboss.job WHERE name = $1 AND state = 'created' ORDER BY lifetime`,
+      [EMAIL_QUEUE_NAME],
+    );
+    expect(EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS).toBe(6 * 60 * 60);
+    expect(rows.rows.map((row) => row.lifetime)).toEqual(expect.arrayContaining([600, 900, 6 * 60 * 60]));
+    expect(Math.max(...rows.rows.map((row) => row.lifetime))).toBeLessThanOrEqual(6 * 60 * 60);
+    for (const row of rows.rows) {
+      expect(row.deletion).toBe(row.lifetime);
     }
   }, 30_000);
 });

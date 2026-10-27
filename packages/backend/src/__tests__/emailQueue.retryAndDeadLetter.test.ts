@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { EMAIL_QUEUE_NAME, EmailSendError, FakeEmailSender, type QueuedEmail, type SendOneTimeCodeInput } from "../email/index.js";
+import { EmailSendError, FakeEmailSender, type QueuedEmail, type SendOneTimeCodeInput } from "../email/index.js";
 import { isPostgresTestEnvironmentAvailable, startMigratedTestDatabase, type MigratedTestDatabase } from "./databaseTestHarness.js";
 import { createTestEmailQueue, createTestKeyring, waitUntil } from "./emailQueueTestSupport.js";
 
@@ -91,24 +91,20 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
     }
   }, 30_000);
 
-  it("after the last try writes one dead-letter log line with the reason and tries, and no address, code or key", async () => {
+  it("after the last try writes one log line with only the job id, template and error class, and deletes the job row", async () => {
     const emailSender = new FlakyEmailSender(Number.POSITIVE_INFINITY);
     const { queue, logLines } = createTestEmailQueue({ connectionString: connectionString(), emailSender });
     await queue.start();
     try {
       await queue.enqueue(email, { idempotencyKey: "always-fails" });
       await waitUntil(() => logLines.length === 1, 20_000);
-      expect(logLines).toEqual([{ event: "email_dead_lettered", kind: "one_time_code", reason: "network", attempts: 3, retried: true }]);
+      const jobId = emailSender.tries[0];
+      expect(logLines).toEqual([{ event: "email_dead_lettered", jobId, template: "one_time_code", errorClass: "network" }]);
       expect(emailSender.tries).toHaveLength(3);
       const logged = JSON.stringify(logLines);
-      for (const secret of [address, code, emailSender.tries[0] ?? "missing"]) {
-        expect(logged).not.toContain(secret);
-      }
-      const failed = await database?.pool.query<{ output: unknown }>("SELECT output FROM pgboss.job WHERE name = $1 AND state = 'failed'", [
-        EMAIL_QUEUE_NAME,
-      ]);
-      expect(failed?.rows).toHaveLength(1);
-      expect(JSON.stringify(failed?.rows)).not.toContain(address);
+      expect(logged).not.toContain(address);
+      expect(logged).not.toContain(code);
+      await waitUntil(async () => (await database?.pool.query("SELECT 1 FROM pgboss.job WHERE id = $1", [jobId]))?.rows.length === 0, 5_000);
     } finally {
       await queue.stop();
     }
@@ -128,7 +124,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
         await waitUntil(() => logLines.length === 1);
         await new Promise((resolve) => setTimeout(resolve, 3_000));
         expect(emailSender.tries).toHaveLength(1);
-        expect(logLines).toEqual([{ event: "email_dead_lettered", kind: "one_time_code", reason, attempts: 1, retried: false }]);
+        expect(logLines).toEqual([{ event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: reason }]);
       } finally {
         await queue.stop();
       }
@@ -182,6 +178,23 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
     } finally {
       await first.queue.stop();
       await second.queue.stop();
+    }
+  }, 30_000);
+
+  it('logs an unexpected error only as "unknown": no message text, so no address or code from it', async () => {
+    const emailSender = new FlakyEmailSender(Number.POSITIVE_INFINITY, new Error(`provider said: bad recipient ${address} for code ${code}`));
+    const { queue, logLines } = createTestEmailQueue({ connectionString: connectionString(), emailSender });
+    await queue.start();
+    try {
+      await queue.enqueue(email, { idempotencyKey: "unexpected-error" });
+      await waitUntil(() => logLines.length === 1, 20_000);
+      expect(logLines).toEqual([{ event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: "unknown" }]);
+      const logged = JSON.stringify(logLines);
+      expect(logged).not.toContain(address);
+      expect(logged).not.toContain(code);
+      expect(logged).not.toContain("provider said");
+    } finally {
+      await queue.stop();
     }
   }, 30_000);
 });
