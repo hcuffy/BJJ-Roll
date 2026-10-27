@@ -82,24 +82,33 @@ function describeMismatch(mismatch: VersionMismatch): string {
   return `${mismatch.packageName}: expected ${mismatch.expectedVersionOrRange}, found ${mismatch.actualVersion}`;
 }
 
-function runExpoVersionCheck(): number {
-  const installCheck = spawnSync("expo", ["install", "--check", "--json"], { encoding: "utf8", env: { ...process.env, CI: "1" } });
-  const result = checkExpoVersionReport(installCheck.stdout ?? "");
+export interface CheckLog {
+  warn: (line: string) => void;
+  error: (line: string) => void;
+}
+
+export function reportExpoVersionCheck(reportText: string, log: CheckLog, stderrText = ""): number {
+  const result = checkExpoVersionReport(reportText);
   for (const mismatch of result.patchDrift) {
-    console.warn(`Patch behind Expo SDK (allowed until the 14-day update lands): ${describeMismatch(mismatch)}`);
+    log.warn(`Patch behind Expo SDK (allowed until the 14-day update lands): ${describeMismatch(mismatch)}`);
   }
   for (const mismatch of result.blocking) {
-    console.error(`Version mismatch with Expo SDK: ${describeMismatch(mismatch)}`);
+    log.error(`Version mismatch with Expo SDK: ${describeMismatch(mismatch)}`);
   }
   if (result.error) {
-    console.error(result.error);
-    console.error(installCheck.stderr);
+    log.error(result.error);
+    log.error(stderrText);
   }
   if (!result.ok) {
     return 1;
   }
-  console.warn("Expo SDK versions: no major or minor mismatch.");
+  log.warn("Expo SDK versions: no major or minor mismatch.");
   return 0;
+}
+
+function runExpoVersionCheck(): number {
+  const installCheck = spawnSync("expo", ["install", "--check", "--json"], { encoding: "utf8", env: { ...process.env, CI: "1" } });
+  return reportExpoVersionCheck(installCheck.stdout ?? "", console, installCheck.stderr ?? "");
 }
 
 if (import.meta.main) {
