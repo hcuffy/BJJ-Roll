@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
+import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone, setUpPhoneWithoutBiometrics } from "./localAuthenticationFake";
 import { renderScreen } from "./screenHarness";
@@ -223,7 +224,9 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
       const nextLaunch = await launchApp();
 
       expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
-      expect(nextLaunch.text()).not.toContain(LOCKED_TITLE);
+      // The fake prompt passes by default, so a lock screen that unlocked itself would still end signed in (Bill, round 3).
+      expect(renderedScreens.some((rendered) => rendered.includes(LOCKED_TITLE))).toBe(false);
+      expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBeNull();
     });
 
     it("account delete: a new account on this phone does not lock the next launch", async () => {
@@ -238,7 +241,9 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
       const nextLaunch = await launchApp();
 
       expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
-      expect(nextLaunch.text()).not.toContain(LOCKED_TITLE);
+      // The fake prompt passes by default, so a lock screen that unlocked itself would still end signed in (Bill, round 3).
+      expect(renderedScreens.some((rendered) => rendered.includes(LOCKED_TITLE))).toBe(false);
+      expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBeNull();
     });
   });
 });
