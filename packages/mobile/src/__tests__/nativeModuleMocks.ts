@@ -20,6 +20,7 @@ vi.mock("react-native", async () => ({
   KeyboardAvoidingView: "KeyboardAvoidingView",
   ScrollView: "ScrollView",
   StatusBar: "StatusBar",
+  Switch: "Switch",
 }));
 // The safe-area library's view gets its own host name so tests can tell it apart from RN's deprecated built-in.
 vi.mock("react-native-safe-area-context", async () => {
@@ -53,3 +54,5 @@ vi.mock("expo-crypto", async () => {
       Promise.resolve(algorithm === "SHA-256" ? createHash("sha256").update(data).digest("hex") : Promise.reject(new Error("unsupported"))),
   };
 });
+// The OS biometric prompt; tests set the phone up through localAuthenticationFake.
+vi.mock("expo-local-authentication", async () => (await import("./localAuthenticationFake")).localAuthenticationModule);

@@ -61,6 +61,8 @@ export function createSignedInScreenHarness() {
           state.adultConfirmations += 1;
           return state.adultResult;
         },
+        onReadBiometricSetting: () => Promise.resolve({ available: true, on: false } as const),
+        onChangeBiometricUnlock: () => Promise.resolve({ ok: true } as const),
       }),
     );
 

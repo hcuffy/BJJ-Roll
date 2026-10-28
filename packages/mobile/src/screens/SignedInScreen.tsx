@@ -1,5 +1,5 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
+import { Share, StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
@@ -7,11 +7,14 @@ import { AdultConfirmStep } from "./AdultConfirmStep";
 import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { BiometricUnlockSetting, type BiometricUnlockSettingProps, useBiometricUnlockSetting } from "./BiometricUnlockSetting";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { moveScreenReaderFocus } from "./moveScreenReaderFocus";
 
-export interface SignedInScreenProps {
+/** The biometric unlock toggle's callbacks come from BiometricUnlockSettingProps (HEN-288). */
+export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onSignOut: () => void;
   readonly onExportData: () => Promise<AccountExportResult>;
   /** Emails a fresh code; DELETE /account only succeeds with it (Henry's decision, HEN-65). */
@@ -35,12 +38,6 @@ const styles = StyleSheet.create({
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
 });
 
-function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
-  if (target) {
-    AccessibilityInfo.sendAccessibilityEvent(target, "focus");
-  }
-}
-
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
 export function SignedInScreen({
   onSignOut,
@@ -50,7 +47,9 @@ export function SignedInScreen({
   onAccountDeleted,
   onReadAgeConfirmation,
   onConfirmAdult,
+  ...biometricCallbacks
 }: SignedInScreenProps) {
+  const biometricSetting = useBiometricUnlockSetting(biometricCallbacks);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -262,6 +261,7 @@ export function SignedInScreen({
             }}
           />
           <StatusText message={adultError} style={authStyles.fieldError} />
+          <BiometricUnlockSetting {...biometricSetting} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"

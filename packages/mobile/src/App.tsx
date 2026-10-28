@@ -12,7 +12,10 @@ import {
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
+import { changeBiometricUnlock, clearBiometricUnlock, isBiometricUnlockOn, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
 import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
+import { BiometricLockScreen } from "./screens/BiometricLockScreen";
+import { BiometricOfferScreen } from "./screens/BiometricOfferScreen";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { SignedInScreen } from "./screens/SignedInScreen";
@@ -23,6 +26,8 @@ type AuthScreen =
   | { readonly name: "loading" }
   | { readonly name: "email" }
   | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
+  | { readonly name: "biometricOffer" }
+  | { readonly name: "locked" }
   | { readonly name: "signedIn" };
 
 export function App() {
@@ -46,7 +51,14 @@ export function App() {
     // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
     void finishPendingSignOut(appAuthClient, appSecureStore)
       .then(async (signOutPending) => (signOutPending ? null : await readSignedInUserId(appAuthClient)))
-      .then((userId) => setStartupScreen(userId ? { name: "signedIn" } : { name: "email" }))
+      .then(async (userId) => {
+        if (!userId) {
+          setStartupScreen({ name: "email" });
+          return;
+        }
+        // Biometric unlock on (HEN-288): nothing signed-in shows until the check passes.
+        setStartupScreen((await isBiometricUnlockOn(appSecureStore)) ? { name: "locked" } : { name: "signedIn" });
+      })
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
         setServerUnreachable(true);
@@ -90,12 +102,16 @@ export function App() {
   const handleSignedIn = () => {
     // A new sign-in cancels a sign-out left to finish; if that fails the user still gets in.
     void cancelPendingSignOut(appSecureStore);
-    setScreen({ name: "signedIn" });
+    // The biometric offer shows once per install; if it cannot be decided the user simply goes in.
+    void takeBiometricOffer(appSecureStore)
+      .catch(() => false)
+      .then((offer) => setScreen(offer ? { name: "biometricOffer" } : { name: "signedIn" }));
   };
 
   const handleSignOut = () => {
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
+    void clearBiometricUnlock(appSecureStore);
     // signOut clears the local session when the server is down and finishes a failed one on the next launch.
     void signOut(appAuthClient, appSecureStore)
       .catch(() => undefined)
@@ -133,7 +149,10 @@ export function App() {
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
             onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
             onConfirmAdult={() => confirmAdult(accountSession())}
+            onReadBiometricSetting={() => readBiometricSetting(appSecureStore)}
+            onChangeBiometricUnlock={(on) => changeBiometricUnlock(appSecureStore, on)}
             onAccountDeleted={() => {
+              void clearBiometricUnlock(appSecureStore);
               // A note from a link that failed while signed in must not sit next to the deleted card.
               setServerUnreachable(false);
               setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
@@ -141,6 +160,12 @@ export function App() {
             }}
           />
         );
+      }
+      case "biometricOffer": {
+        return <BiometricOfferScreen onTurnOn={() => changeBiometricUnlock(appSecureStore, true)} onDone={() => setScreen({ name: "signedIn" })} />;
+      }
+      case "locked": {
+        return <BiometricLockScreen onUnlocked={() => setScreen({ name: "signedIn" })} onSignOut={handleSignOut} />;
       }
       case "code": {
         return (
