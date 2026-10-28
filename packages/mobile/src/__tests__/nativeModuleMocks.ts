@@ -10,7 +10,8 @@ vi.mock("react-native", async () => ({
   // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
   AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },
-  AppState: { addEventListener: () => ({ remove: () => undefined }) },
+  // Backed by appStateHarness so a test can send the app to the background and back.
+  AppState: { addEventListener: (await import("./appStateHarness")).harnessAppStateAddEventListener },
   Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })) },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",

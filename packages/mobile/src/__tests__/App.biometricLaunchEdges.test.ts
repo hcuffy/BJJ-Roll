@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
+import { emitAppState } from "./appStateHarness";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen } from "./screenHarness";
@@ -73,23 +74,46 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
     expect(localAuthenticationFake.promptCount).toBe(1);
   });
 
-  it("a magic link opened with the setting on goes straight in, and the next cold start locks", async () => {
+  it("locks only at app start: coming back from the background does not lock again", async () => {
     await firstSignIn("Turn on");
+    // The check at launch passes, so the app is unlocked.
+    const nextLaunch = await launchApp();
+    expect(everRendered(LOCKED_TITLE)).toBe(true);
+    expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
     const promptsBefore = localAuthenticationFake.promptCount;
 
-    // Henry (28 Oct): the link proves email access, like Sign out → sign in with email, so it skips the lock.
+    emitAppState("background");
+    emitAppState("active");
+    await nextLaunch.rerender();
+    expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
+    expect(nextLaunch.text()).not.toContain(LOCKED_TITLE);
+    expect(localAuthenticationFake.promptCount).toBe(promptsBefore);
+  });
+
+  it("magic link while locked: signs in AND lock screen still shows when biometric on", async () => {
+    await firstSignIn("Turn on");
+
+    // Henry (28 Oct 08:38): a magic link signs in, but with the setting on the lock screen still shows first.
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    localAuthenticationFake.answers.push("user_cancel");
     const linkLaunch = await launchApp();
     expect(backend.requests.some((request) => new URL(request.url).pathname.endsWith("/magic-link/exchange"))).toBe(true);
+    expect(linkLaunch.text()).toContain(LOCKED_TITLE);
+    expect(everRendered(SIGNED_IN_SCREEN)).toBe(false);
+    expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBe("on");
+
+    await linkLaunch.press("Unlock");
+    expect(linkLaunch.text()).toContain(SIGNED_IN_SCREEN);
+  });
+
+  it("magic link with the setting off goes straight in, with no lock", async () => {
+    await firstSignIn("Not now");
+    const promptsBefore = localAuthenticationFake.promptCount;
+
+    deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
+    const linkLaunch = await launchApp();
     expect(linkLaunch.text()).toContain(SIGNED_IN_SCREEN);
     expect(everRendered(LOCKED_TITLE)).toBe(false);
     expect(localAuthenticationFake.promptCount).toBe(promptsBefore);
-    expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBe("on");
-
-    deepLinkState.url = null;
-    localAuthenticationFake.answers.push("user_cancel");
-    const coldStart = await launchApp();
-    expect(coldStart.text()).toContain(LOCKED_TITLE);
-    expect(everRendered(SIGNED_IN_SCREEN)).toBe(false);
   });
 });

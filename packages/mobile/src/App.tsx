@@ -86,9 +86,15 @@ export function App() {
       return;
     }
     void completeMagicLink(appAuthClient, deepLinkUrl)
-      .then((result) => {
+      .then(async (result) => {
         if (result.ok) {
           setLinkError(null);
+          // Biometric unlock on (HEN-288, Henry 28 Oct): the link signs in, but the lock screen still shows first.
+          if (await isBiometricUnlockOn(appSecureStore)) {
+            void cancelPendingSignOut(appSecureStore);
+            setScreen({ name: "locked", kind: await readBiometricKind() });
+            return;
+          }
           handleSignedIn();
           return;
         }
