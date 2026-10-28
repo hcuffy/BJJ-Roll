@@ -20,7 +20,7 @@ const { App } = await import("../App");
 
 const SIGNED_IN_SCREEN = "You are signed in";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
-const OFFER_TITLE = "Unlock with fingerprint or face?";
+const OFFER_TITLE = "Unlock BJJ Roll with your fingerprint or face?";
 const LOCKED_TITLE = "BJJ Roll is locked";
 const TOGGLE_LABEL = "Biometric unlock";
 
@@ -165,16 +165,17 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
       await signIn(screen);
 
       expect(screen.getByLabelText(TOGGLE_LABEL).props.disabled).toBe(true);
-      expect(screen.text()).toContain("Set up a fingerprint or face unlock in your phone's settings to use this.");
+      expect(screen.text()).toContain("Add a fingerprint or face in your phone's Settings to use this.");
     });
   });
 
   describe("settings toggle", () => {
+    // The whole row is the switch (Vera round 2, fix 4): a tap flips it.
+    const toggleValue = (screen: Screen) => (screen.getByRole("switch").props.accessibilityState as { checked: boolean }).checked;
     const toggle = async (screen: Screen, value: boolean) => {
-      (screen.getByLabelText(TOGGLE_LABEL).props.onValueChange as (value: boolean) => void)(value);
-      await screen.rerender();
+      expect(toggleValue(screen)).toBe(!value);
+      await screen.press(TOGGLE_LABEL);
     };
-    const toggleValue = (screen: Screen) => screen.getByLabelText(TOGGLE_LABEL).props.value;
 
     it("on and off both survive a restart", async () => {
       const screen = await firstSignIn("Not now");

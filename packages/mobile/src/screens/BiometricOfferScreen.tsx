@@ -1,13 +1,15 @@
-import { useState } from "react";
-import { Text, View } from "react-native";
-import { type BiometricCheck } from "../auth/biometricUnlock";
+import { useEffect, useRef, useState } from "react";
+import { BackHandler, Text, View } from "react-native";
+import type { BiometricCheck, BiometricKind } from "../auth/biometricUnlock";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { BIOMETRIC_COPY, BIOMETRIC_OFFER_BENEFIT, biometricCheckError } from "./biometricCopy";
 
 export interface BiometricOfferScreenProps {
+  readonly kind: BiometricKind;
   /** Runs the check and saves "on" only when it succeeds. */
   readonly onTurnOn: () => Promise<BiometricCheck>;
   /** Called after a successful Turn on, and on Not now. */
@@ -16,20 +18,31 @@ export interface BiometricOfferScreenProps {
 
 export const BIOMETRIC_CHECK_FAILED = "That didn't work. Try again, or choose Not now.";
 
-/** Shown once after the first sign-in on a phone with biometrics (HEN-288). Opt-in: Not now changes nothing. */
-export function BiometricOfferScreen({ onTurnOn, onDone }: BiometricOfferScreenProps) {
+/** Shown once after the first sign-in on a phone with biometrics (HEN-288). Opt-in: Not now (or Android back) changes nothing. */
+export function BiometricOfferScreen({ kind, onTurnOn, onDone }: BiometricOfferScreenProps) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const copy = BIOMETRIC_COPY[kind];
+  // The parent passes a fresh callback on every render; the back listener is added once.
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      done.current();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
 
   const turnOn = async () => {
     setChecking(true);
     setError(null);
-    const check = await onTurnOn().catch((): BiometricCheck => ({ ok: false, cancelled: false }));
+    const check = await onTurnOn().catch((): BiometricCheck => ({ ok: false, failure: "failed" }));
     setChecking(false);
     if (check.ok) {
       onDone();
-    } else if (!check.cancelled) {
-      setError(BIOMETRIC_CHECK_FAILED);
+    } else if (check.failure !== "cancelled") {
+      setError(biometricCheckError(check.failure, copy, BIOMETRIC_CHECK_FAILED));
     }
   };
 
@@ -37,15 +50,17 @@ export function BiometricOfferScreen({ onTurnOn, onDone }: BiometricOfferScreenP
     <AuthScreenLayout>
       <View style={authStyles.heading}>
         <Text accessibilityRole="header" style={textStyles.display}>
-          Unlock with fingerprint or face?
+          {copy.offerTitle}
         </Text>
-        <Text style={textStyles.body}>BJJ Roll will ask for your fingerprint, face or phone PIN each time it opens.</Text>
+        <Text style={textStyles.body}>{BIOMETRIC_OFFER_BENEFIT}</Text>
+        <Text style={textStyles.body}>{copy.offerBody}</Text>
+        <Text style={textStyles.bodyMuted}>{copy.offerPrivacy}</Text>
         <Text style={textStyles.bodyMuted}>You can change this later under Account.</Text>
       </View>
       <StatusText message={error} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton title="Turn on" loading={checking} loadingTitle="Checking…" onPress={() => void turnOn()} />
-        <AuthButton title="Not now" variant="tertiary" disabled={checking} onPress={onDone} />
+        <AuthButton title="Not now" variant="secondary" large disabled={checking} onPress={onDone} />
       </View>
     </AuthScreenLayout>
   );

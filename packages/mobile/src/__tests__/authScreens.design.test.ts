@@ -31,7 +31,7 @@ const signedIn = () =>
     onAccountDeleted: () => undefined,
     onReadAgeConfirmation: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: false, canPurchase: false } } as const),
     onConfirmAdult: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } } as const),
-    onReadBiometricSetting: () => Promise.resolve({ available: true, on: false } as const),
+    onReadBiometricSetting: () => Promise.resolve({ available: true, on: false, kind: "biometrics" } as const),
     onChangeBiometricUnlock: () => Promise.resolve({ ok: true } as const),
   });
 const deleteCodeStep = () =>
@@ -41,8 +41,9 @@ const deleteCodeStep = () =>
     onAccountDeleted: () => undefined,
     onCancel: () => undefined,
   });
-const biometricOffer = () => createElement(BiometricOfferScreen, { onTurnOn: () => Promise.resolve({ ok: true } as const), onDone: () => undefined });
-const biometricLock = () => createElement(BiometricLockScreen, { onUnlocked: () => undefined, onSignOut: () => undefined });
+const biometricOffer = () =>
+  createElement(BiometricOfferScreen, { kind: "biometrics", onTurnOn: () => Promise.resolve({ ok: true } as const), onDone: () => undefined });
+const biometricLock = () => createElement(BiometricLockScreen, { kind: "biometrics", onUnlocked: () => undefined, onSignOut: () => undefined });
 const screens: [string, () => ReactElement][] = [
   ["email entry", emailEntry],
   ["code entry", codeEntry],

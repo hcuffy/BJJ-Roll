@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import type { BiometricCheck, BiometricSetting } from "../auth/biometricUnlock";
 import { colours, sizes, spacing, textStyles } from "../theme/tokens";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { BIOMETRIC_COPY, biometricCheckError } from "./biometricCopy";
 
 export interface BiometricUnlockSettingProps {
   readonly onReadBiometricSetting: () => Promise<BiometricSetting>;
@@ -49,41 +50,60 @@ export function useBiometricUnlockSetting({
   return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock };
 }
 
-/** Account section toggle (HEN-288). Disabled, with a note, on a phone without a fingerprint or face enrolled. */
+/**
+ * Account section toggle (HEN-288). The whole row is the switch (one screen-reader stop, named by the visible label).
+ * Disabled, with a note that is also its hint, on a phone without a fingerprint or face enrolled.
+ */
 export function BiometricUnlockSetting({ setting, onSettingChanged, onChangeBiometricUnlock }: BiometricUnlockSettingState) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kind = setting?.kind ?? "biometrics";
+  const copy = BIOMETRIC_COPY[kind];
 
   const change = async (on: boolean) => {
     setSaving(true);
     setError(null);
-    const check = await onChangeBiometricUnlock(on).catch((): BiometricCheck => ({ ok: false, cancelled: false }));
+    const check = await onChangeBiometricUnlock(on).catch((): BiometricCheck => ({ ok: false, failure: "failed" }));
     setSaving(false);
     if (check.ok) {
-      onSettingChanged({ available: true, on });
-    } else if (!check.cancelled) {
-      setError(on ? "That didn't work. Try again." : "We could not save that. Try again.");
+      onSettingChanged({ available: true, on, kind });
+    } else if (check.failure !== "cancelled") {
+      setError(on ? biometricCheckError(check.failure, copy, "That didn't work. Try again.") : "We could not save that. Try again.");
     }
   };
 
   const available = setting?.available === true;
+  const on = available && setting.on;
+  const disabled = !available || saving;
   return (
     <View style={styles.item}>
-      <View style={styles.row}>
-        <Text style={available ? styles.label : [styles.label, { color: colours.textSecondary }]}>Biometric unlock</Text>
+      <Pressable
+        accessible
+        accessibilityRole="switch"
+        accessibilityLabel={copy.toggleLabel}
+        accessibilityHint={available ? copy.toggleHint : copy.setUpNote}
+        accessibilityState={{ checked: on, disabled, busy: saving }}
+        disabled={disabled}
+        onPress={() => void change(!on)}
+        style={styles.row}>
+        <Text
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={available ? styles.label : [styles.label, { color: colours.textSecondary }]}>
+          {copy.toggleLabel}
+        </Text>
         <Switch
-          accessibilityLabel="Biometric unlock"
-          accessibilityHint="Asks for your fingerprint, face or phone PIN when the app opens."
-          value={setting?.available === true && setting.on}
-          disabled={!available || saving}
-          onValueChange={(on: boolean) => void change(on)}
-          trackColor={{ false: colours.surfaceRaised, true: colours.primary }}
-          thumbColor={colours.textPrimary}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+          value={on}
+          disabled={disabled}
+          onValueChange={(next: boolean) => void change(next)}
+          trackColor={{ false: colours.border, true: colours.primary }}
+          ios_backgroundColor={colours.border}
+          thumbColor={on ? colours.background : colours.textPrimary}
         />
-      </View>
-      {setting?.available === false ? (
-        <Text style={textStyles.bodyMuted}>Set up a fingerprint or face unlock in your phone&apos;s settings to use this.</Text>
-      ) : null}
+      </Pressable>
+      {setting?.available === false ? <Text style={textStyles.bodyMuted}>{copy.setUpNote}</Text> : null}
       <StatusText message={error} style={authStyles.fieldError} />
     </View>
   );

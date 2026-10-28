@@ -12,7 +12,15 @@ import {
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import { changeBiometricUnlock, clearBiometricUnlock, isBiometricUnlockOn, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
+import {
+  type BiometricKind,
+  changeBiometricUnlock,
+  clearBiometricUnlock,
+  isBiometricUnlockOn,
+  readBiometricKind,
+  readBiometricSetting,
+  takeBiometricOffer,
+} from "./auth/biometricUnlock";
 import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
 import { BiometricOfferScreen } from "./screens/BiometricOfferScreen";
@@ -26,8 +34,8 @@ type AuthScreen =
   | { readonly name: "loading" }
   | { readonly name: "email" }
   | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
-  | { readonly name: "biometricOffer" }
-  | { readonly name: "locked" }
+  | { readonly name: "biometricOffer"; readonly kind: BiometricKind }
+  | { readonly name: "locked"; readonly kind: BiometricKind }
   | { readonly name: "signedIn" };
 
 export function App() {
@@ -57,7 +65,7 @@ export function App() {
           return;
         }
         // Biometric unlock on (HEN-288): nothing signed-in shows until the check passes.
-        setStartupScreen((await isBiometricUnlockOn(appSecureStore)) ? { name: "locked" } : { name: "signedIn" });
+        setStartupScreen((await isBiometricUnlockOn(appSecureStore)) ? { name: "locked", kind: await readBiometricKind() } : { name: "signedIn" });
       })
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
@@ -104,8 +112,8 @@ export function App() {
     void cancelPendingSignOut(appSecureStore);
     // The biometric offer shows once per install; if it cannot be decided the user simply goes in.
     void takeBiometricOffer(appSecureStore)
-      .catch(() => false)
-      .then((offer) => setScreen(offer ? { name: "biometricOffer" } : { name: "signedIn" }));
+      .catch(() => null)
+      .then((kind) => setScreen(kind ? { name: "biometricOffer", kind } : { name: "signedIn" }));
   };
 
   const handleSignOut = () => {
@@ -162,10 +170,16 @@ export function App() {
         );
       }
       case "biometricOffer": {
-        return <BiometricOfferScreen onTurnOn={() => changeBiometricUnlock(appSecureStore, true)} onDone={() => setScreen({ name: "signedIn" })} />;
+        return (
+          <BiometricOfferScreen
+            kind={screen.kind}
+            onTurnOn={() => changeBiometricUnlock(appSecureStore, true)}
+            onDone={() => setScreen({ name: "signedIn" })}
+          />
+        );
       }
       case "locked": {
-        return <BiometricLockScreen onUnlocked={() => setScreen({ name: "signedIn" })} onSignOut={handleSignOut} />;
+        return <BiometricLockScreen kind={screen.kind} onUnlocked={() => setScreen({ name: "signedIn" })} onSignOut={handleSignOut} />;
       }
       case "code": {
         return (
