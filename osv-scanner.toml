@@ -21,6 +21,36 @@ ignoreUntil = 2026-11-01T00:00:00Z
 reason = "undici 8.11.2 via testcontainers (backend dev only). Fixed version 8.12.2 published 2026-10-15, blocked by 14-day minimumReleaseAge, bump after 2026-10-29."
 
 [[IgnoredVulns]]
+id = "GHSA-2m5v-pch6-74hx"
+ignoreUntil = 2026-11-27T00:00:00Z
+reason = "undici 8.11.2: dev-only via testcontainers (backend tests), fix 8.12.2 bumps 29 Oct after 14-day age rule; review ticket at end of M3."
+
+[[IgnoredVulns]]
+id = "GHSA-4w7w-5xrc-9h26"
+ignoreUntil = 2026-11-27T00:00:00Z
+reason = "undici 8.11.2: dev-only via testcontainers (backend tests), fix 8.12.2 bumps 29 Oct after 14-day age rule; review ticket at end of M3."
+
+[[IgnoredVulns]]
+id = "GHSA-55wc-3pg8-jfw6"
+ignoreUntil = 2026-11-27T00:00:00Z
+reason = "undici 8.11.2: dev-only via testcontainers (backend tests), fix 8.12.2 bumps 29 Oct after 14-day age rule; review ticket at end of M3."
+
+[[IgnoredVulns]]
+id = "GHSA-9fm3-97px-rjf6"
+ignoreUntil = 2026-11-27T00:00:00Z
+reason = "undici 8.11.2: dev-only via testcontainers (backend tests), fix 8.12.2 bumps 29 Oct after 14-day age rule; review ticket at end of M3."
+
+[[IgnoredVulns]]
+id = "GHSA-qrxm-fqhp-jwvm"
+ignoreUntil = 2026-11-27T00:00:00Z
+reason = "undici 8.11.2: dev-only via testcontainers (backend tests), fix 8.12.2 bumps 29 Oct after 14-day age rule; review ticket at end of M3."
+
+[[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
 ignoreUntil = 2026-11-20T00:00:00Z
 reason = "zod 3.25.76: tooling only via @expo/cli, no 3.x fix, Expo SDK 57 pinned."
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-11-20T00:00:00Z
+reason = "deepmerge 4.3.1: Expo tooling via @expo/config, no fixed version, prototype poisoning CVSS 5.3; review ticket at end of M3."
