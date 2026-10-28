@@ -12,7 +12,8 @@
     "scheme": "bjjroll",
     "ios": {
       "bundleIdentifier": "com.bjj.roll",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "config": { "usesNonExemptEncryption": false }
     },
     "android": {
       "package": "com.bjj.roll"

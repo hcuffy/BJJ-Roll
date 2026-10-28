@@ -149,29 +149,25 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     expect(await signInWithProvider(dependencies, "apple", AGE_16)).toEqual({ ok: false, reason: "accountNotLinked", message: NEUTRAL_COPY });
   });
 
-  it("names Google in the neutral refusal only for Google; Apple's browser flow gets the general copy", async () => {
+  it("names Google in Google's neutral refusal", async () => {
     const browserResult = { type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=account_not_linked` };
     const google = createTestDependencies({ browserResult });
-    const apple = createTestDependencies({ browserResult, platform: "android" });
 
     expect(await signInWithProvider(google.dependencies, "google", AGE_16)).toEqual({
       ok: false,
       reason: "accountNotLinked",
       message: NEUTRAL_GOOGLE_COPY,
     });
-    expect(await signInWithProvider(apple.dependencies, "apple", AGE_16)).toEqual({ ok: false, reason: "accountNotLinked", message: NEUTRAL_COPY });
   });
 
-  it("Apple on Android uses the browser flow", async () => {
-    const { backend, browser, dependencies } = createTestDependencies({ platform: "android" });
+  it("Apple outside iOS's native sheet sends nothing and opens no browser (Android never shows Apple)", async () => {
+    for (const options of [{ platform: "android" }, { platform: "ios" }] as const) {
+      const { backend, browser, dependencies } = createTestDependencies(options);
 
-    expect(await signInWithProvider(dependencies, "apple", AGE_16)).toEqual({ ok: true });
-    expect(backend.requests[0]?.body).toMatchObject({
-      provider: "apple",
-      disableRedirect: true,
-      additionalData: { age16Confirmed: true, age18Confirmed: false },
-    });
-    expect(browser.openAuthSessionAsync).toHaveBeenCalledOnce();
+      expect(await signInWithProvider(dependencies, "apple", AGE_16)).toMatchObject({ ok: false, reason: "unknown" });
+      expect(backend.fetchImplementation).not.toHaveBeenCalled();
+      expect(browser.openAuthSessionAsync).not.toHaveBeenCalled();
+    }
   });
 
   it("the deep-link handler leaves the social return to the browser session, so a code is never exchanged twice", async () => {
