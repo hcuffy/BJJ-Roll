@@ -21,7 +21,7 @@ class ProbingEmailSender extends FakeEmailSender {
   }
 }
 
-describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted email (Henry, 25 Oct)", () => {
+describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted email, sent through the HEN-284 queue (Henry, 25 Oct)", () => {
   const emailSender = new ProbingEmailSender();
   let environment: StartedAuthTestEnvironment | undefined;
   const current = (): StartedAuthTestEnvironment => {
@@ -32,7 +32,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
   };
 
   beforeAll(async () => {
-    environment = await startAuthTestEnvironment({ emailSender });
+    environment = await startAuthTestEnvironment({ emailSender, emailQueue: "pg-boss" });
     const { pool, codec } = environment;
     emailSender.probe = async (to) => {
       const result = await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM public.users WHERE email_hash = $1", [
@@ -53,14 +53,22 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
     const response = await deleteAccount(user);
     expect(response.status).toBe(200);
 
-    const notices = emailSender.sentMessages.filter((message) => message.kind === "account_deleted");
-    expect(notices).toEqual([{ kind: "account_deleted", to: "notice.sent@example.com", ...renderAccountDeletedEmail({ to: user.email }) }]);
-    expect(notices[0]?.text).toContain("you will get a new, empty account");
+    const notices = () => emailSender.sentMessages.filter((message) => message.kind === "account_deleted");
+    await vi.waitFor(() => expect(notices()).toHaveLength(1), { timeout: 15_000, interval: 50 });
+    expect(notices()).toEqual([
+      {
+        kind: "account_deleted",
+        to: "notice.sent@example.com",
+        idempotencyKey: expect.any(String) as string,
+        ...renderAccountDeletedEmail({ to: user.email }),
+      },
+    ]);
+    expect(notices()[0]?.text).toContain("you will get a new, empty account");
     // The users row (and its encrypted address) was already gone when the notice was sent: the address came from the pre-purge capture.
     expect(emailSender.usersWithAddressAtSendTime).toEqual([0]);
   });
 
-  it("still deletes when the notice fails to send, and logs the failure with the user id and reason but no address", async () => {
+  it("still deletes when the notice keeps failing; the queue retries, then logs one dead-letter line with no address", async () => {
     const email = "notice.fails@example.com";
     const user = await signIn(email, "198.51.100.131");
     emailSender.failNotice = true;
@@ -75,6 +83,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
     let status: number;
     try {
       status = (await deleteAccount(user)).status;
+      await vi.waitFor(() => expect(current().emailQueueLogLines).toHaveLength(1), { timeout: 20_000, interval: 100 });
     } finally {
       emailSender.failNotice = false;
       stdoutSpy.mockRestore();
@@ -85,12 +94,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
 
     expect(status).toBe(200);
     expect((await current().pool.query("SELECT id FROM public.users WHERE id = $1", [user.userId])).rows).toEqual([]);
-    const failureLines = lines.filter((line) => line.includes("account_deletion_email_failed"));
-    expect(failureLines.map((line) => JSON.parse(line) as unknown)).toEqual([
-      { event: "account_deletion_email_failed", userId: user.userId, reason: "network" },
+    // Queuing worked, so the route logs nothing; the queue tried 3 times and wrote the dead-letter line.
+    expect(lines.filter((line) => line.includes("account_deletion_email_failed"))).toEqual([]);
+    expect(current().emailQueueLogLines).toEqual([
+      { event: "email_dead_lettered", jobId: expect.any(String) as unknown, template: "account_deleted_notice", errorClass: "network", attempts: 3 },
     ]);
-    const allLogs = lines.join("\n").toLowerCase();
+    const allLogs = [...lines, ...current().emailQueueLogLines.map((line) => JSON.stringify(line))].join("\n").toLowerCase();
     expect(allLogs).not.toContain(email);
     expect(allLogs).not.toContain(current().codec.computeEmailHmac(email));
-  });
+  }, 30_000);
 });

@@ -19,7 +19,7 @@ import type { AccountDeletionAttempts } from "./auth/accountDeletionAttempts.js"
 import type { AccountDeletionCodes } from "./auth/accountDeletionCodes.js";
 import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
-import type { EmailSender } from "./email/index.js";
+import type { EmailQueue } from "./email/index.js";
 import type { AuthenticatedUserIdResolver } from "./handleRoutes.js";
 
 export type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
@@ -36,7 +36,8 @@ export interface AccountRoutesOptions {
   /** Counted before every code check, so parallel guesses cannot outrun the attempt limit. */
   accountDeletionAttempts: AccountDeletionAttempts;
   resolveClientIp: (context: Context) => string;
-  emailSender: Pick<EmailSender, "sendAccountDeletedNotice">;
+  /** The deleted notice is queued (HEN-284); a failure to queue it is logged and the deletion still succeeds. */
+  emailQueue: Pick<EmailQueue, "enqueue">;
   logAccountEvent: AccountEventLogger;
   /** Revokes a stored Apple refresh token before the account is deleted (HEN-239). Absent when Apple is not wired in. */
   revokeAppleRefreshToken?: (sealedRefreshToken: string) => Promise<void>;
