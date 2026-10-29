@@ -1,6 +1,14 @@
 import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, isSignUpAttestationAccepted, type EmailEntry } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
+import {
+  addPendingSignOut,
+  dropPendingSignOut,
+  oldSessionCookieOf,
+  PENDING_WITHOUT_SESSION_COOKIE,
+  readPendingSignOuts,
+  type SessionKeyStore,
+} from "./pendingSignOuts";
 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 
@@ -203,20 +211,7 @@ export async function readSignedInUserId(client: MobileAuthClient, signal?: Abor
 /** The SecureStore keys the Expo auth client writes; sign-out deletes both. */
 export const SESSION_STORAGE_KEYS = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESSION_STORAGE_PREFIX}_session_data`] as const;
 
-export interface SessionKeyStore {
-  readonly deleteItemAsync: (key: string) => Promise<void>;
-  readonly getItemAsync: (key: string) => Promise<string | null>;
-  readonly setItemAsync: (key: string, value: string) => Promise<void>;
-}
-
-/**
- * Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286).
- * Holds the old session cookie (`<name>=<token>.<signature>`), so that session can be ended on the server by presenting
- * the cookie itself, at the launch retry or at the next sign-in, for any account (HEN-299).
- */
-export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
-/** Marker value when the old session cookie is unknown (no session cookie, or a marker written before HEN-299). */
-const PENDING_WITHOUT_SESSION_COOKIE = "1";
+export { PENDING_SIGN_OUT_KEY, type SessionKeyStore } from "./pendingSignOuts";
 
 /** The stored session cookie pair, as the server needs it to end that session. Null when there is none. */
 async function readSessionCookie(client: MobileAuthClient): Promise<string | null> {
@@ -225,11 +220,6 @@ async function readSessionCookie(client: MobileAuthClient): Promise<string | nul
   } catch {
     return null;
   }
-}
-
-/** The old session cookie a marker holds; null for a marker without one. */
-function oldSessionCookieOf(marker: string): string | null {
-  return marker.includes("=") ? marker : null;
 }
 
 /** One server sign-out: the old session cookie to present (null: the stored session), and a signal that aborts it on a startup timeout (HEN-303). */
@@ -255,7 +245,7 @@ async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, sig
   }
 }
 
-/** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
+/** Ends the session on the server and on the phone; drops its pending entry only when both succeeded. */
 async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: SignOutAttempt): Promise<void> {
   const serverSignedOut = await signOutOnServer(client, attempt);
   // Timed out: leave keys and marker as they are, so a late answer cannot touch a session made since; the next launch retries (HEN-303).
@@ -264,13 +254,13 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
   }
   const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
   if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
-    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+    await dropPendingSignOut(secureStore, attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
   }
 }
 
 /**
  * The marker belongs to a session older than the one now stored (a sign-in came after it): end that old session only.
- * The marker is cleared once the server confirmed; otherwise it stays for the next launch. The stored session is never sent.
+ * Its entry is dropped once the server confirmed; otherwise it stays for the next launch. The stored session is never sent.
  */
 async function revokeOldSession(
   client: MobileAuthClient,
@@ -281,7 +271,7 @@ async function revokeOldSession(
   const confirmed = await signOutOnServer(client, attempt);
   // Timed out: keep the marker, so a late answer cannot clear a marker written since; the next launch retries (HEN-303).
   if (confirmed && !attempt.signal?.aborted) {
-    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+    await dropPendingSignOut(secureStore, attempt.oldSessionCookie);
   }
 }
 
@@ -290,11 +280,12 @@ async function revokeOldSession(
  * `signal` is the caller's deadline; a server sign-out it cuts off is finished on the next launch. Never rejects.
  */
 export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
-  // An older session still waiting to be ended gets one more try before its marker is replaced.
-  await endLeftoverSession(client, secureStore, signal);
-  // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
+  // Older sessions still waiting to be ended get one more try; those that fail stay queued (HEN-314).
+  await endLeftoverSessions(client, secureStore, signal);
+  // Queued first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
   const sessionCookie = await readSessionCookie(client);
-  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
+  // Accepted (Sara, HEN-314): if every SecureStore write fails and the server is down, a cold launch comes back signed in.
+  await addPendingSignOut(secureStore, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
   // The phone first, so a server that never answers cannot leave the session in use here.
   await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
   // Presents the cookie itself: the Expo plugin's own SecureStore writes on sign-out cannot stop the server sign-out.
@@ -307,22 +298,21 @@ export async function signOut(client: MobileAuthClient, secureStore: SessionKeyS
  * next launch retries it; the new session is not signed out for that. Never rejects and never blocks the sign-in.
  */
 export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
-  await endLeftoverSession(client, secureStore);
+  await endLeftoverSessions(client, secureStore);
 }
 
-/** Ends the session a marker holds unless it is the one now stored; `signal` aborts the server request. Never rejects. */
-async function endLeftoverSession(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
-  const marker = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
-  if (marker === null) {
-    return;
+/** Ends each queued session unless it is the one now stored; `signal` aborts the server requests. Never rejects. */
+async function endLeftoverSessions(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
+  const storedSessionCookie = await readSessionCookie(client);
+  for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
+    const oldSessionCookie = oldSessionCookieOf(marker);
+    if (oldSessionCookie === null || oldSessionCookie === storedSessionCookie) {
+      // Nothing to end, or it is the session now in use.
+      await dropPendingSignOut(secureStore, marker);
+    } else {
+      await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
+    }
   }
-  const oldSessionCookie = oldSessionCookieOf(marker);
-  if (oldSessionCookie === null || oldSessionCookie === (await readSessionCookie(client))) {
-    // Nothing to end, or it is the session now in use.
-    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
-    return;
-  }
-  await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
 }
 
 /**
@@ -331,16 +321,16 @@ async function endLeftoverSession(client: MobileAuthClient, secureStore: Session
  * A marker left by an earlier sign-in (a newer session is stored) only ends the old session; false, the user stays signed in.
  */
 export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
-  const marker = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
-  if (marker === null) {
-    return false;
-  }
-  const oldSessionCookie = oldSessionCookieOf(marker);
   const storedSessionCookie = await readSessionCookie(client);
-  if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
-    await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
-    return false;
+  let signOutPending = false;
+  for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
+    const oldSessionCookie = oldSessionCookieOf(marker);
+    if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
+      await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
+    } else {
+      signOutPending = true;
+      await finishSignOut(client, secureStore, { oldSessionCookie, signal });
+    }
   }
-  await finishSignOut(client, secureStore, { oldSessionCookie, signal });
-  return true;
+  return signOutPending;
 }
