@@ -135,9 +135,10 @@ export function App() {
   };
 
   const handleSignOut = () => {
+    // Biometric unlock goes at the tap, best effort, never waiting on the server or a timeout (HEN-288, Stamp HEN-314 fix 2).
+    void clearBiometricUnlock(appSecureStore).catch(() => undefined);
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    void clearBiometricUnlock(appSecureStore);
     // signOut clears the local session when the server is down and finishes a failed one on the next launch.
     void signOut(appAuthClient, appSecureStore)
       .catch(() => undefined)
@@ -145,7 +146,7 @@ export function App() {
   };
 
   const handleAccountDeleted = () => {
-    void clearBiometricUnlock(appSecureStore);
+    void clearBiometricUnlock(appSecureStore).catch(() => undefined);
     // A note from a link that failed while signed in must not sit next to the deleted card.
     setServerUnreachable(false);
     setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
