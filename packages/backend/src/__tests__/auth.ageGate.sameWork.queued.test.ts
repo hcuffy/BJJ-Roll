@@ -1,8 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Client } from "pg";
-import { PgBoss } from "pg-boss";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
-import { EMAIL_QUEUE_NAME, EmailSendError, FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
+import {
+  EMAIL_QUEUE_NAME,
+  EmailSendError,
+  FakeEmailSender,
+  type QueuedEmail,
+  type SendMagicLinkInput,
+  type SendOneTimeCodeInput,
+} from "../email/index.js";
 import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
 import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
@@ -32,7 +38,6 @@ interface Observed {
   readonly headers: [string, string][];
   /** App SQL only: pg-boss runs its own timers in the same process, so its `pgboss.*` queries are left out. */
   readonly appQueries: string[];
-  /** Jobs this request stored. Counting rows instead races the worker, which deletes earlier jobs as it sends them (HEN-313). */
   readonly jobsAdded: number;
 }
 
@@ -42,63 +47,66 @@ const sendPaths = [
   { name: "magic link send", path: magicLinkSendPath, extraBody: { callbackURL: DEEP_LINK_CALLBACK_URL } },
 ];
 
-// HEN-263 again with the real HEN-284 queue: every variant stores exactly one job and returns without waiting for the provider.
-describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with sign-in emails on the HEN-284 pg-boss queue", () => {
-  const emailSender = new FailingEmailSender();
-  let environment: StartedAuthTestEnvironment | undefined;
-  let ipSuffix = 10;
-  const originalQuery = Object.getOwnPropertyDescriptor(Client.prototype, "query")?.value as (this: Client, ...queryArguments: unknown[]) => unknown;
-  type SendJob = (this: PgBoss, ...sendArguments: unknown[]) => Promise<string | null>;
-  const originalSend = Object.getOwnPropertyDescriptor(PgBoss.prototype, "send")?.value as SendJob;
+let ipSuffix = 10;
+const originalQuery = Object.getOwnPropertyDescriptor(Client.prototype, "query")?.value as (this: Client, ...queryArguments: unknown[]) => unknown;
 
-  const observeSend = async (path: string, body: Record<string, unknown>): Promise<Observed> => {
-    const { app, pool } = environment as StartedAuthTestEnvironment;
-    await pool.query("DELETE FROM public.rate_limits");
-    const queries: string[] = [];
-    const storedJobIds: string[] = [];
-    const querySpy = vi.spyOn(Client.prototype, "query").mockImplementation(function (this: Client, ...queryArguments: unknown[]) {
-      const [config] = queryArguments;
-      const text = typeof config === "string" ? config : (config as { text?: string } | undefined)?.text;
-      queries.push((text ?? "").replace(/\s+/gu, " ").trim());
-      return originalQuery.apply(this, queryArguments) as never;
-    });
-    // pg-boss answers the new job id, or null when it stored nothing (for example a repeated id).
-    const sendSpy = vi.spyOn(PgBoss.prototype, "send").mockImplementation(async function (this: PgBoss, ...sendArguments: unknown[]) {
-      const jobId = await originalSend.apply(this, sendArguments);
-      if (sendArguments[0] === EMAIL_QUEUE_NAME && jobId !== null) {
-        storedJobIds.push(jobId);
-      }
-      return jobId;
-    });
-    ipSuffix += 1;
-    let response: Response;
-    try {
-      response = await postAuthJson(app, path, { body, ipAddress: `198.51.100.${ipSuffix}` });
-    } finally {
-      querySpy.mockRestore();
-      sendSpy.mockRestore();
-    }
-    const headers = [...response.headers.entries()].filter(([name]) => name !== "date").sort();
-    return {
-      status: response.status,
-      body: await response.text(),
-      headers,
-      appQueries: queries.filter((query) => !query.includes("pgboss")),
-      jobsAdded: storedJobIds.length,
-    };
+const countJobs = async (environment: StartedAuthTestEnvironment): Promise<number> => {
+  const result = await environment.pool.query<{ count: number }>("SELECT count(*)::int AS count FROM pgboss.job WHERE name = $1", [EMAIL_QUEUE_NAME]);
+  return result.rows[0]?.count ?? -1;
+};
+
+const observeSend = async (environment: StartedAuthTestEnvironment, path: string, body: Record<string, unknown>): Promise<Observed> => {
+  const { app, pool } = environment;
+  await pool.query("DELETE FROM public.rate_limits");
+  const jobsBefore = await countJobs(environment);
+  const queries: string[] = [];
+  const querySpy = vi.spyOn(Client.prototype, "query").mockImplementation(function (this: Client, ...queryArguments: unknown[]) {
+    const [config] = queryArguments;
+    const text = typeof config === "string" ? config : (config as { text?: string } | undefined)?.text;
+    queries.push((text ?? "").replace(/\s+/gu, " ").trim());
+    return originalQuery.apply(this, queryArguments) as never;
+  });
+  ipSuffix += 1;
+  let response: Response;
+  try {
+    response = await postAuthJson(app, path, { body, ipAddress: `198.51.100.${ipSuffix}` });
+  } finally {
+    querySpy.mockRestore();
+  }
+  const headers = [...response.headers.entries()].filter(([name]) => name !== "date").sort();
+  return {
+    status: response.status,
+    body: await response.text(),
+    headers,
+    appQueries: queries.filter((query) => !query.includes("pgboss")),
+    jobsAdded: (await countJobs(environment)) - jobsBefore,
   };
+};
+
+/** Signs knownEmail up with the code that `readCode` finds once the send has returned. */
+const signUpKnownEmail = async (environment: StartedAuthTestEnvironment, readCode: () => Promise<string>): Promise<void> => {
+  const { app } = environment;
+  const body = { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation };
+  expect((await postAuthJson(app, otpSendPath, { body })).status).toBe(200);
+  const otp = await readCode();
+  expect((await postAuthJson(app, otpSignInPath, { body: { email: knownEmail, otp } })).status).toBe(200);
+};
+
+// HEN-263 again with the real HEN-284 queue: every variant stores exactly one job and returns without waiting for the provider.
+// The worker is off (HEN-313): it deletes each job once sent, so with it on, a row count around a request could read 0 new jobs.
+describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with sign-in emails stored on the HEN-284 pg-boss queue", () => {
+  let environment: StartedAuthTestEnvironment | undefined;
 
   beforeAll(async () => {
-    environment = await startAuthTestEnvironment({ emailSender, emailQueue: "pg-boss" });
-    const { app } = environment;
-    expect(
-      (await postAuthJson(app, otpSendPath, { body: { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation } }))
-        .status,
-    ).toBe(200);
-    await vi.waitFor(() => expect(emailSender.sentMessages).toHaveLength(1), { timeout: 15_000, interval: 50 });
-    const sent = emailSender.sentMessages.at(-1);
-    const otp = sent?.kind === "one_time_code" ? sent.code : "";
-    expect((await postAuthJson(app, otpSignInPath, { body: { email: knownEmail, otp } })).status).toBe(200);
+    const started = await startAuthTestEnvironment({ emailQueue: "pg-boss", emailQueueWorker: false });
+    environment = started;
+    // No worker sends the code, so read it from the one stored job.
+    await signUpKnownEmail(started, async () => {
+      const { rows } = await started.pool.query<{ data: { sealed: string } }>("SELECT data FROM pgboss.job WHERE name = $1", [EMAIL_QUEUE_NAME]);
+      expect(rows).toHaveLength(1);
+      const email = JSON.parse(started.codec.decryptVerificationPayload(rows[0]?.data.sealed ?? "")) as QueuedEmail;
+      return email.kind === "one_time_code" ? email.input.code : "";
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -108,16 +116,17 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
   it.each(sendPaths)(
     "$name: same app SQL, same status, body and headers, and one stored job for every variant",
     async ({ path, extraBody }) => {
+      const started = environment as StartedAuthTestEnvironment;
       const variants = {
-        known: await observeSend(path, { email: knownEmail, ...extraBody, age16Confirmed: true, ...currentSignUpAttestation }),
-        unknown: await observeSend(path, {
+        known: await observeSend(started, path, { email: knownEmail, ...extraBody, age16Confirmed: true, ...currentSignUpAttestation }),
+        unknown: await observeSend(started, path, {
           email: `same.work.queued.new.${path.length}@example.com`,
           ...extraBody,
           age16Confirmed: true,
           ...currentSignUpAttestation,
         }),
-        refused: await observeSend(path, { email: `same.work.queued.refused.${path.length}@example.com`, ...extraBody }),
-        knownUnticked: await observeSend(path, { email: knownEmail, ...extraBody }),
+        refused: await observeSend(started, path, { email: `same.work.queued.refused.${path.length}@example.com`, ...extraBody }),
+        knownUnticked: await observeSend(started, path, { email: knownEmail, ...extraBody }),
       };
       const [first, ...rest] = Object.values(variants);
       expect(first?.appQueries.length).toBeGreaterThan(0);
@@ -136,8 +145,28 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
     },
     30_000,
   );
+});
+
+describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with sign-in emails sent by the HEN-284 pg-boss worker", () => {
+  const emailSender = new FailingEmailSender();
+  let environment: StartedAuthTestEnvironment | undefined;
+
+  beforeAll(async () => {
+    const started = await startAuthTestEnvironment({ emailSender, emailQueue: "pg-boss" });
+    environment = started;
+    await signUpKnownEmail(started, async () => {
+      await vi.waitFor(() => expect(emailSender.sentMessages).toHaveLength(1), { timeout: 15_000, interval: 50 });
+      const sent = emailSender.sentMessages.at(-1);
+      return sent?.kind === "one_time_code" ? sent.code : "";
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await environment?.stop();
+  }, 30_000);
 
   it("with a failing provider, known and unknown sends match; each job ends in one PII-free dead-letter line after 3 tries", async () => {
+    const started = environment as StartedAuthTestEnvironment;
     emailSender.fail = true;
     try {
       const unknownEmail = "same.work.queued.failing.new@example.com";
@@ -147,15 +176,25 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
             (await environment?.pool.query("SELECT 1 FROM pgboss.job WHERE name = $1 AND state < 'completed'", [EMAIL_QUEUE_NAME]))?.rows,
           ).toEqual([]),
         {
-          // Jobs left by the earlier tests drain on their own; a full parallel run once needed more than 15 s.
+          // The sign-up job drains on its own; a full parallel run once needed more than 15 s.
           timeout: 30_000,
           interval: 100,
         },
       );
       const logBefore = environment?.emailQueueLogLines.length ?? 0;
       const sentBefore = emailSender.sentMessages.length;
-      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
-      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
+      const known = await observeSend(started, otpSendPath, {
+        email: knownEmail,
+        type: "sign-in",
+        age16Confirmed: true,
+        ...currentSignUpAttestation,
+      });
+      const unknown = await observeSend(started, otpSendPath, {
+        email: unknownEmail,
+        type: "sign-in",
+        age16Confirmed: true,
+        ...currentSignUpAttestation,
+      });
       expect(known.status).toBe(200);
       expect(unknown.appQueries).toEqual(known.appQueries);
       expect({ status: unknown.status, body: unknown.body, headers: unknown.headers }).toEqual({
