@@ -20,10 +20,15 @@ export const jobPayloadSchema = z.strictObject({
   inputObjectKey: z.string().regex(/^videos\/[0-9a-f-]{36}\//),
 });
 
-// The only arguments the Modal function receives.
-export const modalCallInputSchema = z.object({
+// Server-built key of the video a Modal function reads: never an uploaded filename, URL, query string or email (HEN-227).
+export const modalInputObjectKeySchema = z
+  .string()
+  .regex(/^videos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(source|transcode)\.[a-z0-9]{2,4}$/);
+
+// The only arguments the Modal function receives. Strict: any extra field (bytes, URL, email, filename) is rejected (HEN-227).
+export const modalCallInputSchema = z.strictObject({
   jobId: identifierSchema,
-  inputObjectKey: jobPayloadSchema.shape.inputObjectKey,
+  inputObjectKey: modalInputObjectKeySchema,
 });
 
 // Fetched by the worker from GET /internal/jobs/{jobId} while the job is active.
