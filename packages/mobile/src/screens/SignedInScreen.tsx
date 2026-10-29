@@ -8,6 +8,7 @@ import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
+import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
@@ -195,38 +196,26 @@ export function SignedInScreen({
 
   if (deleteStep === "confirm") {
     return (
-      <AuthScreenLayout>
-        <Text accessibilityRole="header" style={textStyles.display}>
-          You are signed in
-        </Text>
-        <View style={authStyles.heading}>
-          <Text ref={confirmHeading} accessibilityRole="header" style={textStyles.title}>
-            Delete your account?
-          </Text>
-          <Text style={textStyles.body}>This permanently deletes your account, handle and sign-in data now. It can&apos;t be undone.</Text>
-          <Text style={textStyles.body}>If you sign up again later, you get a new, empty account.</Text>
-        </View>
-        <View style={authStyles.actions}>
-          <AuthButton
-            {...exportButtonProps}
-            title="Export my data first"
-            variant="tertiary"
-            accessibilityHint="Opens the share sheet with a copy of your account data. Nothing is deleted."
-          />
-          <StatusText message={exportError} style={authStyles.fieldError} />
-          <StatusText message={codeRequestError} style={authStyles.fieldError} />
-          <AuthButton
-            title="Email me a code"
-            variant="secondary"
-            disabled={runningTask === "export"}
-            loading={runningTask === "code"}
-            loadingTitle="Sending code…"
-            accessibilityHint="Emails you a code to confirm. Nothing is deleted yet."
-            onPress={() => void requestCode()}
-          />
-          <AuthButton title="Cancel" variant="tertiary" disabled={isBusy} onPress={cancelDelete} />
-        </View>
-      </AuthScreenLayout>
+      <DeleteAccountConfirmStep
+        headingRef={confirmHeading}
+        exportAction={
+          <>
+            <AuthButton
+              {...exportButtonProps}
+              title="Export my data first"
+              variant="tertiary"
+              accessibilityHint="Opens the share sheet with a copy of your account data. Nothing is deleted."
+            />
+            <StatusText message={exportError} style={authStyles.fieldError} />
+          </>
+        }
+        codeRequestError={codeRequestError}
+        sendingCode={runningTask === "code"}
+        emailCodeDisabled={runningTask === "export"}
+        cancelDisabled={isBusy}
+        onEmailCode={() => void requestCode()}
+        onCancel={cancelDelete}
+      />
     );
   }
 

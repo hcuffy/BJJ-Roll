@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment, currentSignUpAttestation } from "./authTestHelper.js";
 import { cookieHeaderFrom, createFakeSocialProviderConfig, fakeGoogleConfig, stubProviderFetch, unsignedIdToken } from "./socialSignInTestDoubles.js";
 
 interface FakeGoogleUser {
@@ -51,7 +51,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
         callbackURL: DEEP_LINK_CALLBACK_URL,
         errorCallbackURL: DEEP_LINK_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: age16Confirmed ? { age16Confirmed: true, age18Confirmed: false } : undefined,
+        additionalData: age16Confirmed ? { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false } : undefined,
       },
       ipAddress,
     });

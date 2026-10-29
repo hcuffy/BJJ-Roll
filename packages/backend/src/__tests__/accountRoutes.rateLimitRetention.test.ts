@@ -3,7 +3,7 @@ import { MAX_SENDS_PER_EMAIL_PER_WINDOW } from "../auth/authLimits.js";
 import { emailRateLimitKey } from "../auth/authRateLimits.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import { createAccountTestFlow } from "./accountTestFlow.js";
-import { postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment, currentSignUpAttestation } from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account delete keeps the per-email send counter (Sara, 25 Oct)", () => {
   let environment: StartedAuthTestEnvironment | undefined;
@@ -27,7 +27,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account delete ke
   const ipAddress = "198.51.100.106";
 
   const sendOtp = (): Promise<Response> =>
-    postAuthJson(current().app, "/email-otp/send-verification-otp", { body: { email, type: "sign-in", age16Confirmed: true }, ipAddress });
+    postAuthJson(current().app, "/email-otp/send-verification-otp", {
+      body: { email, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
+      ipAddress,
+    });
 
   const { signIn, deleteAccount } = createAccountTestFlow(current);
 

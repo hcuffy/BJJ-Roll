@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import type { Hono } from "hono";
 import type { Pool } from "pg";
 import { createApp } from "../app.js";
@@ -18,6 +19,9 @@ import { createAppRoleLoginPool, startMigratedTestDatabase, type AppRoleLoginPoo
 export const testBaseUrl = "http://localhost:3000";
 
 export const defaultTestClientIp = "203.0.113.10";
+
+/** HEN-183: the attestation field every account-creating request needs, at the current text version. */
+export const currentSignUpAttestation = { signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id } as const;
 
 export interface StartedAuthTestEnvironment {
   database: MigratedTestDatabase;

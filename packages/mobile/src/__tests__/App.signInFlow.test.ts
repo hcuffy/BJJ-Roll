@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -37,7 +38,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   const signInPaths = () =>
     backend.requests
       .map((request) => new URL(request.url).pathname)
-      .filter((path) => !path.endsWith("/get-session") && path !== "/account/age-confirmation");
+      .filter((path) => !path.endsWith("/get-session") && !path.startsWith("/account/"));
   const lastBodyFor = (path: string) => backend.requests.findLast((request) => request.url.endsWith(path))?.body;
 
   beforeEach(() => {
@@ -51,6 +52,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
 
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "new.member@example.test");
     await screen.press("Continue with email");
     expect(screen.text()).toContain("Enter your code");
@@ -78,6 +80,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     try {
       const screen = await startApp();
       await screen.pressRole("checkbox");
+      await screen.press(SIGN_UP_ATTESTATION_LABEL);
       await screen.press("I am 18 or older");
       await screen.changeText("Email", "new.member@example.test");
       await screen.press("Continue with email");
@@ -95,6 +98,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("18+ (HEN-263): signed in without the 18+ tick, the Account section confirms it later and then says so", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "new.member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
@@ -110,6 +114,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("delete account (HEN-65): confirm, email a code, DELETE /account with code and cookie, then signed-out, also after a restart", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
@@ -124,6 +129,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     const accountRequests = backend.requests.filter((request) => new URL(request.url).pathname.startsWith("/account"));
     expect(accountRequests.map((request) => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "GET /account/signup-attestation",
       "GET /account/age-confirmation",
       "POST /account/delete-code",
       "DELETE /account",
@@ -142,6 +148,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("after delete (Vera item 3): the sign-in screen shows a one-time neutral, announced notice: re-signup is a new empty account", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
@@ -168,6 +175,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("magic link: requests a bjjroll://auth link, then opening the link signs the user in", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Email me a sign-in link instead");
 
@@ -177,6 +185,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
       callbackURL: "bjjroll://auth",
       age16Confirmed: true,
       age18Confirmed: false,
+      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
     });
 
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
@@ -200,6 +209,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(signInPaths()).toEqual([]);
 
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(screen.text()).not.toContain(message);
   });
 

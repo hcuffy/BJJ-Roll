@@ -1,122 +1,25 @@
-import { AGE_CONFIRMATION_TEXT_VERSION_ID, AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  AGE_CONFIRMATION_TEXT_VERSION_ID,
+  AGE_GATE_REFUSAL_MESSAGE,
+  SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
+  SIGN_UP_ATTESTATION_TEXT_VERSION,
+} from "@bjj-roll/shared";
+import { describe, expect, it } from "vitest";
 import { RATE_LIMIT_WINDOW_SECONDS, MAX_VERIFIES_PER_IP_PER_WINDOW } from "../auth/authLimits.js";
 import { authIpRateLimitCustomRules } from "../auth/authRateLimits.js";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
+import { currentSignUpAttestation, dumpRawAuthTables, getAuthPath, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import {
-  dumpRawAuthTables,
-  extractSessionCookie,
-  getAuthPath,
-  postAuthJson,
-  startAuthTestEnvironment,
-  type StartedAuthTestEnvironment,
-} from "./authTestHelper.js";
-import { cookieHeaderFrom, createFakeSocialProviderConfig, fakeGoogleConfig, stubProviderFetch, unsignedIdToken } from "./socialSignInTestDoubles.js";
-
-interface FakeGoogleUser {
-  subject: string;
-  email: string;
-  emailVerified: boolean;
-}
-
-const fakeAccessToken = "fake-google-access-token-never-stored";
-const fakeIdTokenMarker = "fake-google-id-token-marker";
+import { createGoogleSignInTestContext, fakeAccessToken, fakeIdTokenMarker } from "./googleSignInTestContext.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (browser flow, code exchange back to the app)", () => {
-  let environment: StartedAuthTestEnvironment | undefined;
-  let nextGoogleUser: FakeGoogleUser | undefined;
-  let providerFetch: ReturnType<typeof stubProviderFetch> | undefined;
-  const capturedLogs: string[] = [];
-
-  const current = (): StartedAuthTestEnvironment => {
-    if (!environment) {
-      throw new Error("Auth test environment not initialized");
-    }
-    return environment;
-  };
-
-  const countRows = async (table: "users" | "sessions" | "accounts"): Promise<number> => {
-    const result = await current().pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM public.${table}`);
-    return result.rows[0]?.count ?? 0;
-  };
-
-  /** Starts sign-in as the app does (no redirect, URL handed to the in-app browser), then plays Google's redirect back. */
-  const signInWithGoogle = async (
-    googleUser: FakeGoogleUser,
-    options: { additionalData?: Record<string, unknown>; ipAddress?: string },
-  ): Promise<{ location: URL; callbackResponse: Response }> => {
-    const ipAddress = options.ipAddress ?? "198.51.100.200";
-    const startResponse = await postAuthJson(current().app, "/sign-in/social", {
-      body: {
-        provider: "google",
-        callbackURL: DEEP_LINK_CALLBACK_URL,
-        errorCallbackURL: DEEP_LINK_CALLBACK_URL,
-        disableRedirect: true,
-        additionalData: options.additionalData,
-      },
-      ipAddress,
-    });
-    expect(startResponse.status).toBe(200);
-    const { url } = (await startResponse.json()) as { url: string };
-    const authorizationUrl = new URL(url);
-    expect(authorizationUrl.origin).toBe("https://accounts.google.com");
-    expect(authorizationUrl.searchParams.get("client_id")).toBe(fakeGoogleConfig.clientId);
-    nextGoogleUser = googleUser;
-    const callbackResponse = await getAuthPath(
-      current().app,
-      `/callback/google?code=fake-google-code&state=${encodeURIComponent(authorizationUrl.searchParams.get("state") ?? "")}`,
-      { ipAddress, cookie: cookieHeaderFrom(startResponse) },
-    );
-    expect(callbackResponse.status).toBe(302);
-    return { location: new URL(callbackResponse.headers.get("location") ?? ""), callbackResponse };
-  };
-
-  const exchangeForSession = async (code: string): Promise<{ userId: string; cookie: string }> => {
-    const exchangeResponse = await postAuthJson(current().app, "/magic-link/exchange", { body: { code }, ipAddress: "198.51.100.201" });
-    expect(exchangeResponse.status).toBe(200);
-    const payload = (await exchangeResponse.json()) as { user: { id: string } };
-    return { userId: payload.user.id, cookie: extractSessionCookie(exchangeResponse) };
-  };
-
-  beforeAll(async () => {
-    const recordLog = (...entries: unknown[]): void => {
-      capturedLogs.push(entries.map((entry) => (typeof entry === "string" ? entry : JSON.stringify(entry))).join(" "));
-    };
-    for (const method of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, method).mockImplementation(recordLog);
-    }
-    providerFetch = stubProviderFetch((url) => {
-      if (url !== "https://oauth2.googleapis.com/token" || !nextGoogleUser) {
-        return undefined;
-      }
-      const idToken = unsignedIdToken({
-        iss: "https://accounts.google.com",
-        aud: fakeGoogleConfig.clientId,
-        sub: nextGoogleUser.subject,
-        email: nextGoogleUser.email,
-        email_verified: nextGoogleUser.emailVerified,
-        name: "Test Grappler",
-        marker: fakeIdTokenMarker,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 600,
-      });
-      return Response.json({ access_token: fakeAccessToken, id_token: idToken, token_type: "Bearer", expires_in: 3600, scope: "openid email" });
-    });
-    environment = await startAuthTestEnvironment({ logger: { disabled: false, level: "debug" }, socialProviders: createFakeSocialProviderConfig() });
-  }, 60_000);
-
-  afterAll(async () => {
-    providerFetch?.restore();
-    vi.restoreAllMocks();
-    await environment?.stop();
-  }, 30_000);
+  const { current, capturedLogs, countRows, signInWithGoogle, exchangeForSession } = createGoogleSignInTestContext();
 
   it("creates an account for a new Google user who ticked the 16+ box, returning only a one-time code to the app", async () => {
     const usersBefore = await countRows("users");
     const { location, callbackResponse } = await signInWithGoogle(
       { subject: "google-sub-new", email: "new.google.member@example.com", emailVerified: true },
-      { additionalData: { age16Confirmed: true, age18Confirmed: true } },
+      { additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: true } },
     );
 
     expect(location.href.startsWith(`${DEEP_LINK_CALLBACK_URL}?`)).toBe(true);
@@ -135,20 +38,31 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect(accounts.rows).toEqual([{ provider_id: "google", access_token: null, id_token: null, refresh_token: null }]);
     // HEN-263: the same consent record as an email sign-up, with the 18+ answer sent by the app.
     const consent = await current().pool.query(
-      "SELECT consent_type, text_version_id, age16_confirmed, age18_confirmed FROM public.consent_records WHERE user_id = $1",
+      "SELECT consent_type, text_version_id, age16_confirmed, age18_confirmed FROM public.consent_records WHERE user_id = $1 ORDER BY consent_type",
       [userId],
     );
     expect(consent.rows).toEqual([
       { consent_type: "age_confirmation", text_version_id: AGE_CONFIRMATION_TEXT_VERSION_ID, age16_confirmed: true, age18_confirmed: true },
+      // HEN-183: and the sign-up attestation, with the text version the app showed.
+      { consent_type: "attestation_signup", text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id, age16_confirmed: null, age18_confirmed: null },
     ]);
   });
 
+  const ageRefusal = { error: "AGE_CONFIRMATION_REQUIRED", description: AGE_GATE_REFUSAL_MESSAGE };
+  const attestationRefusal = { error: "SIGN_UP_ATTESTATION_REQUIRED", description: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE };
   it.each([
-    { name: "no age answer", additionalData: undefined },
-    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
-    { name: "16+ as a string", additionalData: { age16Confirmed: "true" } },
-    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true } },
-  ])("refuses a new Google account with $name: error back to the app, no user or session", async ({ additionalData }) => {
+    { name: "no age answer", additionalData: undefined, refusal: ageRefusal },
+    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true }, refusal: ageRefusal },
+    { name: "16+ as a string", additionalData: { age16Confirmed: "true" }, refusal: ageRefusal },
+    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true }, refusal: ageRefusal },
+    // HEN-183: 16+ ticked is not enough; the current attestation text version is needed too.
+    { name: "16+ but no attestation", additionalData: { age16Confirmed: true }, refusal: attestationRefusal },
+    {
+      name: "16+ but an old attestation version",
+      additionalData: { age16Confirmed: true, signUpAttestationTextVersionId: "attestation-signup-draft-0" },
+      refusal: attestationRefusal,
+    },
+  ])("refuses a new Google account with $name: error back to the app, no user or session", async ({ additionalData, refusal }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions"), accounts: await countRows("accounts") };
     const { location } = await signInWithGoogle(
       { subject: "google-sub-refused", email: "refused.google.member@example.com", emailVerified: true },
@@ -156,15 +70,17 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     );
 
     expect(location.href.startsWith(`${DEEP_LINK_CALLBACK_URL}?`)).toBe(true);
-    expect(location.searchParams.get("error")).toBe("AGE_CONFIRMATION_REQUIRED");
+    expect(location.searchParams.get("error")).toBe(refusal.error);
     expect(location.searchParams.get("code")).toBeNull();
-    expect(location.searchParams.get("error_description")).toBe(AGE_GATE_REFUSAL_MESSAGE);
+    expect(location.searchParams.get("error_description")).toBe(refusal.description);
     expect({ users: await countRows("users"), sessions: await countRows("sessions"), accounts: await countRows("accounts") }).toEqual(before);
   });
 
   it("signs a returning Google user in again without asking the age question", async () => {
     const googleUser = { subject: "google-sub-returning", email: "returning.google.member@example.com", emailVerified: true };
-    const first = await signInWithGoogle(googleUser, { additionalData: { age16Confirmed: true, age18Confirmed: false } });
+    const first = await signInWithGoogle(googleUser, {
+      additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false },
+    });
     const { userId } = await exchangeForSession(first.location.searchParams.get("code") ?? "");
 
     const again = await signInWithGoogle(googleUser, {});
@@ -172,10 +88,28 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect((await exchangeForSession(again.location.searchParams.get("code") ?? "")).userId).toBe(userId);
   });
 
+  it("HEN-183: a returning Google user who ticks the duties gets a record at the current version (no second prompt)", async () => {
+    const googleUser = { subject: "google-sub-refresh", email: "refresh.google.member@example.com", emailVerified: true };
+    const ticked = { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false };
+    const { userId } = await exchangeForSession(
+      (await signInWithGoogle(googleUser, { additionalData: ticked })).location.searchParams.get("code") ?? "",
+    );
+    // An account made before HEN-183 has no attestation record.
+    await current().pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [userId]);
+
+    const again = await signInWithGoogle(googleUser, { additionalData: ticked });
+    expect((await exchangeForSession(again.location.searchParams.get("code") ?? "")).userId).toBe(userId);
+    const rows = await current().pool.query(
+      "SELECT text_version_id FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'",
+      [userId],
+    );
+    expect(rows.rows).toEqual([{ text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id }]);
+  });
+
   it("links Google to an existing email account when Google has verified the same address", async () => {
     const email = "email.first.member@example.com";
     const sendResponse = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in", age16Confirmed: true },
+      body: { email, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
       ipAddress: "198.51.100.202",
     });
     expect(sendResponse.status).toBe(200);
@@ -201,14 +135,14 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     const email = "unverified.clash@example.com";
     const first = await signInWithGoogle(
       { subject: "google-sub-owner", email, emailVerified: true },
-      { additionalData: { age16Confirmed: true, age18Confirmed: false } },
+      { additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false } },
     );
     const { userId: ownerId } = await exchangeForSession(first.location.searchParams.get("code") ?? "");
     const before = { users: await countRows("users"), accounts: await countRows("accounts") };
 
     const { location } = await signInWithGoogle(
       { subject: "google-sub-intruder", email, emailVerified: false },
-      { additionalData: { age16Confirmed: true, age18Confirmed: false } },
+      { additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false } },
     );
     expect(location.searchParams.get("code")).toBeNull();
     expect(location.searchParams.get("error")).toBe("account_not_linked");
@@ -223,7 +157,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
         provider: "google",
         callbackURL: "https://evil.example.com/steal",
         disableRedirect: true,
-        additionalData: { age16Confirmed: true, age18Confirmed: false },
+        additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false },
       },
       ipAddress: "198.51.100.203",
     });

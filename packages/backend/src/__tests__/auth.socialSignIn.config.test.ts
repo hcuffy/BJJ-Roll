@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createPublicKey, verify } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { readSocialSignUpAgeAnswers } from "../auth/ageGate.js";
@@ -110,12 +111,16 @@ describe("HEN-239 provider tokens at rest", () => {
 
 describe("HEN-239 age gate for social sign-up (16+, HEN-263)", () => {
   const ticked16 = { age16Confirmed: true, age18Confirmed: false };
+  const ticked16Answers = { ...ticked16, signUpAttestationTextVersionId: null };
 
   it("reads the 16+ and 18+ answers from the request (native token) or the OAuth state (browser), and from nowhere else", () => {
-    expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: ticked16 }, undefined)).toEqual({ social: true, answers: ticked16 });
+    expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: ticked16 }, undefined)).toEqual({
+      social: true,
+      answers: ticked16Answers,
+    });
     expect(readSocialSignUpAgeAnswers("/callback/apple", undefined, { age16Confirmed: true, age18Confirmed: true })).toEqual({
       social: true,
-      answers: { age16Confirmed: true, age18Confirmed: true },
+      answers: { age16Confirmed: true, age18Confirmed: true, signUpAttestationTextVersionId: null },
     });
     expect(readSocialSignUpAgeAnswers("/sign-in/social", {}, ticked16)).toEqual({ social: true, answers: null });
     expect(readSocialSignUpAgeAnswers("/callback/google", { additionalData: ticked16 }, undefined)).toEqual({ social: true, answers: null });
@@ -132,7 +137,20 @@ describe("HEN-239 age gate for social sign-up (16+, HEN-263)", () => {
   it("stores 18+ only when it is exactly true", () => {
     expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: { age16Confirmed: true, age18Confirmed: "true" } }, undefined)).toEqual({
       social: true,
-      answers: ticked16,
+      answers: ticked16Answers,
     });
+  });
+
+  it("HEN-183: reads the attestation text version id from the same place, and keeps it only when it is the current version", () => {
+    const attested = { ...ticked16, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+    expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: attested }, undefined)).toEqual({ social: true, answers: attested });
+    expect(readSocialSignUpAgeAnswers("/callback/google", undefined, attested)).toEqual({ social: true, answers: attested });
+    expect(
+      readSocialSignUpAgeAnswers(
+        "/sign-in/social",
+        { additionalData: { ...ticked16, signUpAttestationTextVersionId: "attestation-signup-draft-0" } },
+        undefined,
+      ),
+    ).toEqual({ social: true, answers: ticked16Answers });
   });
 });

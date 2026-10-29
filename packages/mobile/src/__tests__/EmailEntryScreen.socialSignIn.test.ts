@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
@@ -66,6 +67,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     expect(socialSignIn.browser.openAuthSessionAsync).not.toHaveBeenCalled();
 
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(screen.getPressable("Sign in with Google").props.accessibilityHint).toBeUndefined();
     await screen.press("Sign in with Google");
 
@@ -78,6 +80,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     const screen = await renderWith(["google"]);
 
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.press("I am 18 or older");
     await screen.press("Sign in with Google");
 
@@ -93,6 +96,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     const screen = await renderWith(["google"]);
 
     await screen.press("I am 16 or older");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.press("Sign in with Google");
 
     expect(screen.text()).toContain("We couldn't sign you in with Google. Sign in with your email instead.");

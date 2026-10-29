@@ -3,7 +3,7 @@ import { Client } from "pg";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { EMAIL_QUEUE_NAME, EmailSendError, FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
 import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 /** Records each try; `fail` makes every try throw after it is recorded. */
@@ -86,7 +86,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
   beforeAll(async () => {
     environment = await startAuthTestEnvironment({ emailSender, emailQueue: "pg-boss" });
     const { app } = environment;
-    expect((await postAuthJson(app, otpSendPath, { body: { email: knownEmail, type: "sign-in", age16Confirmed: true } })).status).toBe(200);
+    expect(
+      (await postAuthJson(app, otpSendPath, { body: { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation } }))
+        .status,
+    ).toBe(200);
     await vi.waitFor(() => expect(emailSender.sentMessages).toHaveLength(1), { timeout: 15_000, interval: 50 });
     const sent = emailSender.sentMessages.at(-1);
     const otp = sent?.kind === "one_time_code" ? sent.code : "";
@@ -101,8 +104,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
     "$name: same app SQL, same status, body and headers, and one stored job for every variant",
     async ({ path, extraBody }) => {
       const variants = {
-        known: await observeSend(path, { email: knownEmail, ...extraBody, age16Confirmed: true }),
-        unknown: await observeSend(path, { email: `same.work.queued.new.${path.length}@example.com`, ...extraBody, age16Confirmed: true }),
+        known: await observeSend(path, { email: knownEmail, ...extraBody, age16Confirmed: true, ...currentSignUpAttestation }),
+        unknown: await observeSend(path, {
+          email: `same.work.queued.new.${path.length}@example.com`,
+          ...extraBody,
+          age16Confirmed: true,
+          ...currentSignUpAttestation,
+        }),
         refused: await observeSend(path, { email: `same.work.queued.refused.${path.length}@example.com`, ...extraBody }),
         knownUnticked: await observeSend(path, { email: knownEmail, ...extraBody }),
       };
@@ -140,8 +148,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
       );
       const logBefore = environment?.emailQueueLogLines.length ?? 0;
       const sentBefore = emailSender.sentMessages.length;
-      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true });
-      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true });
+      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
+      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
       expect(known.status).toBe(200);
       expect(unknown.appQueries).toEqual(known.appQueries);
       expect({ status: unknown.status, body: unknown.body, headers: unknown.headers }).toEqual({
