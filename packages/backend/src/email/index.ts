@@ -3,6 +3,7 @@ export {
   renderAccountDeletedEmail,
   renderMagicLinkEmail,
   renderOneTimeCodeEmail,
+  type EmailIdempotency,
   type EmailSender,
   type EmailSendFailureReason,
   type OneTimeCodePurpose,
@@ -26,3 +27,20 @@ export {
   type LettermintEmailSenderConfig,
   type LettermintSendRequestBody,
 } from "./lettermintEmailSender.js";
+export {
+  EMAIL_QUEUE_EXPIRE_SECONDS,
+  EMAIL_QUEUE_NAME,
+  EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS,
+  EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS,
+  EMAIL_QUEUE_RETRY_DELAY_SECONDS,
+  EMAIL_QUEUE_RETRY_LIMIT,
+  isRetryableEmailError,
+  PgBossEmailQueue,
+  type EmailQueue,
+  type EmailQueueLogger,
+  type EmailQueueLogLine,
+  type EnqueueEmailOptions,
+  type PgBossEmailQueueOptions,
+  type QueuedEmail,
+  type StartEmailQueueOptions,
+} from "./emailQueue.js";

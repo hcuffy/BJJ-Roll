@@ -7,12 +7,11 @@ import { emailOTP, magicLink } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
-import type { EmailSender } from "../email/index.js";
+import type { EmailQueue, EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
 import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
-import { enqueueSignInEmail } from "./signInEmailQueue.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
 import {
   DEEP_LINK_SCHEME,
@@ -62,6 +61,8 @@ export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxy
 export interface CreateAuthOptions {
   readonly pool: Pool;
   readonly emailSender: EmailSender;
+  /** Sign-in emails go through this queue (HEN-284), so a send response never waits on the provider. */
+  readonly emailQueue: EmailQueue;
   readonly baseURL: string;
   readonly keyring?: Keyring;
   readonly env?: AuthSecretEnvironment;
@@ -94,6 +95,7 @@ export interface AuthInstance {
   /** Client IP for rate limiting, resolved the same way as for /api/auth/*. */
   readonly resolveClientIp: (headers: Headers, connection?: AuthConnectionInfo) => string;
   readonly emailSender: EmailSender;
+  readonly emailQueue: EmailQueue;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
   /**
    * Revokes a stored, sealed Apple refresh token (HEN-239, App Store rule 5.1.1(v)). Throws when Apple is not configured, the value
@@ -221,14 +223,14 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
             await options.emailSender.sendOneTimeCode({ ...input, purpose: "account_deletion" });
             return;
           }
-          enqueueSignInEmail(() => options.emailSender.sendOneTimeCode(input));
+          await options.emailQueue.enqueue({ kind: "one_time_code", input });
         },
       }),
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
         storeToken: { type: "custom-hasher", hash: (token) => Promise.resolve(codec.hashMagicLinkToken(token)) },
-        sendMagicLink: ({ email, url }) => {
-          enqueueSignInEmail(() => options.emailSender.sendMagicLink({ to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES }));
+        sendMagicLink: async ({ email, url }) => {
+          await options.emailQueue.enqueue({ kind: "magic_link", input: { to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES } });
         },
       }),
       createMagicLinkExchangePlugin({ pool: options.pool, codec }),
@@ -242,6 +244,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     accountDeletionAttempts: createAccountDeletionAttempts(options.pool),
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
+    emailQueue: options.emailQueue,
     telemetry: betterAuthTelemetryDisabledConfig,
     revokeAppleRefreshToken: async (sealedRefreshToken) => await revokeSealedAppleRefreshToken(appleSignIn, sealedRefreshToken),
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {

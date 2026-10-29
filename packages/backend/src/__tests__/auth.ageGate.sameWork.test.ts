@@ -1,21 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Client } from "pg";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
-import { EmailSendError, FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
+import { FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
 import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
 import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-/** Records each send when it starts; while `hold` is on, a send never finishes until `release()`; `fail` makes every try throw. */
+/** Records each send when it starts; while `hold` is on, a send never finishes until `release()`. */
 class HoldingEmailSender extends FakeEmailSender {
   hold = false;
-  fail = false;
   #releases: (() => void)[] = [];
 
   #wait(): Promise<void> {
-    if (this.fail) {
-      return Promise.reject(new EmailSendError("network"));
-    }
     return this.hold ? new Promise((resolve) => this.#releases.push(resolve)) : Promise.resolve();
   }
 
@@ -52,6 +48,7 @@ const sendPaths = [
 
 // Timing is shown by structure, not a stopwatch (Sara, 26 Oct): the same SQL in the same order, the same response, and the email
 // queued without waiting for it, for a known email, an unknown email, and a send whose sign-up will be refused (no 16+ tick).
+// This suite uses the inline test queue; the real pg-boss path is in auth.ageGate.sameWork.queued.test.ts (HEN-284).
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown and refused sends do the same work", () => {
   const emailSender = new HoldingEmailSender();
   let environment: StartedAuthTestEnvironment | undefined;
@@ -138,38 +135,4 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown a
     },
     30_000,
   );
-
-  it("with a failing provider, known and unknown sends match; the retries end in one PII-free log line each", async () => {
-    const lines: string[] = [];
-    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
-      lines.push(String(chunk));
-      return true;
-    });
-    emailSender.fail = true;
-    try {
-      const unknownEmail = "same.work.failing.new@example.com";
-      const sentBefore = emailSender.sentMessages.length;
-      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
-      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
-      expect(known.status).toBe(200);
-      expect(unknown.queries).toEqual(known.queries);
-      expect({ status: unknown.status, body: unknown.body, headers: unknown.headers }).toEqual({
-        status: known.status,
-        body: known.body,
-        headers: known.headers,
-      });
-
-      const failureLines = () => lines.filter((line) => line.includes("sign_in_email_failed"));
-      await vi.waitFor(() => expect(failureLines()).toHaveLength(2), { timeout: 10_000, interval: 100 });
-      expect(emailSender.sentMessages.length - sentBefore).toBe(6);
-      for (const line of failureLines()) {
-        expect(JSON.parse(line) as unknown).toEqual({ event: "sign_in_email_failed", reason: "network", attempts: 3 });
-        expect(line).not.toContain(knownEmail);
-        expect(line).not.toContain(unknownEmail);
-      }
-    } finally {
-      emailSender.fail = false;
-      writeSpy.mockRestore();
-    }
-  }, 30_000);
 });

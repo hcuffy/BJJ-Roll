@@ -93,6 +93,37 @@ describe("LettermintEmailSender request construction (HEN-43 AC 3)", () => {
     });
   });
 
+  it("sends the queue job key as the Idempotency-Key header, and only when one is given (HEN-284)", async () => {
+    const apiKey = generateTestApiKey();
+    const capturedRequests: CapturedRequest[] = [];
+    const sender = new LettermintEmailSender({
+      apiKey,
+      fromAddress: "no-reply@bjjroll.test",
+      fetchImplementation: (input, init) => {
+        capturedRequests.push({ url: extractRequestUrl(input), init });
+        return Promise.resolve(new Response(null, { status: 202 }));
+      },
+    });
+
+    await sender.sendOneTimeCode({ to: "athlete@example.com", code: "904127", expiresInMinutes: 10, idempotencyKey: "job-0001" });
+    await sender.sendMagicLink({
+      to: "athlete@example.com",
+      url: "bjjroll://auth/verify?code=exch_1",
+      expiresInMinutes: 15,
+      idempotencyKey: "job-0002",
+    });
+    await sender.sendAccountDeletedNotice({ to: "athlete@example.com", idempotencyKey: "job-0003" });
+    await sender.sendOneTimeCode({ to: "athlete@example.com", code: "904127", expiresInMinutes: 10 });
+
+    expect(capturedRequests.map((request) => (request.init?.headers as Record<string, string>)["Idempotency-Key"])).toEqual([
+      "job-0001",
+      "job-0002",
+      "job-0003",
+      undefined,
+    ]);
+    expect(capturedRequests[0]?.init?.body).not.toContain("job-0001");
+  });
+
   it("never exposes the API key when serialising the sender or rejecting invalid configuration", () => {
     const apiKey = generateTestApiKey();
     const sender = new LettermintEmailSender({
