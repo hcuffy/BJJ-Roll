@@ -207,8 +207,25 @@ export interface SessionKeyStore {
   readonly setItemAsync: (key: string, value: string) => Promise<void>;
 }
 
-/** Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286). */
+/**
+ * Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286).
+ * Holds the old session token, so a new sign-in can revoke that session on the server (HEN-299).
+ */
 export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
+/** Marker value when the old session token is unknown (no session cookie, or a marker written before HEN-299). */
+const PENDING_WITHOUT_SESSION_TOKEN = "1";
+
+/** Token of the stored session: the signed cookie value without its signature (`<token>.<signature>`). Null when there is none. */
+async function readSessionToken(client: MobileAuthClient): Promise<string | null> {
+  try {
+    const sessionCookie = (await client.getCookie()).split("; ").find((cookie) => cookie.split("=")[0]?.endsWith("session_token"));
+    const signedValue = decodeURIComponent(sessionCookie?.slice(sessionCookie.indexOf("=") + 1) ?? "");
+    const signatureStart = signedValue.lastIndexOf(".");
+    return signatureStart > 0 ? signedValue.slice(0, signatureStart) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function signOutOnServer(client: MobileAuthClient): Promise<boolean> {
   try {
@@ -232,12 +249,21 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
 /** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). Never rejects. */
 export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
   // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
-  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, "1").catch(() => undefined);
+  const sessionToken = await readSessionToken(client);
+  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, sessionToken ?? PENDING_WITHOUT_SESSION_TOKEN).catch(() => undefined);
   await finishSignOut(client, secureStore);
 }
 
-/** Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session. Never rejects. */
-export async function cancelPendingSignOut(secureStore: SessionKeyStore): Promise<void> {
+/**
+ * Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session.
+ * Best effort first revokes the old session by its token (never the new one), then always clears the marker. Never rejects.
+ */
+export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  const oldSessionToken = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
+  if (oldSessionToken !== null && oldSessionToken !== PENDING_WITHOUT_SESSION_TOKEN && oldSessionToken !== (await readSessionToken(client))) {
+    // A failed revoke (offline, server error) must not touch the new sign-in; nothing is logged, so the token never reaches a log.
+    await client.revokeSession({ token: oldSessionToken }).catch(() => undefined);
+  }
   await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
 }
 
