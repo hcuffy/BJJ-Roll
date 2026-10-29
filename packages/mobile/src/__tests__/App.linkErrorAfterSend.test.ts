@@ -107,7 +107,7 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
     deepLinkState.url = null;
     consoleCalls.length = 0;
     for (const method of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => consoleCalls.push(args));
+      vi.spyOn(console, method).mockImplementation((...callArguments: unknown[]) => consoleCalls.push(callArguments));
     }
     vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
   });
@@ -225,6 +225,15 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       unreachablePaths.delete("/magic-link/exchange");
       await openLink(screen, REJECTED_LINK);
       expectLinkErrorCardBetween(screen, "Code expires in", "Resend");
+    });
+
+    it("'Use a different email' drops the card, as on 'Check your email', so the form does not show it again", async () => {
+      const screen = await startOnCodeScreen();
+      await openLink(screen, REJECTED_LINK);
+      await screen.press("Use a different email");
+
+      expect(screen.text()).toContain("Sign in to BJJ Roll");
+      expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
     });
 
     it("screen reader: the card is announced once when it mounts", async () => {

@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { MobileAuthClient } from "../auth/authClient";
 import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode, type ActionResult } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { LinkErrorCard, type LinkErrorCardProps } from "./LinkErrorCard";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
@@ -18,11 +19,32 @@ export interface CodeEntryScreenProps {
   readonly email: string;
   /** The optional 18+ tick from the email screen; Resend sends it again so the latest send keeps it (HEN-263). */
   readonly age18Confirmed?: boolean;
+  /** A sign-in link opened on this screen failed (HEN-304): the form's card, in the red error slot, until the next attempt. */
+  readonly linkError?: string | null;
+  readonly linkErrorReason?: LinkErrorCardProps["reason"];
+  readonly onClearLinkError?: () => void;
+  /** A sign-in link opened on this screen failed on the network; shows the calm note. */
+  readonly serverUnreachable?: boolean;
+  readonly onClearServerUnreachable?: () => void;
+  /** Changes when an opened sign-in link failed: a new attempt, so this screen's own note and red errors go. */
+  readonly linkAttempt?: number;
   readonly onSignedIn: () => void;
   readonly onBack: () => void;
 }
 
-export function CodeEntryScreen({ client, email, age18Confirmed = false, onSignedIn, onBack }: CodeEntryScreenProps) {
+export function CodeEntryScreen({
+  client,
+  email,
+  age18Confirmed = false,
+  linkError = null,
+  linkErrorReason = null,
+  onClearLinkError,
+  serverUnreachable = false,
+  onClearServerUnreachable,
+  linkAttempt = 0,
+  onSignedIn,
+  onBack,
+}: CodeEntryScreenProps) {
   const [code, setCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -35,6 +57,22 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
   // so both handlers must see the latest digits and the in-flight request immediately.
   const latestCode = useRef("");
   const inFlight = useRef(false);
+
+  useEffect(() => {
+    setCodeError(null);
+    setFormError(null);
+    setOffline(false);
+  }, [linkAttempt]);
+
+  /** Every attempt starts clean: the last attempt's note and errors, and a failed link's card or note, go. */
+  const startAttempt = () => {
+    onClearLinkError?.();
+    onClearServerUnreachable?.();
+    setCodeError(null);
+    setFormError(null);
+    setNotice(null);
+    setOffline(false);
+  };
 
   const showFailure = (result: Extract<ActionResult, { ok: false }>) => {
     if (result.reason === "network") {
@@ -50,10 +88,7 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
     }
     inFlight.current = true;
     setIsVerifying(true);
-    setCodeError(null);
-    setFormError(null);
-    setNotice(null);
-    setOffline(false);
+    startAttempt();
     // The user ticked the 16+ box on the email screen; it is required to get here.
     const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true });
     inFlight.current = false;
@@ -69,10 +104,7 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
 
   const resend = async () => {
     setIsResending(true);
-    setCodeError(null);
-    setFormError(null);
-    setNotice(null);
-    setOffline(false);
+    startAttempt();
     const result = await sendEmailCode(client, { email, age16Confirmed: true, age18Confirmed, signUpAttestationAccepted: true });
     setIsResending(false);
     if (result.ok) {
@@ -117,7 +149,8 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
         }}
         onSubmitEditing={() => void verify(latestCode.current)}
       />
-      <ServerUnreachableNote visible={offline} />
+      <ServerUnreachableNote visible={serverUnreachable || offline} />
+      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
