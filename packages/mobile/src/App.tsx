@@ -14,15 +14,8 @@ import {
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import {
-  cancelPendingSignOut,
-  completeMagicLink,
-  type FailureReason,
-  finishPendingSignOut,
-  readSignedInUserId,
-  signOut,
-  withStartupTimeout,
-} from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
+import { withStartupTimeout } from "./auth/startupTimeout";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { LoadingScreen } from "./screens/LoadingScreen";
@@ -100,8 +93,8 @@ export function App() {
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignedIn = () => {
-    // A new sign-in cancels a sign-out left to finish; if that fails the user still gets in.
-    void cancelPendingSignOut(appSecureStore);
+    // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
+    void cancelPendingSignOut(appAuthClient, appSecureStore);
     setScreen({ name: "signedIn" });
   };
 

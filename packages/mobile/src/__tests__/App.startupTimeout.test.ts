@@ -18,7 +18,8 @@ vi.mock("../auth/appAuthClient", () => ({
 }));
 
 const { App } = await import("../App");
-const { STARTUP_REQUEST_TIMEOUT_MS, PENDING_SIGN_OUT_KEY } = await import("../auth/signInActions");
+const { PENDING_SIGN_OUT_KEY } = await import("../auth/signInActions");
+const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
@@ -36,6 +37,8 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
   let hangMode: HangMode;
   /** Late answers held back in "answersLate" mode; releasing them delivers the real backend response. */
   let lateAnswers: (() => void)[];
+  /** Hanging requests the app aborted at its deadline. */
+  let abortedRequests: number;
   let signOutEndpointDown: boolean;
   let renderedScreens: string[] = [];
   const unhandledRejections: unknown[] = [];
@@ -48,7 +51,10 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
         lateAnswers.push(() => void backend.fetchImplementation(input, init).then(resolve, reject));
         return;
       }
-      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      init?.signal?.addEventListener("abort", () => {
+        abortedRequests += 1;
+        reject(new DOMException("Aborted", "AbortError"));
+      });
     });
 
   const launchApp = async () => {
@@ -114,6 +120,7 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
     hangingPaths = new Set();
     hangMode = "untilAborted";
     lateAnswers = [];
+    abortedRequests = 0;
     signOutEndpointDown = false;
     deepLinkState.url = null;
     unhandledRejections.length = 0;
@@ -149,6 +156,8 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
       await expectLoadingEndsAtTimeout(screen);
 
       expectCalmOfflineNote(screen);
+      // The retry presents the old session cookie (HEN-299) and that request is aborted at the deadline.
+      expect(abortedRequests).toBe(1);
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(true);
       // The next launch with a reachable server finishes it.
       hangingPaths.clear();
@@ -172,6 +181,26 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
       expectCalmOfflineNote(screen);
       expect(renderedScreens.slice(screensAtTimeout).every((text) => text === renderedScreens[screensAtTimeout - 1])).toBe(true);
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(true);
+    });
+
+    it("ending an older session left by a sign-in (HEN-299) times out: the marker stays even if the server answers late", async () => {
+      await signIn(await launchApp());
+      const olderSessionMarker = "better-auth.session_token=older-session.signature";
+      await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, olderSessionMarker);
+      hangingPaths.add("/sign-out");
+      hangMode = "answersLate";
+
+      const screen = await launchApp();
+      await expectLoadingEndsAtTimeout(screen);
+      lateAnswers.forEach((answer) => answer());
+      await settle();
+
+      expectCalmOfflineNote(screen);
+      expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toBe(olderSessionMarker);
+      // The stored session was never touched: a reachable launch ends the older one and keeps the user signed in.
+      hangingPaths.clear();
+      expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
+      expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);
     });
   });
 

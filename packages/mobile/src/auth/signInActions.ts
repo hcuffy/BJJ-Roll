@@ -209,11 +209,44 @@ export interface SessionKeyStore {
   readonly setItemAsync: (key: string, value: string) => Promise<void>;
 }
 
-/** Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286). */
+/**
+ * Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286).
+ * Holds the old session cookie (`<name>=<token>.<signature>`), so that session can be ended on the server by presenting
+ * the cookie itself, at the launch retry or at the next sign-in, for any account (HEN-299).
+ */
 export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
+/** Marker value when the old session cookie is unknown (no session cookie, or a marker written before HEN-299). */
+const PENDING_WITHOUT_SESSION_COOKIE = "1";
 
-async function signOutOnServer(client: MobileAuthClient, signal?: AbortSignal): Promise<boolean> {
+/** The stored session cookie pair, as the server needs it to end that session. Null when there is none. */
+async function readSessionCookie(client: MobileAuthClient): Promise<string | null> {
   try {
+    return (await client.getCookie()).split("; ").find((cookie) => cookie.split("=")[0]?.endsWith("session_token")) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The old session cookie a marker holds; null for a marker without one. */
+function oldSessionCookieOf(marker: string): string | null {
+  return marker.includes("=") ? marker : null;
+}
+
+/** One server sign-out: the old session cookie to present (null: the stored session), and a signal that aborts it on a startup timeout (HEN-303). */
+interface SignOutAttempt {
+  readonly oldSessionCookie: string | null;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * True only when the server confirmed the session is over. With an old cookie it presents that cookie, never the stored one.
+ * Without one it falls back to the stored session (markers that hold no cookie).
+ */
+async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, signal }: SignOutAttempt): Promise<boolean> {
+  try {
+    if (oldSessionCookie !== null) {
+      return await client.signOutSessionCookie(oldSessionCookie, signal);
+    }
     const { error } = await client.signOut({ fetchOptions: { signal } });
     return !error;
   } catch {
@@ -223,10 +256,10 @@ async function signOutOnServer(client: MobileAuthClient, signal?: AbortSignal): 
 }
 
 /** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
-async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
-  const serverSignedOut = await signOutOnServer(client, signal);
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: SignOutAttempt): Promise<void> {
+  const serverSignedOut = await signOutOnServer(client, attempt);
   // Timed out: leave keys and marker as they are, so a late answer cannot touch a session made since; the next launch retries (HEN-303).
-  if (signal?.aborted) {
+  if (attempt.signal?.aborted) {
     return;
   }
   const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
@@ -235,55 +268,68 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
   }
 }
 
-/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). Never rejects. */
-export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
-  // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
-  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, "1").catch(() => undefined);
-  await finishSignOut(client, secureStore);
+/**
+ * The marker belongs to a session older than the one now stored (a sign-in came after it): end that old session only.
+ * The marker is cleared once the server confirmed; otherwise it stays for the next launch. The stored session is never sent.
+ */
+async function revokeOldSession(
+  client: MobileAuthClient,
+  secureStore: SessionKeyStore,
+  attempt: SignOutAttempt & { readonly oldSessionCookie: string },
+): Promise<void> {
+  // Failures are ignored silently and never logged, so the cookie never reaches a log.
+  const confirmed = await signOutOnServer(client, attempt);
+  // Timed out: keep the marker, so a late answer cannot clear a marker written since; the next launch retries (HEN-303).
+  if (confirmed && !attempt.signal?.aborted) {
+    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+  }
 }
 
-/** Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session. Never rejects. */
-export async function cancelPendingSignOut(secureStore: SessionKeyStore): Promise<void> {
-  await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+/** Signs out on the server, then deletes the session from SecureStore (also when the server cannot be reached). Never rejects. */
+export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  // An older session still waiting to be ended gets one more try before its marker is replaced.
+  await cancelPendingSignOut(client, secureStore);
+  // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
+  const sessionCookie = await readSessionCookie(client);
+  await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
+  await finishSignOut(client, secureStore, { oldSessionCookie: sessionCookie });
+}
+
+/**
+ * Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session.
+ * Ends the old session by its own cookie (never the new one, any account). Without a confirmed end the marker stays and the
+ * next launch retries it; the new session is not signed out for that. Never rejects and never blocks the sign-in.
+ */
+export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
+  const marker = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
+  if (marker === null) {
+    return;
+  }
+  const oldSessionCookie = oldSessionCookieOf(marker);
+  if (oldSessionCookie === null || oldSessionCookie === (await readSessionCookie(client))) {
+    // Nothing to end, or it is the session now in use.
+    await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
+    return;
+  }
+  await revokeOldSession(client, secureStore, { oldSessionCookie });
 }
 
 /**
  * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
  * so the user stays signed out on this launch even if the retry fails again.
+ * A marker left by an earlier sign-in (a newer session is stored) only ends the old session; false, the user stays signed in.
  */
 export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
-  const pending = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
-  if (pending === null) {
+  const marker = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
+  if (marker === null) {
     return false;
   }
-  await finishSignOut(client, secureStore, signal);
-  return true;
-}
-
-/** How long each startup request (sign-out retry, session read, link exchange) may take; React Native's fetch has no timeout (HEN-303). */
-export const STARTUP_REQUEST_TIMEOUT_MS = 10_000;
-
-/** Thrown by withStartupTimeout; the app treats it like an unreachable server. */
-class StartupTimeoutError extends Error {
-  override readonly name = "StartupTimeoutError";
-}
-
-/**
- * Runs one startup step with a deadline: after STARTUP_REQUEST_TIMEOUT_MS it rejects and aborts the step's requests.
- * An answer that arrives later is ignored, so the screen changes once.
- */
-export async function withStartupTimeout<T>(step: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new StartupTimeoutError("Startup request timed out"));
-      controller.abort();
-    }, STARTUP_REQUEST_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([step(controller.signal), deadline]);
-  } finally {
-    clearTimeout(timer);
+  const oldSessionCookie = oldSessionCookieOf(marker);
+  const storedSessionCookie = await readSessionCookie(client);
+  if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
+    await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
+    return false;
   }
+  await finishSignOut(client, secureStore, { oldSessionCookie, signal });
+  return true;
 }
