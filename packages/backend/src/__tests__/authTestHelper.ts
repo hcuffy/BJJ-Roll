@@ -12,7 +12,8 @@ import {
   type AuthInstance,
   type CreateAuthOptions,
 } from "../auth/index.js";
-import { FakeEmailSender } from "../email/index.js";
+import { FakeEmailSender, type EmailQueueLogLine, PgBossEmailQueue } from "../email/index.js";
+import { InlineEmailQueue } from "./inlineEmailQueue.js";
 import { createAppRoleLoginPool, startMigratedTestDatabase, type AppRoleLoginPool, type MigratedTestDatabase } from "./databaseTestHarness.js";
 
 export const testBaseUrl = "http://localhost:3000";
@@ -31,6 +32,8 @@ export interface StartedAuthTestEnvironment {
   app: Hono;
   auth: AuthInstance;
   emailSender: FakeEmailSender;
+  /** Dead-letter log lines of the real queue; always empty with the inline one. */
+  emailQueueLogLines: EmailQueueLogLine[];
   codec: AuthCryptoCodec;
   stop: () => Promise<void>;
 }
@@ -38,6 +41,8 @@ export interface StartedAuthTestEnvironment {
 export async function startAuthTestEnvironment(
   overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger" | "socialProviders" | "logAuthEvent">> & {
     emailSender?: FakeEmailSender;
+    /** "inline" (default) sends at once without waiting; "pg-boss" runs the real HEN-284 queue on the test database. */
+    emailQueue?: "inline" | "pg-boss";
   },
 ): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
@@ -45,10 +50,23 @@ export async function startAuthTestEnvironment(
   const secrets = generateTestAuthSecrets();
   const keyring = loadAuthKeyringFromEnvironment(secrets);
   const codec = createAuthCryptoCodec(keyring);
-  const { emailSender = new FakeEmailSender(), ...authOverrides } = overrides ?? {};
+  const { emailSender = new FakeEmailSender(), emailQueue: queueKind = "inline", ...authOverrides } = overrides ?? {};
+  const emailQueueLogLines: EmailQueueLogLine[] = [];
+  const pgBossQueue =
+    queueKind === "pg-boss"
+      ? new PgBossEmailQueue({
+          connectionString: database.connectionString,
+          emailSender,
+          keyring,
+          pollingIntervalSeconds: 0.5,
+          logEvent: (line) => emailQueueLogLines.push(line),
+        })
+      : undefined;
+  await pgBossQueue?.start();
   const auth = createAuth({
     pool: appLogin.pool,
     emailSender,
+    emailQueue: pgBossQueue ?? new InlineEmailQueue(emailSender),
     keyring,
     baseURL: testBaseUrl,
     ...authOverrides,
@@ -62,8 +80,10 @@ export async function startAuthTestEnvironment(
     app,
     auth,
     emailSender,
+    emailQueueLogLines,
     codec,
     stop: async () => {
+      await pgBossQueue?.stop();
       await appLogin.stop();
       await database.stop();
     },

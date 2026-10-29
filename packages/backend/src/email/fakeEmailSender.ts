@@ -11,6 +11,8 @@ import {
 } from "./emailSender.js";
 
 export interface FakeSentOneTimeCodeMessage {
+  /** The provider idempotency key the queue passed, when there was one. */
+  idempotencyKey?: string;
   kind: "one_time_code";
   to: string;
   code: string;
@@ -21,6 +23,8 @@ export interface FakeSentOneTimeCodeMessage {
 }
 
 export interface FakeSentMagicLinkMessage {
+  /** The provider idempotency key the queue passed, when there was one. */
+  idempotencyKey?: string;
   kind: "magic_link";
   to: string;
   url: string;
@@ -30,6 +34,8 @@ export interface FakeSentMagicLinkMessage {
 }
 
 export interface FakeSentAccountDeletedMessage {
+  /** The provider idempotency key the queue passed, when there was one. */
+  idempotencyKey?: string;
   kind: "account_deleted";
   to: string;
   subject: string;
@@ -62,6 +68,7 @@ export class FakeEmailSender implements EmailSender {
         code: input.code,
         expiresInMinutes: input.expiresInMinutes,
         ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
+        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
         subject: rendered.subject,
         text: rendered.text,
       });
@@ -79,6 +86,7 @@ export class FakeEmailSender implements EmailSender {
         to: input.to.trim(),
         url: input.url,
         expiresInMinutes: input.expiresInMinutes,
+        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
         subject: rendered.subject,
         text: rendered.text,
       });
@@ -91,7 +99,13 @@ export class FakeEmailSender implements EmailSender {
   sendAccountDeletedNotice(input: SendAccountDeletedNoticeInput): Promise<void> {
     try {
       const rendered = renderAccountDeletedEmail(input);
-      this.#sentMessages.push({ kind: "account_deleted", to: input.to.trim(), subject: rendered.subject, text: rendered.text });
+      this.#sentMessages.push({
+        kind: "account_deleted",
+        to: input.to.trim(),
+        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+        subject: rendered.subject,
+        text: rendered.text,
+      });
       return Promise.resolve();
     } catch (error) {
       return Promise.reject(error instanceof Error ? error : new EmailSendError("configuration"));

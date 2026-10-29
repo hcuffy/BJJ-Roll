@@ -98,7 +98,11 @@ export async function handleDeleteAccount(context: Context, options: AccountRout
   }
   options.logAccountEvent("account_deleted", userId);
   try {
-    await options.emailSender.sendAccountDeletedNotice({ to: capturedEmail });
+    // Queued (HEN-284): retried on its own, and the user id key stops a second notice for the same account.
+    await options.emailQueue.enqueue(
+      { kind: "account_deleted_notice", input: { to: capturedEmail } },
+      { idempotencyKey: `account-deleted:${userId}` },
+    );
   } catch (error) {
     options.logAccountEvent("account_deletion_email_failed", userId, { reason: error instanceof EmailSendError ? error.reason : "unknown" });
   }

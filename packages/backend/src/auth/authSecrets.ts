@@ -47,6 +47,8 @@ export interface AuthCryptoCodec {
   hashMagicLinkToken(token: string): string;
   hashExchangeCode(code: string): string;
   hashSessionToken(token: string): string;
+  /** Keyed id for an email queue job, so the same request maps to the same job without the job id revealing what it is for (HEN-284). */
+  hashEmailQueueJobKey(jobKey: string): string;
 }
 
 const HEX_KEY_PATTERN = /^[0-9a-fA-F]{64}$/u;
@@ -212,6 +214,9 @@ export function createAuthCryptoCodec(keyringOrConfig: Keyring | AuthSecretConfi
     },
     hashSessionToken(token: string): string {
       return computeDomainSeparatedHmac(keyring, "session-token-v1", token);
+    },
+    hashEmailQueueJobKey(jobKey: string): string {
+      return computeDomainSeparatedHmac(keyring, "email-queue-job-v1", jobKey);
     },
   };
 }
