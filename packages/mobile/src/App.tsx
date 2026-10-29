@@ -141,7 +141,8 @@ export function App() {
             onSignOut={handleSignOut}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
-            onAccountDeleted={handleAccountDeleted}>
+            onAccountDeleted={handleAccountDeleted}
+            onExportData={() => exportAccountData(accountSession())}>
             <SignedInScreen
               onSignOut={handleSignOut}
               onExportData={() => exportAccountData(accountSession())}
