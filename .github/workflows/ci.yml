@@ -56,6 +56,15 @@ jobs:
           pnpm --filter @bjj-roll/frontend build
       - name: Lint
         run: pnpm lint
+      - name: Modal EU residency guard (HEN-227)
+        run: |
+          sh scripts/checkModalResidency.test.sh
+          sh scripts/checkModalResidency.sh
+      # The Modal image pins Python 3.13 while the repo pins 3.15, so the Modal-side code must still compile on 3.13.
+      # Syntax only: nothing is installed, so `modal` is never imported.
+      - name: Modal code compiles on Python 3.13 (HEN-227)
+        working-directory: packages/workers
+        run: uv run --no-project --python 3.13 python -m compileall -q src/bjj_roll_workers tests/test_modal_app_eu_residency.py tests/test_modal_call_input_rejects_user_data.py
       # No outside payment, tip or donation links in the mobile app (HEN-278; lists and docs in docs/release.md).
       - name: Payment link guard (mobile)
         run: pnpm --filter @bjj-roll/mobile run payment-guard

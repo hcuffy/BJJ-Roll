@@ -10,7 +10,7 @@ import { authStyles } from "./authStyles";
 export interface DeleteAccountConfirmStepProps {
   /** The caller moves screen-reader focus here when the step opens (it acts as a dialog). */
   readonly headingRef: Ref<ComponentRef<typeof Text>>;
-  /** The signed-in screen's "Export my data first" and its error; the gate offers none (waits on Henry, Vera Q3). */
+  /** "Export my data first" and its error (ExportDataFirstAction); the gate offers it too, as export is not attestation-gated (HEN-308). */
   readonly exportAction?: ReactNode;
   readonly codeRequestError: string | null;
   /** The grey "can't reach the server" note instead of a red error (the gate, Vera #74 round 4). */

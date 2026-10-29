@@ -3,6 +3,7 @@ import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { LinkErrorCard, type LinkErrorCardProps } from "./LinkErrorCard";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
@@ -11,6 +12,9 @@ import { formatCountdown } from "./useCountdown";
 export interface LinkSentScreenProps {
   readonly email: string;
   readonly notice: string | null;
+  /** A sign-in link opened on this view failed (HEN-304); shown as the form's card in the red error slot. */
+  readonly linkError: string | null;
+  readonly linkErrorReason: LinkErrorCardProps["reason"];
   readonly offline: boolean;
   readonly formError: string | null;
   readonly cooldownSecondsLeft: number;
@@ -40,6 +44,7 @@ export function LinkSentScreen(props: LinkSentScreenProps) {
         </View>
       </View>
       <ServerUnreachableNote visible={offline} />
+      {props.linkError ? <LinkErrorCard message={props.linkError} reason={props.linkErrorReason} /> : null}
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
