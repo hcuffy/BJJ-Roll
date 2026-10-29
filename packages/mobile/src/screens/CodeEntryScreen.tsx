@@ -14,7 +14,7 @@ import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCou
 
 const CODE_LENGTH = 6;
 /** The code screen's link-error copy: the code is still a way in here (CTO decision, HEN-304). */
-export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter your code below, or send a new one.";
+export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter the code from your email, or send a new one.";
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
