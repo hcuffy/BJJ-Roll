@@ -43,6 +43,8 @@ export async function startAuthTestEnvironment(
     emailSender?: FakeEmailSender;
     /** "inline" (default) sends at once without waiting; "pg-boss" runs the real HEN-284 queue on the test database. */
     emailQueue?: "inline" | "pg-boss";
+    /** pg-boss only: false stores jobs but runs no worker, so nothing is sent and no job row is deleted. Default true. */
+    emailQueueWorker?: boolean;
   },
 ): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
@@ -50,7 +52,7 @@ export async function startAuthTestEnvironment(
   const secrets = generateTestAuthSecrets();
   const keyring = loadAuthKeyringFromEnvironment(secrets);
   const codec = createAuthCryptoCodec(keyring);
-  const { emailSender = new FakeEmailSender(), emailQueue: queueKind = "inline", ...authOverrides } = overrides ?? {};
+  const { emailSender = new FakeEmailSender(), emailQueue: queueKind = "inline", emailQueueWorker = true, ...authOverrides } = overrides ?? {};
   const emailQueueLogLines: EmailQueueLogLine[] = [];
   const pgBossQueue =
     queueKind === "pg-boss"
@@ -62,7 +64,7 @@ export async function startAuthTestEnvironment(
           logEvent: (line) => emailQueueLogLines.push(line),
         })
       : undefined;
-  await pgBossQueue?.start();
+  await pgBossQueue?.start({ worker: emailQueueWorker });
   const auth = createAuth({
     pool: appLogin.pool,
     emailSender,
