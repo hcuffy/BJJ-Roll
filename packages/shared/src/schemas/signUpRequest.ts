@@ -12,7 +12,7 @@ export const AGE_CONFIRMATION_TEXT_VERSION_ID = "age-confirmation-v1";
 
 /** HEN-263: a failed magic link opens `bjjroll://auth?r=<reason>` with a fixed code only; the app shows its own copy for each code. */
 export const MAGIC_LINK_REASON_PARAM = "r";
-export const MAGIC_LINK_REASONS = { ageRefused: "age_refused", linkInvalid: "link_invalid" } as const;
+export const MAGIC_LINK_REASONS = { ageRefused: "age_refused", attestationRefused: "attestation_refused", linkInvalid: "link_invalid" } as const;
 export type MagicLinkReason = (typeof MAGIC_LINK_REASONS)[keyof typeof MAGIC_LINK_REASONS];
 
 export const age16ConfirmedSchema = z.literal(true, { error: AGE_GATE_REFUSAL_MESSAGE });

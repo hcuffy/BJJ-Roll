@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_TEXT_VERSION, type SignUpAttestationTextVersion } from "@bjj-roll/shared";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { loadSocialProviderConfig, type SocialProviderConfig } from "./auth/socialProviders.js";
 import { loadAuthKeyringFromEnvironment, TRUSTABLE_PROXY_IP_HEADERS, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
@@ -21,6 +22,13 @@ export interface ServerConfig {
   readonly port: number;
   /** HEN-239: Google is required; Apple stays off until all its variables are set (Henry's Apple developer account). */
   readonly socialProviders: SocialProviderConfig;
+  /** HEN-183: the sign-up attestation text version new records store. Never a draft in production. */
+  readonly signUpAttestationTextVersionId: string;
+}
+
+export interface LoadServerConfigOptions {
+  /** Tests only: stands in for the shipped SIGN_UP_ATTESTATION_TEXT_VERSION. */
+  readonly signUpAttestationTextVersion?: SignUpAttestationTextVersion;
 }
 
 /** Errors name the variable only; values are never echoed. */
@@ -49,7 +57,11 @@ function parseTrustedProxyIpHeaders(raw: string | undefined): TrustableProxyIpHe
  * Reads and validates everything the server needs at startup, so a misconfigured deploy fails before
  * listening. Both auth secrets are decoded and checked here (length, distinctness).
  */
-export function loadServerConfig(env: ServerEnvironment): ServerConfig {
+export function loadServerConfig(env: ServerEnvironment, options: LoadServerConfigOptions = {}): ServerConfig {
+  const signUpAttestationTextVersion = options.signUpAttestationTextVersion ?? SIGN_UP_ATTESTATION_TEXT_VERSION;
+  if (env.NODE_ENV === "production" && signUpAttestationTextVersion.isDraft) {
+    throw new Error(`Sign-up attestation text version ${signUpAttestationTextVersion.id} is a draft; production needs a lawyer-reviewed version`);
+  }
   const keyring = loadAuthKeyringFromEnvironment(env);
   const authBaseUrl = requireVariable(env, AUTH_BASE_URL_ENV);
   if (!URL.canParse(authBaseUrl)) {
@@ -70,5 +82,6 @@ export function loadServerConfig(env: ServerEnvironment): ServerConfig {
     trustedProxyIpHeaders: parseTrustedProxyIpHeaders(env[AUTH_TRUSTED_PROXY_IP_HEADERS_ENV]),
     port,
     socialProviders,
+    signUpAttestationTextVersionId: signUpAttestationTextVersion.id,
   };
 }

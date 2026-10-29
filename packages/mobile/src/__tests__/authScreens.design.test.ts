@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement, type ReactElement } from "react";
 import { Platform } from "react-native";
 import { afterEach, describe, expect, it } from "vitest";
@@ -47,6 +48,7 @@ const screens: [string, () => ReactElement][] = [
 const renderReadyEmailEntry = async () => {
   const screen = await renderScreen(emailEntry());
   await screen.pressRole("checkbox");
+  await screen.press(SIGN_UP_ATTESTATION_LABEL);
   await screen.changeText("Email", "member@example.test");
   return screen;
 };
@@ -183,6 +185,7 @@ describe("email entry design details", () => {
     expect(flattenStyle(box()?.props.style)).toMatchObject({ height: 24, borderWidth: 2, borderColor: colours.textSecondary });
 
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(flattenStyle(box()?.props.style)).toMatchObject({ backgroundColor: colours.primary, borderColor: colours.primary });
     const tick = box()?.children.find((child) => typeof child !== "string" && child.type === "Text");
     expect(tick && typeof tick !== "string" && flattenStyle(tick.props.style).color).toBe(colours.onPrimary);
@@ -192,6 +195,7 @@ describe("email entry design details", () => {
     const screen = await renderScreen(emailEntry());
     expect(screen.getByRole("checkbox").props.accessibilityLabel).toBe("I am 16 or older");
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     const tick = screen.findAllByType("Text").find((text) => textOf(text) === "✓");
     expect(tick?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });
   });

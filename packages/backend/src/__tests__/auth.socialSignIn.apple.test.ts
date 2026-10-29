@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, APPLE_REVOKE_ENDPOINT, APPLE_TOKEN_ENDPOINT, openAppleRefreshToken } from "../auth/index.js";
 import { createAccountTestFlow, type SignedInUser } from "./accountTestFlow.js";
@@ -10,6 +10,7 @@ import {
   postAuthJson,
   startAuthTestEnvironment,
   type StartedAuthTestEnvironment,
+  currentSignUpAttestation,
 } from "./authTestHelper.js";
 import { createFakeAppleIdentityTokenSigner, createFakeSocialProviderConfig, stubProviderFetch } from "./socialSignInTestDoubles.js";
 
@@ -74,7 +75,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     const response = await signInWithApple({
       subject: `apple-sub-${randomUUID()}`,
       email,
-      additionalData: { age16Confirmed: true, age18Confirmed: false, appleAuthorizationCode: "fake-apple-code" },
+      additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false, appleAuthorizationCode: "fake-apple-code" },
       ipAddress,
     });
     expect(response.status).toBe(200);
@@ -147,11 +148,22 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     expect(rawDump).not.toContain("fake-apple-access");
   });
 
+  const ageRefusal = { code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE };
+  const attestationRefusal = { code: "SIGN_UP_ATTESTATION_REQUIRED", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE };
+  const ticked16 = { age16Confirmed: true, age18Confirmed: false };
   it.each([
-    { name: "no age answer", additionalData: undefined },
-    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true } },
-    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true } },
-  ])("refuses a new Apple account with $name and leaves no user or session", async ({ additionalData }) => {
+    { name: "no age answer", additionalData: undefined, refusal: ageRefusal },
+    { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true }, refusal: ageRefusal },
+    { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true }, refusal: ageRefusal },
+    // HEN-183: 16+ ticked is not enough; the current attestation text version is needed too.
+    { name: "16+ but no attestation", additionalData: ticked16, refusal: attestationRefusal },
+    {
+      name: "16+ but an old attestation version",
+      additionalData: { ...ticked16, signUpAttestationTextVersionId: "attestation-signup-draft-0" },
+      refusal: attestationRefusal,
+    },
+    { name: "16+ but a boolean attestation", additionalData: { ...ticked16, signUpAttestationTextVersionId: true }, refusal: attestationRefusal },
+  ])("refuses a new Apple account with $name and leaves no user or session", async ({ additionalData, refusal }) => {
     const before = { users: await countRows("users"), sessions: await countRows("sessions") };
     const response = await signInWithApple({
       subject: "apple-sub-refused",
@@ -161,9 +173,18 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     });
 
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { message?: string }).message).toBe(AGE_GATE_REFUSAL_MESSAGE);
+    expect(await response.json()).toMatchObject(refusal);
     expect(extractSessionCookie(response)).toBe("");
     expect({ users: await countRows("users"), sessions: await countRows("sessions") }).toEqual(before);
+  });
+
+  it("HEN-183: stores the sign-up attestation with its text version when a new Apple account is created", async () => {
+    const user = await signUpWithApple("attested.apple.member@example.com", "198.51.100.215");
+    const rows = await current().pool.query(
+      "SELECT text_version_id FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'",
+      [user.userId],
+    );
+    expect(rows.rows).toEqual([{ text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id }]);
   });
 
   it("rejects an identity token not signed by Apple's key", async () => {
@@ -172,7 +193,11 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     const forged = `${unsignedPart}.${Buffer.from("forged").toString("base64url")}`;
     const usersBefore = await countRows("users");
     const response = await postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken: { token: forged, nonce }, additionalData: { age16Confirmed: true, age18Confirmed: false } },
+      body: {
+        provider: "apple",
+        idToken: { token: forged, nonce },
+        additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false },
+      },
       ipAddress: "198.51.100.212",
     });
     expect(response.status).toBe(401);
@@ -184,7 +209,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
       const response = await signInWithApple({
         subject: "apple-sub-no-code",
         email: "no.code.apple@example.com",
-        additionalData: { age16Confirmed: true, age18Confirmed: false },
+        additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false },
         ipAddress: "198.51.100.213",
       });
       expect(response.status).toBe(200);

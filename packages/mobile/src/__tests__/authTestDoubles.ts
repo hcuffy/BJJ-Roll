@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { vi } from "vitest";
 
 export const TEST_BACKEND_URL = "http://backend.test";
@@ -81,9 +82,21 @@ export const TEST_PROVIDER_AUTHORIZATION_URL = "https://provider.example.test/au
 
 /** Fake backend: sign-in endpoints set a session cookie; get-session answers only when that cookie is sent. */
 /** `nativeSignInRefusal`: how the backend answers a native (id token) social sign-in instead of signing in. */
-export function createFakeBackend(options: { nativeSignInRefusal?: { status: number; body: unknown } } = {}) {
+export interface FakeBackendOptions {
+  readonly nativeSignInRefusal?: { status: number; body: unknown };
+  /** How the backend answers POST /sign-in/email-otp instead of signing in. */
+  readonly emailOtpRefusal?: { status: number; body: unknown };
+  /** The attestation version the signed-in fake user accepted (HEN-183); defaults to the current one. */
+  readonly signUpAttestationAcceptedVersion?: string | null;
+  /** GET /account/signup-attestation answers with a body the app cannot parse. */
+  readonly signUpAttestationBadPayload?: boolean;
+}
+
+export function createFakeBackend(options: FakeBackendOptions = {}) {
   const requests: RecordedRequest[] = [];
   let adultConfirmed = false;
+  let acceptedAttestation =
+    options.signUpAttestationAcceptedVersion === undefined ? SIGN_UP_ATTESTATION_TEXT_VERSION.id : options.signUpAttestationAcceptedVersion;
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const bodyText = request.method === "GET" ? "" : await request.text();
@@ -105,6 +118,9 @@ export function createFakeBackend(options: { nativeSignInRefusal?: { status: num
       }
       return jsonResponse({ url: `${TEST_PROVIDER_AUTHORIZATION_URL}&provider=${String(body?.provider)}`, redirect: false });
     }
+    if (pathname.endsWith("/sign-in/email-otp") && options.emailOtpRefusal) {
+      return jsonResponse(options.emailOtpRefusal.body, {}, options.emailOtpRefusal.status);
+    }
     if (pathname.endsWith("/sign-in/email-otp") || pathname.endsWith("/magic-link/exchange")) {
       return jsonResponse({ token: "raw-session-token", user: { id: "user-1" } }, { "set-cookie": TEST_SESSION_COOKIE });
     }
@@ -117,10 +133,24 @@ export function createFakeBackend(options: { nativeSignInRefusal?: { status: num
       pathname === "/account/export" ||
       pathname === "/account" ||
       pathname === "/account/delete-code" ||
-      pathname === "/account/age-confirmation"
+      pathname === "/account/age-confirmation" ||
+      pathname === "/account/signup-attestation"
     ) {
       if (!signedIn) {
         return jsonResponse({ error: "Authentication required" }, {}, 401);
+      }
+      if (pathname === "/account/signup-attestation") {
+        if (request.method === "POST") {
+          if (requests.at(-1)?.body?.textVersionId !== SIGN_UP_ATTESTATION_TEXT_VERSION.id) {
+            return jsonResponse({ error: "Invalid request" }, {}, 400);
+          }
+          acceptedAttestation = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+        }
+        if (options.signUpAttestationBadPayload === true) {
+          return jsonResponse({ required: "maybe" });
+        }
+        const current = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+        return jsonResponse({ required: acceptedAttestation !== current, currentTextVersionId: current, acceptedTextVersionId: acceptedAttestation });
       }
       if (pathname === "/account/age-confirmation") {
         if (request.method === "POST") {
