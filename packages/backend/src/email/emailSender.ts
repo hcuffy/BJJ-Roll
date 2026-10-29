@@ -1,7 +1,12 @@
 /** What a one-time code is for. Default sign_in; account_deletion is the fresh code DELETE /account needs (HEN-65). */
 export type OneTimeCodePurpose = "sign_in" | "account_deletion";
 
-export interface SendOneTimeCodeInput {
+/** Set by the email queue to its job id: the provider sends once per key, so a retry after a timeout is not a second email (HEN-284). */
+export interface EmailIdempotency {
+  idempotencyKey?: string;
+}
+
+export interface SendOneTimeCodeInput extends EmailIdempotency {
   to: string;
   code: string;
   expiresInMinutes: number;
@@ -9,11 +14,11 @@ export interface SendOneTimeCodeInput {
 }
 
 /** The address is captured before the account is purged (HEN-65). */
-export interface SendAccountDeletedNoticeInput {
+export interface SendAccountDeletedNoticeInput extends EmailIdempotency {
   to: string;
 }
 
-export interface SendMagicLinkInput {
+export interface SendMagicLinkInput extends EmailIdempotency {
   to: string;
   url: string;
   expiresInMinutes: number;

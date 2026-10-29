@@ -94,7 +94,7 @@ export function App() {
           setLinkError(null);
           // Biometric unlock on (HEN-288, Henry 28 Oct): the link signs in, but the lock screen still shows first.
           if (await isBiometricUnlockOn(appSecureStore)) {
-            void cancelPendingSignOut(appSecureStore);
+            void cancelPendingSignOut(appAuthClient, appSecureStore);
             setScreen({ name: "locked", kind: await readBiometricKind() });
             return;
           }
@@ -117,8 +117,8 @@ export function App() {
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
   const handleSignedIn = () => {
-    // A new sign-in cancels a sign-out left to finish; if that fails the user still gets in.
-    void cancelPendingSignOut(appSecureStore);
+    // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
+    void cancelPendingSignOut(appAuthClient, appSecureStore);
     // The biometric offer shows once per install; if it cannot be decided the user simply goes in.
     void takeBiometricOffer(appSecureStore)
       .catch(() => null)
