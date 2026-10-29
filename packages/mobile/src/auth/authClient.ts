@@ -25,11 +25,12 @@ function sessionCookieSignOut(options: MobileAuthClientOptions) {
   return {
     id: "bjjroll-session-cookie-sign-out",
     getActions: () => ({
-      /** True on a 2xx: the server deleted that session or no longer had it. False on any other status; rejects when offline. */
-      signOutSessionCookie: async (sessionCookie: string): Promise<boolean> => {
+      /** True on a 2xx: the server deleted that session or no longer had it. False on any other status; rejects when offline or aborted. */
+      signOutSessionCookie: async (sessionCookie: string, signal?: AbortSignal): Promise<boolean> => {
         const response = await fetchImplementation(signOutUrl, {
           method: "POST",
           credentials: "omit",
+          signal,
           headers: {
             "content-type": "application/json",
             cookie: sessionCookie,

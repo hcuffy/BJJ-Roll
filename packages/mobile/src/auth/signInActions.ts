@@ -71,12 +71,14 @@ export interface AuthRequest {
   readonly body: Record<string, unknown>;
   /** How to read a 4xx that is not the age refusal or a rate limit. */
   readonly clientErrorReason?: ClientErrorReason;
+  /** Aborts the request, e.g. when a startup step times out. */
+  readonly signal?: AbortSignal;
 }
 
-export async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason }: AuthRequest): Promise<ActionResult> {
+export async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason, signal }: AuthRequest): Promise<ActionResult> {
   let error: { readonly status: number; readonly code?: unknown } | null;
   try {
-    ({ error } = await client.$fetch(path, { method: "POST", body }));
+    ({ error } = await client.$fetch(path, { method: "POST", body, signal }));
   } catch {
     // fetch rejects when the phone is offline or the backend cannot be reached.
     return failure("network");
@@ -159,7 +161,7 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
 export const SOCIAL_SIGN_IN_CALLBACK_PATH = "/social";
 
 /** Handles a bjjroll://auth deep link: swaps its one-time code for a session. Other URLs are ignored (message null). */
-export async function completeMagicLink(client: MobileAuthClient, url: string): Promise<ActionResult> {
+export async function completeMagicLink(client: MobileAuthClient, url: string, signal?: AbortSignal): Promise<ActionResult> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -189,12 +191,12 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   if (!code) {
     return { ok: false, reason: "ignored", message: null };
   }
-  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink" });
+  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink", signal });
 }
 
 /** User id of the stored session, or null when signed out (also on network errors). */
-export async function readSignedInUserId(client: MobileAuthClient): Promise<string | null> {
-  const { data } = await client.getSession();
+export async function readSignedInUserId(client: MobileAuthClient, signal?: AbortSignal): Promise<string | null> {
+  const { data } = await client.getSession({ fetchOptions: { signal } });
   return data?.user.id ?? null;
 }
 
@@ -230,16 +232,22 @@ function oldSessionCookieOf(marker: string): string | null {
   return marker.includes("=") ? marker : null;
 }
 
+/** One server sign-out: the old session cookie to present (null: the stored session), and a signal that aborts it on a startup timeout (HEN-303). */
+interface SignOutAttempt {
+  readonly oldSessionCookie: string | null;
+  readonly signal?: AbortSignal;
+}
+
 /**
  * True only when the server confirmed the session is over. With an old cookie it presents that cookie, never the stored one.
  * Without one it falls back to the stored session (markers that hold no cookie).
  */
-async function signOutOnServer(client: MobileAuthClient, oldSessionCookie: string | null): Promise<boolean> {
+async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, signal }: SignOutAttempt): Promise<boolean> {
   try {
     if (oldSessionCookie !== null) {
-      return await client.signOutSessionCookie(oldSessionCookie);
+      return await client.signOutSessionCookie(oldSessionCookie, signal);
     }
-    const { error } = await client.signOut();
+    const { error } = await client.signOut({ fetchOptions: { signal } });
     return !error;
   } catch {
     // Offline or the backend cannot be reached.
@@ -248,8 +256,12 @@ async function signOutOnServer(client: MobileAuthClient, oldSessionCookie: strin
 }
 
 /** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
-async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, oldSessionCookie: string | null): Promise<void> {
-  const serverSignedOut = await signOutOnServer(client, oldSessionCookie);
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: SignOutAttempt): Promise<void> {
+  const serverSignedOut = await signOutOnServer(client, attempt);
+  // Timed out: leave keys and marker as they are, so a late answer cannot touch a session made since; the next launch retries (HEN-303).
+  if (attempt.signal?.aborted) {
+    return;
+  }
   const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
   if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
     await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
@@ -260,9 +272,15 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
  * The marker belongs to a session older than the one now stored (a sign-in came after it): end that old session only.
  * The marker is cleared once the server confirmed; otherwise it stays for the next launch. The stored session is never sent.
  */
-async function revokeOldSession(client: MobileAuthClient, secureStore: SessionKeyStore, oldSessionCookie: string): Promise<void> {
+async function revokeOldSession(
+  client: MobileAuthClient,
+  secureStore: SessionKeyStore,
+  attempt: SignOutAttempt & { readonly oldSessionCookie: string },
+): Promise<void> {
   // Failures are ignored silently and never logged, so the cookie never reaches a log.
-  if (await signOutOnServer(client, oldSessionCookie)) {
+  const confirmed = await signOutOnServer(client, attempt);
+  // Timed out: keep the marker, so a late answer cannot clear a marker written since; the next launch retries (HEN-303).
+  if (confirmed && !attempt.signal?.aborted) {
     await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
   }
 }
@@ -274,7 +292,7 @@ export async function signOut(client: MobileAuthClient, secureStore: SessionKeyS
   // Marker first, so a sign-out that fails here is finished on the next launch. If it cannot be saved, sign out anyway.
   const sessionCookie = await readSessionCookie(client);
   await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
-  await finishSignOut(client, secureStore, sessionCookie);
+  await finishSignOut(client, secureStore, { oldSessionCookie: sessionCookie });
 }
 
 /**
@@ -293,7 +311,7 @@ export async function cancelPendingSignOut(client: MobileAuthClient, secureStore
     await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
     return;
   }
-  await revokeOldSession(client, secureStore, oldSessionCookie);
+  await revokeOldSession(client, secureStore, { oldSessionCookie });
 }
 
 /**
@@ -301,7 +319,7 @@ export async function cancelPendingSignOut(client: MobileAuthClient, secureStore
  * so the user stays signed out on this launch even if the retry fails again.
  * A marker left by an earlier sign-in (a newer session is stored) only ends the old session; false, the user stays signed in.
  */
-export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<boolean> {
+export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
   const marker = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
   if (marker === null) {
     return false;
@@ -309,9 +327,9 @@ export async function finishPendingSignOut(client: MobileAuthClient, secureStore
   const oldSessionCookie = oldSessionCookieOf(marker);
   const storedSessionCookie = await readSessionCookie(client);
   if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
-    await revokeOldSession(client, secureStore, oldSessionCookie);
+    await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
     return false;
   }
-  await finishSignOut(client, secureStore, oldSessionCookie);
+  await finishSignOut(client, secureStore, { oldSessionCookie, signal });
   return true;
 }
