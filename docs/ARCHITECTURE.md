@@ -342,7 +342,7 @@ Each queue has a dead-letter queue named `<queue>_dead_letter`.
 
 ### 3.3 States and claim
 
-pg-boss job states (from the 12.38.0 schema): `created`, `retry`, `active`, `completed`, `cancelled`, `failed`.
+pg-boss job states (from the 12.38.0 schema; the same six in 12.37.1, the version the repo pins): `created`, `retry`, `active`, `completed`, `cancelled`, `failed`.
 
 | pg-boss state | Meaning here                                      | `videos.processing_status` shown in the app    |
 | ------------- | ------------------------------------------------- | ---------------------------------------------- |
@@ -433,6 +433,25 @@ export const jobResultSchema = z.discriminatedUnion("outcome", [
 - The Python side validates against JSON Schema generated from these Zod schemas (Zod 4 `z.toJSONSchema`) and committed to `packages/workers`. A test in
   `shared` fails if the committed JSON Schema is stale.
 - Logs: job id, queue, timings and error class only (HEN-227 log-scrub test). EU pinning, `.remote()`-only calls and cost: `docs/security/modal-eu-residency.md`. Partner pose, masks and metrics are never persisted (D6).
+
+### 3.7 Email queue (HEN-284)
+
+Sign-in codes, magic links and the account-deleted notice go through the pg-boss queue `email_send` (`packages/backend/src/email/emailQueue.ts`, pg-boss
+12.37.1, pinned; Sara, 2026-10-27: stay on it). The API process runs the worker; pg-boss creates its own `pgboss` schema on start, so the app role
+needs CREATE on the database (without it the server stops with a message naming the GRANT). Account-deletion codes are sent directly, not queued
+(Sara, 2026-10-27), because DELETE /account waits for them.
+
+- Retries: 3 tries in all (`retryLimit: 2`), first retry after 1 s, doubling, at most 60 s. A 4xx answer (except 408, 409, 429) or a configuration error
+  is not retried. A try still running after 60 s counts as failed (the provider timeout is 10 s).
+- Duplicates: the job id is derived from a keyed hash of the email (or a caller key, such as the user id for the deleted notice), so the same request twice
+  stores one job. The job id is sent to Lettermint as `Idempotency-Key`, so a retry after a slow or timed-out send does not send a second email.
+- No dead-letter queue (Sara, 2026-10-27): after the last try, or at once for a non-retried error, the worker writes one JSON line
+  `email_dead_lettered` to stdout with only the job id, the template, an error class and `attempts` (tries made, pg-boss `retryCount + 1`; never the
+  address, code, link or provider text), then deletes the job. A payload the worker cannot decrypt is logged the same way at once, with template
+  `unknown`. There is no `_dead_letter` queue for emails, so the payload is not kept.
+- Privacy: the job row holds only what the send needs (address, and the code or link), sealed with the app data key (D18). The row is deleted as soon as
+  the email is sent or finally fails. Unsent, a code or link job is dropped when the code or link expires; the deleted notice job, which has none, after
+  at most 6 hours (`EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS`), so it outlives the account by at most that.
 
 ## 4. Row-level security
 
@@ -625,7 +644,8 @@ payouts. We store only their transaction, product and receipt references. Payout
 | Ratings                                        | Postgres                        | Disk/volume encryption (public by design)                                                  | Proposal                             | No                                                                                                  |
 | Payment and payout references                  | Postgres                        | Disk/volume encryption; no card, bank or ID data (schema + log test, HEN-191)              | Decided (no card data)               | No                                                                                                  |
 | Reports and moderation records                 | Postgres                        | Field encryption for reporter text                                                         | Proposal                             | With E2E the reporter's client forwards content (HEN-198)                                           |
-| Job rows (pg-boss), audit log                  | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                             | No                                                                                                  |
+| Job rows (pg-boss, not email), audit log       | Postgres                        | Ids and object keys only, so disk/volume encryption                                        | Proposal                             | No                                                                                                  |
+| Email job rows (pg-boss `email_send`, §3.7)    | Postgres                        | Only what the send needs, sealed with the app data key (D18); deleted on send, 6 h max     | Decided (Sara, 2026-10-27)           | No                                                                                                  |
 | Disk/volume encryption for Postgres            | Hetzner Cloud VM                | Method not checked (for example LUKS on the volume)                                        | OPEN (owned by HEN-191)              | –                                                                                                   |
 | Backups                                        | Backup store                    | Encrypted before upload; method and key OPEN                                               | OPEN (owned by HEN-50)               | –                                                                                                   |
 | Session token on the phone                     | iOS Keychain / Android Keystore | `@better-auth/expo` keeps tokens in SecureStore (D17 research)                             | Decided (D17)                        | E2E would add device keys here                                                                      |

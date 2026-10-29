@@ -77,20 +77,20 @@ export class LettermintEmailSender implements EmailSender {
 
   async sendOneTimeCode(input: SendOneTimeCodeInput): Promise<void> {
     const rendered = renderOneTimeCodeEmail(input);
-    await this.#postMessage(input.to.trim(), rendered);
+    await this.#postMessage(input.to.trim(), rendered, input.idempotencyKey);
   }
 
   async sendMagicLink(input: SendMagicLinkInput): Promise<void> {
     const rendered = renderMagicLinkEmail(input);
-    await this.#postMessage(input.to.trim(), rendered);
+    await this.#postMessage(input.to.trim(), rendered, input.idempotencyKey);
   }
 
   async sendAccountDeletedNotice(input: SendAccountDeletedNoticeInput): Promise<void> {
     const rendered = renderAccountDeletedEmail(input);
-    await this.#postMessage(input.to.trim(), rendered);
+    await this.#postMessage(input.to.trim(), rendered, input.idempotencyKey);
   }
 
-  async #postMessage(recipientAddress: string, rendered: RenderedEmailMessage): Promise<void> {
+  async #postMessage(recipientAddress: string, rendered: RenderedEmailMessage, idempotencyKey: string | undefined): Promise<void> {
     const requestBody: LettermintSendRequestBody = {
       from: this.#fromAddress,
       to: [recipientAddress],
@@ -105,6 +105,8 @@ export class LettermintEmailSender implements EmailSender {
         headers: {
           "Content-Type": "application/json",
           "x-lettermint-token": this.#apiKey,
+          // Lettermint sends once per key for 24 h, so a retry after a timeout does not send the email twice.
+          ...(idempotencyKey === undefined ? {} : { "Idempotency-Key": idempotencyKey }),
         },
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(this.#timeoutMilliseconds),
