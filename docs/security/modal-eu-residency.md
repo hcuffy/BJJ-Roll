@@ -12,6 +12,8 @@ deployed to Modal and no data is sent to it until that gate clears.
 - The call input is a job ID and a server-built object key (`modalCallInputSchema`): no bytes, URL, query string, email or filename. Results stay under
   2 MiB, because larger inputs and outputs are stored in us-east ([region selection](https://modal.com/docs/guide/region-selection)).
 - Logs hold the job ID, timings and the error class only; error messages are dropped on both sides.
+- No `CloudBucketMount`, Volumes, Dicts or Queues in the Modal app: the worker reads the video through a short-lived presigned URL (ARCHITECTURE §3.6,
+  built in the spikes) and Modal Secrets hold no storage keys.
 - Proof: `sh scripts/checkModalResidency.sh` (CI step "Modal EU residency guard"), `tests/test_modal_app_eu_residency.py`, and the payload and log-scrub tests.
 
 ## Expected monthly cost (Starter plan)

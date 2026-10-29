@@ -52,3 +52,15 @@ def test_modal_app_eu_residency_has_no_snapshot_or_spawn() -> None:
             assert node.arg not in {"snap", "experimental_options"}, "memory snapshot options are not allowed on user-data functions"
         if isinstance(node, ast.Attribute):
             assert "spawn" not in node.attr, "only .remote() may call a user-data function"
+
+
+def test_modal_app_eu_residency_keeps_user_data_out_of_modal_storage() -> None:
+    # Volumes, Dicts, Queues and bucket mounts are stored outside the eu routing path; the video comes through a presigned URL instead.
+    forbidden_storage = {"CloudBucketMount", "Volume", "Dict", "Queue", "NetworkFileSystem"}
+    for node in ast.walk(_modal_app_tree()):
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in forbidden_storage, f"modal.{node.attr} must not hold user data"
+        if isinstance(node, ast.keyword):
+            assert node.arg not in {"volumes", "network_file_systems", "cloud_bucket_mounts"}, (
+                f"{node.arg} must not be mounted on a user-data function"
+            )
