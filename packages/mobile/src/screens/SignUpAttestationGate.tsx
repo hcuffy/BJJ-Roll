@@ -1,6 +1,6 @@
 import { type ComponentRef, useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, BackHandler, StyleSheet, Text, View } from "react-native";
-import type { AccountCodeResult, AccountDeletionResult, SignUpAttestationResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, SignUpAttestationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import {
   ATTESTATION_NEEDED_HINT,
@@ -15,11 +15,13 @@ import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
+import { useExportDataFirst } from "./ExportDataFirstAction";
 import { LoadingScreen } from "./LoadingScreen";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { whileFlagged } from "./whileFlagged";
 
 export interface SignUpAttestationGateProps {
   readonly onReadStatus: () => Promise<SignUpAttestationResult>;
@@ -29,6 +31,11 @@ export interface SignUpAttestationGateProps {
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   readonly onAccountDeleted: () => void;
+  /**
+   * HEN-308: "Export my data first" on the delete confirm, as on the signed-in screen. Offered because GET /account/export is not
+   * attestation-gated (backend accountRoutes.exportWithoutAttestation.test.ts); without it the confirm shows no export.
+   */
+  readonly onExportData?: () => Promise<AccountExportResult>;
   /** The signed-in app, shown only once the account accepted the current text version. */
   readonly children?: ReactNode;
 }
@@ -50,14 +57,6 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
   }
 }
 
-/** Sets `flag` while the request runs, so Android back is ignored like the code step's disabled Cancel (Vera #74 round 5). */
-function whileFlagged<Inputs extends unknown[], Result>(flag: { current: boolean }, request: (...inputs: Inputs) => Promise<Result>) {
-  return (...inputs: Inputs): Promise<Result> => {
-    flag.current = true;
-    return request(...inputs).finally(() => (flag.current = false));
-  };
-}
-
 const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
 
 /** True only for a status the server confirmed: anything else keeps the gate closed. */
@@ -71,7 +70,7 @@ function isAccepted(result: SignUpAttestationResult): boolean {
  * error state with a retry. The only ways past are the server's "not required", accepting, or signing out.
  */
 export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
-  const { onReadStatus, onAccept, onSignOut, onRequestDeleteCode, onDeleteAccount, onAccountDeleted, children } = props;
+  const { onReadStatus, onAccept, onSignOut, onRequestDeleteCode, onDeleteAccount, onAccountDeleted, onExportData, children } = props;
   const [state, setState] = useState<GateState>("checking");
   const [readOffline, setReadOffline] = useState(false);
   const [ticked, setTicked] = useState(false);
@@ -84,8 +83,10 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   const [deleteCodeError, setDeleteCodeError] = useState<string | null>(null);
   const [deleteOffline, setDeleteOffline] = useState(false);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a code.
-  // The code step's DELETE and "Send a new code" set it too, so Android back is ignored while they run.
+  // The code step's DELETE and "Send a new code" and the export set it too, so Android back is ignored while they run.
   const codeInFlight = useRef(false);
+  // Starting either action clears every confirm message, as Cancel does (Vera, HEN-308).
+  const exportFirst = useExportDataFirst(codeInFlight, onExportData, { onStart: () => clearConfirmMessages(), setOffline: setDeleteOffline });
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntryButton = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToDeleteEntry = useRef(false);
@@ -125,9 +126,14 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     }
   }, [deleteStep]);
 
-  const cancelDelete = () => {
+  const clearConfirmMessages = () => {
     setDeleteCodeError(null);
     setDeleteOffline(false);
+    exportFirst.clearError();
+  };
+
+  const cancelDelete = () => {
+    clearConfirmMessages();
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -177,12 +183,9 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     if (codeInFlight.current) {
       return;
     }
-    codeInFlight.current = true;
-    setDeleteCodeError(null);
-    setDeleteOffline(false);
+    clearConfirmMessages();
     setSendingCode(true);
-    const result = await onRequestDeleteCode().catch(unknownFailure);
-    codeInFlight.current = false;
+    const result = await whileFlagged(codeInFlight, onRequestDeleteCode)().catch(unknownFailure);
     setSendingCode(false);
     if (result.ok) {
       setDeleteStep("code");
@@ -210,10 +213,12 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     return (
       <DeleteAccountConfirmStep
         headingRef={confirmHeading}
+        exportAction={exportFirst.renderAction(sendingCode)}
         codeRequestError={deleteCodeError}
         offline={deleteOffline}
         sendingCode={sendingCode}
-        cancelDisabled={sendingCode}
+        emailCodeDisabled={exportFirst.exporting}
+        cancelDisabled={sendingCode || exportFirst.exporting}
         onEmailCode={() => void requestDeleteCode()}
         onCancel={cancelDelete}
       />

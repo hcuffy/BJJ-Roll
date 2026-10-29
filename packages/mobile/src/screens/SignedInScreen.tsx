@@ -1,7 +1,6 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Share, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AdultConfirmStep } from "./AdultConfirmStep";
 import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
@@ -9,6 +8,7 @@ import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
+import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
@@ -119,16 +119,7 @@ export function SignedInScreen({
   const exportData = () =>
     runOnce("export", async () => {
       setExportError(null);
-      const result = await onExportData();
-      if (!result.ok) {
-        setExportError(`Export failed. ${result.message}`);
-        return;
-      }
-      try {
-        await Share.share({ title: "BJJ Roll data export", message: result.json });
-      } catch {
-        setExportError(`Export failed. ${FAILURE_MESSAGES.unknown}`);
-      }
+      setExportError(await shareAccountExport(onExportData));
     });
 
   const confirmAdultAge = () =>
@@ -198,17 +189,7 @@ export function SignedInScreen({
     return (
       <DeleteAccountConfirmStep
         headingRef={confirmHeading}
-        exportAction={
-          <>
-            <AuthButton
-              {...exportButtonProps}
-              title="Export my data first"
-              variant="tertiary"
-              accessibilityHint="Opens the share sheet with a copy of your account data. Nothing is deleted."
-            />
-            <StatusText message={exportError} style={authStyles.fieldError} />
-          </>
-        }
+        exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} />}
         codeRequestError={codeRequestError}
         sendingCode={runningTask === "code"}
         emailCodeDisabled={runningTask === "export"}
