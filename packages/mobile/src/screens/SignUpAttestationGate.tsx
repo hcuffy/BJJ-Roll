@@ -85,7 +85,8 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a code.
   // The code step's DELETE and "Send a new code" and the export set it too, so Android back is ignored while they run.
   const codeInFlight = useRef(false);
-  const exportFirst = useExportDataFirst(codeInFlight, onExportData);
+  // Starting either action clears every confirm message, as Cancel does (Vera, HEN-308).
+  const exportFirst = useExportDataFirst(codeInFlight, onExportData, { onStart: () => clearConfirmMessages(), setOffline: setDeleteOffline });
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntryButton = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToDeleteEntry = useRef(false);
@@ -125,10 +126,14 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     }
   }, [deleteStep]);
 
-  const cancelDelete = () => {
+  const clearConfirmMessages = () => {
     setDeleteCodeError(null);
     setDeleteOffline(false);
     exportFirst.clearError();
+  };
+
+  const cancelDelete = () => {
+    clearConfirmMessages();
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -178,12 +183,9 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     if (codeInFlight.current) {
       return;
     }
-    codeInFlight.current = true;
-    setDeleteCodeError(null);
-    setDeleteOffline(false);
+    clearConfirmMessages();
     setSendingCode(true);
-    const result = await onRequestDeleteCode().catch(unknownFailure);
-    codeInFlight.current = false;
+    const result = await whileFlagged(codeInFlight, onRequestDeleteCode)().catch(unknownFailure);
     setSendingCode(false);
     if (result.ok) {
       setDeleteStep("code");
