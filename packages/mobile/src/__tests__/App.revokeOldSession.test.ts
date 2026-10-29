@@ -24,16 +24,20 @@ const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
 const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
+const MEMBER_EMAIL = "member@example.test";
+const OLD_SESSION = "session-token-1";
+const NEW_SESSION = "session-token-2";
 
 /**
- * A server that keeps sessions: every sign-in starts a new one with its own signed cookie (`<token>.<signature>`, as Better Auth sends it).
- * Requests from a live session reach the shared fake backend as signed in; revoked or unknown sessions reach it signed out.
+ * A server that keeps sessions, as Better Auth `/sign-out` does: every sign-in starts a new one with its own signed cookie
+ * (`<token>.<signature>`); `/sign-out` deletes the session whose cookie the request presents and answers success even when
+ * it presents none. Requests from a live session reach the shared fake backend as signed in; others reach it signed out.
  */
 function createSessionServer() {
   const backend = createFakeBackend();
-  const liveSessions = new Set<string>();
-  const revokeRequests: { readonly token: unknown; readonly fromSession: string | null }[] = [];
-  const state = { signOutEndpointDown: false, revokeEndpointDown: false, revokeEndpointErrors: false };
+  const liveSessions = new Map<string, string>();
+  const signOutRequests: { readonly session: string | null; readonly cookie: string | null }[] = [];
+  const state = { signOutEndpointDown: false, signOutEndpointErrors: false };
   let signIns = 0;
 
   const sessionOf = (request: Request): string | null => {
@@ -53,38 +57,26 @@ function createSessionServer() {
     const session = sessionOf(request);
     const live = session !== null && liveSessions.has(session);
     if (pathname.endsWith("/sign-in/email-otp")) {
+      const { email } = (await request.json()) as { email: string };
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
-      liveSessions.add(token);
+      liveSessions.set(token, email);
       const signedValue = encodeURIComponent(`${token}.signature+${String(signIns)}=`);
       const cookie = `better-auth.session_token=${signedValue}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`;
-      return json({ token, user: { id: "user-1" } }, { "set-cookie": cookie });
+      return json({ token, user: { id: `user-${email}` } }, { "set-cookie": cookie });
     }
     if (pathname.endsWith("/sign-out")) {
+      signOutRequests.push({ session, cookie: request.headers.get("cookie") });
       if (state.signOutEndpointDown) {
         throw new TypeError("fetch failed");
+      }
+      if (state.signOutEndpointErrors) {
+        return json({ message: "Internal Server Error" }, {}, 500);
       }
       if (session) {
         liveSessions.delete(session);
       }
-      return json({ success: true });
-    }
-    if (pathname.endsWith("/revoke-session")) {
-      const body = (await request.json()) as { token?: unknown };
-      revokeRequests.push({ token: body.token, fromSession: live ? session : null });
-      if (state.revokeEndpointDown) {
-        throw new TypeError("fetch failed");
-      }
-      if (state.revokeEndpointErrors) {
-        return json({ message: "Internal Server Error" }, {}, 500);
-      }
-      if (!live) {
-        return json({ message: "Unauthorized" }, {}, 401);
-      }
-      if (typeof body.token === "string") {
-        liveSessions.delete(body.token);
-      }
-      return json({ status: true });
+      return json({ success: true }, { "set-cookie": "better-auth.session_token=; Path=/; Max-Age=0" });
     }
     const headers = new Headers(request.headers);
     headers.delete("cookie");
@@ -93,10 +85,10 @@ function createSessionServer() {
     }
     return await backend.fetchImplementation(new Request(request, { headers }));
   };
-  return { state, liveSessions, revokeRequests, requests: backend.requests, fetchImplementation: vi.fn(fetchImplementation) };
+  return { state, liveSessions, signOutRequests, fetchImplementation: vi.fn(fetchImplementation) };
 }
 
-describe("App revokes the old session when a new sign-in cancels an unfinished sign-out (HEN-299)", () => {
+describe("App ends the old session by its own cookie after an unfinished sign-out (HEN-299)", () => {
   let server: ReturnType<typeof createSessionServer>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let consoleSpies: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }[] = [];
@@ -108,28 +100,41 @@ describe("App revokes the old session when a new sign-in cancels an unfinished s
       storage: secureStore,
       fetchImplementation: server.fetchImplementation,
     });
-    return await renderScreen(createElement(App));
+    const screen = await renderScreen(createElement(App));
+    await settle();
+    return screen;
   };
-  const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
+  const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>, email = MEMBER_EMAIL) => {
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
-    await screen.changeText("Email", "member@example.test");
+    await screen.changeText("Email", email);
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    await settle();
   };
   /** Signed in as session 1, then sign-out cannot reach the server: the phone forgets the session, the server still has it. */
-  const signOutLeftUnfinished = async () => {
+  const signOutLeftUnfinished = async (email = MEMBER_EMAIL) => {
     const screen = await launchApp();
-    await signIn(screen);
+    await signIn(screen, email);
     server.state.signOutEndpointDown = true;
     await screen.press("Sign out");
     server.state.signOutEndpointDown = false;
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
-    expect(server.liveSessions.has("session-token-1")).toBe(true);
+    expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
+    expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain(OLD_SESSION);
     return screen;
   };
-  const storedValues = () => [...secureStore.items.values()].join("\n");
+  const marker = () => secureStore.items.get(PENDING_SIGN_OUT_KEY) ?? null;
+  /** Every sign-out request since `from` presented the old session's cookie and never the new one. */
+  const expectOnlyOldCookiePresented = (from: number) => {
+    const requests = server.signOutRequests.slice(from);
+    expect(requests.length).toBeGreaterThan(0);
+    for (const request of requests) {
+      expect(request.session).toBe(OLD_SESSION);
+      expect(request.cookie).not.toContain(NEW_SESSION);
+    }
+  };
 
   beforeEach(() => {
     server = createSessionServer();
@@ -144,54 +149,101 @@ describe("App revokes the old session when a new sign-in cancels an unfinished s
       .flatMap((spy) => spy.mock.calls.flat<readonly (readonly unknown[])[]>())
       .map((value) => inspect(value, { depth: 8 }))
       .join("\n");
-    for (const secret of ["session-token-", "signature", "member@example.test"]) {
+    for (const secret of ["session-token-", "signature", "session_token", "@example.test"]) {
       expect(logged).not.toContain(secret);
     }
     vi.restoreAllMocks();
   });
 
-  it("the unfinished sign-out keeps the old session token in SecureStore, not just a flag", async () => {
+  it("the unfinished sign-out keeps the old session cookie in SecureStore, not just a flag", async () => {
     await signOutLeftUnfinished();
 
-    expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toBe("session-token-1");
+    expect(marker()).toMatch(/^better-auth\.session_token=session-token-1\./u);
   });
 
-  it("revokes the old session on the server with the new session, which survives a restart", async () => {
+  it("online relaunch before any sign-in ends the old session with its stored cookie and clears the marker", async () => {
+    await signOutLeftUnfinished();
+    const signOutsBefore = server.signOutRequests.length;
+
+    const relaunched = await launchApp();
+
+    expect(relaunched.text()).toContain(SIGN_IN_SCREEN);
+    expectOnlyOldCookiePresented(signOutsBefore);
+    expect(server.liveSessions.has(OLD_SESSION)).toBe(false);
+    expect(marker()).toBeNull();
+
+    await signIn(relaunched);
+    expect(server.liveSessions.has(NEW_SESSION)).toBe(true);
+    expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
+  });
+
+  it("offline relaunch keeps the marker; the next online launch ends the old session", async () => {
+    await signOutLeftUnfinished();
+    server.state.signOutEndpointDown = true;
+
+    expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
+    expect(marker()).toContain(OLD_SESSION);
+    expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
+
+    server.state.signOutEndpointDown = false;
+    expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
+    expect(server.liveSessions.has(OLD_SESSION)).toBe(false);
+    expect(marker()).toBeNull();
+  });
+
+  it("a new sign-in ends the old session with the old cookie only; the new session survives a restart", async () => {
     const screen = await signOutLeftUnfinished();
+    const signOutsBefore = server.signOutRequests.length;
 
     await signIn(screen);
-    await settle();
 
-    expect(server.revokeRequests).toEqual([{ token: "session-token-1", fromSession: "session-token-2" }]);
-    expect(server.liveSessions).toEqual(new Set(["session-token-2"]));
-    expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);
-    expect(storedValues()).not.toContain("session-token-1");
+    expectOnlyOldCookiePresented(signOutsBefore);
+    expect([...server.liveSessions.keys()]).toEqual([NEW_SESSION]);
+    expect(marker()).toBeNull();
+    expect([...secureStore.items.values()].join("\n")).not.toContain(OLD_SESSION);
     expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
-    expect(server.liveSessions.has("session-token-2")).toBe(true);
+    expect(server.liveSessions.has(NEW_SESSION)).toBe(true);
+  });
+
+  it("a different account signing in ends account A's old session; account B's session survives", async () => {
+    const screen = await signOutLeftUnfinished("alpha@example.test");
+    const signOutsBefore = server.signOutRequests.length;
+
+    await signIn(screen, "bravo@example.test");
+
+    expectOnlyOldCookiePresented(signOutsBefore);
+    expect([...server.liveSessions.entries()]).toEqual([[NEW_SESSION, "bravo@example.test"]]);
+    expect(marker()).toBeNull();
+    expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
   });
 
   it.each([
-    ["the network is down", { revokeEndpointDown: true }],
-    ["the server fails", { revokeEndpointErrors: true }],
-  ])("revoke fails because %s: sign-in still succeeds and the marker and old token are cleared", async (_case, failure) => {
+    ["the network is down", { signOutEndpointDown: true }],
+    ["the server fails", { signOutEndpointErrors: true }],
+  ])("ending the old session fails because %s: sign-in succeeds, the marker stays, the next launch ends it", async (_case, failure) => {
     const screen = await signOutLeftUnfinished();
     Object.assign(server.state, failure);
 
     await signIn(screen);
-    await settle();
 
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
-    expect(server.revokeRequests).toHaveLength(1);
-    expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);
-    expect(storedValues()).not.toContain("session-token-1");
-    expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
-    expect(server.liveSessions.has("session-token-2")).toBe(true);
+    expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
+    expect(marker()).toContain(OLD_SESSION);
+
+    Object.assign(server.state, { signOutEndpointDown: false, signOutEndpointErrors: false });
+    const signOutsBefore = server.signOutRequests.length;
+    const nextLaunch = await launchApp();
+
+    // The leftover marker does not sign the new session out.
+    expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
+    expectOnlyOldCookiePresented(signOutsBefore);
+    expect([...server.liveSessions.keys()]).toEqual([NEW_SESSION]);
+    expect(marker()).toBeNull();
   });
 
-  it("a sign-in with nothing pending sends no revoke", async () => {
+  it("a sign-in with nothing pending sends no sign-out", async () => {
     await signIn(await launchApp());
-    await settle();
 
-    expect(server.revokeRequests).toEqual([]);
+    expect(server.signOutRequests).toEqual([]);
   });
 });
