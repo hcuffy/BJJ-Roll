@@ -34,6 +34,8 @@ export function App() {
   const [linkError, setLinkError] = useState<{ readonly message: string; readonly reason: FailureReason } | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const [serverUnreachable, setServerUnreachable] = useState(false);
+  // Counts sign-in links that failed; each one is a new attempt, so the screen drops what its last attempt showed (HEN-304).
+  const [linkAttempt, setLinkAttempt] = useState(0);
   // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
   const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
@@ -68,6 +70,8 @@ export function App() {
       showStartupScreen();
       return;
     }
+    // A link opened in the running app replaces the last result; at startup the startup note stays next to a link card.
+    const openedInRunningApp = screen.name !== "loading";
     void completeMagicLink(appAuthClient, deepLinkUrl)
       .then((result) => {
         if (result.ok) {
@@ -75,14 +79,16 @@ export function App() {
           handleSignedIn();
           return;
         }
-        if (result.reason === "network") {
-          setServerUnreachable(true);
-        } else if (result.message) {
-          setLinkError({ message: result.message, reason: result.reason });
+        if (result.reason !== "ignored") {
+          setLinkAttempt((count) => count + 1);
+          setLinkError(result.reason === "network" || !result.message ? null : { message: result.message, reason: result.reason });
+          setServerUnreachable((current) => result.reason === "network" || (current && !openedInRunningApp));
         }
         showStartupScreen();
       })
       .catch(() => {
+        setLinkAttempt((count) => count + 1);
+        setLinkError(null);
         setServerUnreachable(true);
         showStartupScreen();
       });
@@ -155,8 +161,18 @@ export function App() {
             client={appAuthClient}
             email={screen.email}
             age18Confirmed={screen.age18Confirmed}
+            linkError={linkError?.message ?? null}
+            linkErrorReason={linkError?.reason ?? null}
+            onClearLinkError={() => setLinkError(null)}
+            serverUnreachable={serverUnreachable}
+            onClearServerUnreachable={() => setServerUnreachable(false)}
+            linkAttempt={linkAttempt}
             onSignedIn={handleSignedIn}
-            onBack={() => setScreen({ name: "email" })}
+            onBack={() => {
+              // As on "Check your email": the card is about this view; App's note stays (HEN-287 item 1).
+              setLinkError(null);
+              setScreen({ name: "email" });
+            }}
           />
         );
       }
@@ -171,6 +187,7 @@ export function App() {
             onClearAccountNotice={() => setAccountNotice(null)}
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
+            linkAttempt={linkAttempt}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
             socialProviders={appSocialProviders}
             socialSignIn={appSocialSignIn}
