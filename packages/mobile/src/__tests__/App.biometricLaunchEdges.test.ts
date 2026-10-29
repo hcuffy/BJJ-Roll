@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -44,6 +45,7 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
   const firstSignIn = async (answer: "Turn on" | "Not now") => {
     const screen = await launchApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");

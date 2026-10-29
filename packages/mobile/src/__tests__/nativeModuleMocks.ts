@@ -5,8 +5,8 @@ import { vi } from "vitest";
 vi.mock("react-native", async () => ({
   // addListener is backed by keyboardHarness so a test can open and close the keyboard.
   Keyboard: { addListener: (await import("./keyboardHarness")).harnessKeyboardAddListener },
-  // Backed by backHandlerHarness so a test can press Android back.
-  BackHandler: { addEventListener: (await import("./backHandlerHarness")).harnessBackHandlerAddEventListener },
+  // Backed by backHandlerHarness so a test can press Android's hardware back.
+  BackHandler: (await import("./backHandlerHarness")).harnessBackHandler,
   // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
   AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },

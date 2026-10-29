@@ -3,7 +3,7 @@ import { Client } from "pg";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { EmailSendError, FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
 import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 /** Records each send when it starts; while `hold` is on, a send never finishes until `release()`; `fail` makes every try throw. */
@@ -87,7 +87,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown a
   beforeAll(async () => {
     environment = await startAuthTestEnvironment({ emailSender });
     const { app } = environment;
-    expect((await postAuthJson(app, otpSendPath, { body: { email: knownEmail, type: "sign-in", age16Confirmed: true } })).status).toBe(200);
+    expect(
+      (await postAuthJson(app, otpSendPath, { body: { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation } }))
+        .status,
+    ).toBe(200);
     const sent = emailSender.sentMessages.at(-1);
     const otp = sent?.kind === "one_time_code" ? sent.code : "";
     expect((await postAuthJson(app, otpSignInPath, { body: { email: knownEmail, otp } })).status).toBe(200);
@@ -104,8 +107,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown a
       emailSender.hold = true;
       try {
         const variants = {
-          known: await observeSend(path, { email: knownEmail, ...extraBody, age16Confirmed: true }),
-          unknown: await observeSend(path, { email: `same.work.new.${path.length}@example.com`, ...extraBody, age16Confirmed: true }),
+          known: await observeSend(path, { email: knownEmail, ...extraBody, age16Confirmed: true, ...currentSignUpAttestation }),
+          unknown: await observeSend(path, {
+            email: `same.work.new.${path.length}@example.com`,
+            ...extraBody,
+            age16Confirmed: true,
+            ...currentSignUpAttestation,
+          }),
           refused: await observeSend(path, { email: `same.work.refused.${path.length}@example.com`, ...extraBody }),
           knownUnticked: await observeSend(path, { email: knownEmail, ...extraBody }),
         };
@@ -141,8 +149,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown a
     try {
       const unknownEmail = "same.work.failing.new@example.com";
       const sentBefore = emailSender.sentMessages.length;
-      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true });
-      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true });
+      const known = await observeSend(otpSendPath, { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
+      const unknown = await observeSend(otpSendPath, { email: unknownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation });
       expect(known.status).toBe(200);
       expect(unknown.queries).toEqual(known.queries);
       expect({ status: unknown.status, body: unknown.body, headers: unknown.headers }).toEqual({

@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { readFileSync } from "node:fs";
@@ -44,6 +44,12 @@ describe("EmailEntryScreen", () => {
       }),
     );
 
+  /** Ticks 16+ (the first checkbox) and the HEN-183 sign-up duties, the two boxes every send needs. */
+  const tickRequiredBoxes = async (screen: Awaited<ReturnType<typeof renderEmailEntry>>) => {
+    await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
+  };
+
   it("shows the 16+ checkbox unticked and an email field without a password field", async () => {
     const screen = await renderEmailEntry();
 
@@ -72,7 +78,7 @@ describe("EmailEntryScreen", () => {
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
     expect(sentTo).toEqual([]);
 
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     expect(screen.text()).not.toContain("Tick the box to confirm");
     expect(flattenStyle(screen.getPressable("Continue with email").props.style).backgroundColor).toBe(colours.primary);
   });
@@ -89,6 +95,8 @@ describe("EmailEntryScreen", () => {
     expect(hints(screen)).toEqual(Array(2).fill("Tick the 16 or older box first."));
 
     await screen.pressRole("checkbox");
+    expect(hints(screen)).toEqual(Array(2).fill("Tick I accept these duties first."));
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(hints(screen)).toEqual([undefined, undefined]);
 
     await screen.changeText("Email", "member@example");
@@ -113,7 +121,7 @@ describe("EmailEntryScreen", () => {
 
   it("tells the user to fix the email when they tap Continue with the box ticked but no valid email", async () => {
     const screen = await renderEmailEntry();
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.press("Continue with email");
 
     expect(screen.text()).toContain("Enter a valid email address.");
@@ -131,7 +139,7 @@ describe("EmailEntryScreen", () => {
   it("submits from the keyboard: the email field has return key Go and no autocorrect", async () => {
     const screen = await renderEmailEntry();
     expect(screen.getByLabelText("Email").props).toMatchObject({ returnKeyType: "go", autoCorrect: false, autoCapitalize: "none" });
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.changeText("Email", "member@example.test");
     await screen.fire("Email", "onSubmitEditing");
 
@@ -142,7 +150,7 @@ describe("EmailEntryScreen", () => {
     let release: (response: Response) => void = () => undefined;
     backend.fetchImplementation.mockImplementationOnce(() => new Promise<Response>((resolve) => (release = resolve)));
     const screen = await renderEmailEntry();
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.changeText("Email", "member@example.test");
     const idleHeight = flattenStyle(screen.getPressable("Continue with email").props.style).minHeight;
     await screen.press("Continue with email");
@@ -161,13 +169,22 @@ describe("EmailEntryScreen", () => {
   it("sends the code request with age16Confirmed true once ticked, then hands over the email", async () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", " member@example.test ");
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
 
     expect(screen.isDisabled("Continue with email")).toBe(false);
     await screen.press("Continue with email");
 
     expect(backend.requests.map((request) => [new URL(request.url).pathname, request.body])).toEqual([
-      ["/api/auth/email-otp/send-verification-otp", { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false }],
+      [
+        "/api/auth/email-otp/send-verification-otp",
+        {
+          email: "member@example.test",
+          type: "sign-in",
+          age16Confirmed: true,
+          age18Confirmed: false,
+          signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        },
+      ],
     ]);
     expect(sentTo).toEqual(["member@example.test"]);
     expect(sentAdult).toEqual([false]);
@@ -176,7 +193,7 @@ describe("EmailEntryScreen", () => {
   it("sends age18Confirmed true with the code and the link when the 18+ box is ticked, and hands it over with the email", async () => {
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     (screen.getByLabelText("I am 18 or older").props.onPress as () => void)();
     await screen.rerender();
     await screen.press("Email me a sign-in link instead");
@@ -184,8 +201,20 @@ describe("EmailEntryScreen", () => {
     await screen.press("Continue with email");
 
     expect(backend.requests.map((request) => request.body)).toEqual([
-      { email: "member@example.test", callbackURL: "bjjroll://auth", age16Confirmed: true, age18Confirmed: true },
-      { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: true },
+      {
+        email: "member@example.test",
+        callbackURL: "bjjroll://auth",
+        age16Confirmed: true,
+        age18Confirmed: true,
+        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      },
+      {
+        email: "member@example.test",
+        type: "sign-in",
+        age16Confirmed: true,
+        age18Confirmed: true,
+        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      },
     ]);
     expect(sentAdult).toEqual([true]);
   });
@@ -197,7 +226,7 @@ describe("EmailEntryScreen", () => {
     );
     const screen = await renderEmailEntry();
     await screen.changeText("Email", "member@example.test");
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.press("Continue with email");
 
     expect(screen.queryByText(AGE_GATE_REFUSAL_MESSAGE)).not.toBeNull();
@@ -208,7 +237,7 @@ describe("EmailEntryScreen", () => {
     const rateLimited = () => Promise.resolve(Response.json({ message: "Too many requests" }, { status: 429 }));
     backend.fetchImplementation.mockImplementation(rateLimited);
     const screen = await renderEmailEntry();
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
 
@@ -217,7 +246,7 @@ describe("EmailEntryScreen", () => {
 
     Platform.OS = "ios";
     const iosScreen = await renderEmailEntry();
-    await iosScreen.pressRole("checkbox");
+    await tickRequiredBoxes(iosScreen);
     await iosScreen.changeText("Email", "member@example.test");
     await iosScreen.press("Continue with email");
     expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith("Too many tries. Wait a minute and try again.");
@@ -231,7 +260,7 @@ describe("EmailEntryScreen", () => {
   it("after the link is sent, replaces the form with a 'Check your email' notice (not error style) with Resend link", async () => {
     vi.useFakeTimers();
     const screen = await renderEmailEntry();
-    await screen.pressRole("checkbox");
+    await tickRequiredBoxes(screen);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Email me a sign-in link instead");
 

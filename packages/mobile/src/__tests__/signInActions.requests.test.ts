@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { completeMagicLink, FAILURE_MESSAGES, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
@@ -18,18 +18,29 @@ describe("sign-in requests", () => {
   it("asks for a 6-digit sign-in code with age16Confirmed true", async () => {
     const { backend, client } = createTestClient();
 
-    const result = await sendEmailCode(client, { email: " Member@Example.test ", age16Confirmed: true });
+    const result = await sendEmailCode(client, { email: " Member@Example.test ", age16Confirmed: true, signUpAttestationAccepted: true });
 
     expect(result).toEqual({ ok: true });
     expect(backend.requests).toHaveLength(1);
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/email-otp/send-verification-otp`);
-    expect(backend.requests[0]?.body).toEqual({ email: "Member@Example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false });
+    expect(backend.requests[0]?.body).toEqual({
+      email: "Member@Example.test",
+      type: "sign-in",
+      age16Confirmed: true,
+      age18Confirmed: false,
+      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+    });
   });
 
   it("signs in with the code and age16Confirmed true", async () => {
     const { backend, client } = createTestClient();
 
-    const result = await verifyEmailCode(client, { email: "member@example.test", code: " 123456 ", age16Confirmed: true });
+    const result = await verifyEmailCode(client, {
+      email: "member@example.test",
+      code: " 123456 ",
+      age16Confirmed: true,
+      signUpAttestationAccepted: true,
+    });
 
     expect(result).toEqual({ ok: true });
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/sign-in/email-otp`);
@@ -39,7 +50,12 @@ describe("sign-in requests", () => {
   it("rejects a code that is not 6 digits without a request", async () => {
     const { backend, client } = createTestClient();
 
-    const result = await verifyEmailCode(client, { email: "member@example.test", code: "12345", age16Confirmed: true });
+    const result = await verifyEmailCode(client, {
+      email: "member@example.test",
+      code: "12345",
+      age16Confirmed: true,
+      signUpAttestationAccepted: true,
+    });
 
     expect(result.ok).toBe(false);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
@@ -48,7 +64,7 @@ describe("sign-in requests", () => {
   it("asks for a magic link that comes back to the bjjroll deep link", async () => {
     const { backend, client } = createTestClient();
 
-    const result = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true });
+    const result = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true });
 
     expect(result).toEqual({ ok: true });
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/sign-in/magic-link`);
@@ -57,14 +73,15 @@ describe("sign-in requests", () => {
       callbackURL: "bjjroll://auth",
       age16Confirmed: true,
       age18Confirmed: false,
+      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
     });
   });
 
   it("passes the optional 18+ answer on with both sends, as a plain boolean (HEN-263)", async () => {
     const { backend, client } = createTestClient();
 
-    await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true, age18Confirmed: true });
-    await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, age18Confirmed: true });
+    await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true });
+    await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true });
 
     expect(backend.requests.map((request) => request.body?.age18Confirmed)).toEqual([true, true]);
   });
@@ -124,12 +141,12 @@ describe("sign-in requests", () => {
       Promise.resolve(Response.json({ code: "AGE_CONFIRMATION_REQUIRED", message: "server wording" }, { status: 400 })),
     );
 
-    expect(await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true })).toEqual({
+    expect(await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
     });
-    expect(await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true })).toEqual({
+    expect(await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
@@ -141,7 +158,9 @@ describe("sign-in requests", () => {
       const { backend, client } = createTestClient();
       backend.fetchImplementation.mockImplementation(() => Promise.resolve(Response.json({ code, message: "Invalid OTP" }, { status: 400 })));
 
-      expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true })).toEqual({
+      expect(
+        await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true }),
+      ).toEqual({
         ok: false,
         reason: "invalidCode",
         message: "That code didn't work. Check the email or send a new code.",
@@ -164,7 +183,7 @@ describe("sign-in requests", () => {
   it("maps a network failure and a rate limit to plain copy", async () => {
     const offline = createTestClient();
     offline.backend.fetchImplementation.mockRejectedValue(new TypeError("Network request failed"));
-    expect(await sendEmailCode(offline.client, { email: "member@example.test", age16Confirmed: true })).toEqual({
+    expect(await sendEmailCode(offline.client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
       ok: false,
       reason: "network",
       message: "No connection. Check your internet and try again.",
@@ -174,7 +193,7 @@ describe("sign-in requests", () => {
     limited.backend.fetchImplementation.mockImplementation(() =>
       Promise.resolve(Response.json({ code: "TOO_MANY_REQUESTS", message: "Too many verification emails requested" }, { status: 429 })),
     );
-    expect(await sendMagicLink(limited.client, { email: "member@example.test", age16Confirmed: true })).toEqual({
+    expect(await sendMagicLink(limited.client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
       ok: false,
       reason: "rateLimited",
       message: "Too many tries. Wait a minute and try again.",
@@ -186,7 +205,7 @@ describe("sign-in requests", () => {
     backend.fetchImplementation.mockImplementation(() =>
       Promise.resolve(Response.json({ code: "INTERNAL", message: "relation users does not exist" }, { status: 500 })),
     );
-    expect(await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true })).toEqual({
+    expect(await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
       ok: false,
       reason: "unknown",
       message: "Something went wrong. Please try again.",

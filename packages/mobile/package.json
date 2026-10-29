@@ -30,7 +30,7 @@
     "react-native-safe-area-context": "~5.7.0"
   },
   "devDependencies": {
-    "@types/node": "^24.19.1",
+    "@types/node": "^24.19.2",
     "@types/react": "~19.2.2",
     "expo-doctor": "1.21.4",
     "typescript": "~6.0.3",

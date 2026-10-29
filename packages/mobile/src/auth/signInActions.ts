@@ -1,12 +1,21 @@
-import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS } from "@bjj-roll/shared";
-import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, type EmailEntry } from "./ageConfirmation";
+import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, isSignUpAttestationAccepted, type EmailEntry } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 
 export const MAGIC_LINK_CALLBACK_URL = `${DEEP_LINK_SCHEME}://auth`;
 
 /** Why an action failed; screens use it to place the message next to the field it is about. */
 export type FailureReason =
-  "ageRequired" | "invalidEmail" | "invalidCode" | "invalidLink" | "accountNotLinked" | "network" | "rateLimited" | "unknown" | "ignored";
+  | "ageRequired"
+  | "attestationRequired"
+  | "invalidEmail"
+  | "invalidCode"
+  | "invalidLink"
+  | "accountNotLinked"
+  | "network"
+  | "rateLimited"
+  | "unknown"
+  | "ignored";
 
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly reason: FailureReason; readonly message: string | null };
 
@@ -33,15 +42,21 @@ const OAUTH_LINK_ERROR_CODE = "OAUTH_LINK_ERROR";
 const HTTP_TOO_MANY_REQUESTS = 429;
 /** Error code of the backend's refusal when a new account's latest send had no `age16Confirmed: true` (HEN-77, HEN-263). */
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
+/** Error code of the backend's refusal when a new account's latest send had no current attestation version (HEN-183). */
+export const SIGN_UP_ATTESTATION_REQUIRED_CODE = "SIGN_UP_ATTESTATION_REQUIRED";
+export const ATTESTATION_REQUIRED: ActionResult = { ok: false, reason: "attestationRequired", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE };
 const OTP_PATTERN = /^\d{6}$/u;
 
-export function failure(reason: Exclude<FailureReason, "ageRequired" | "ignored">): ActionResult {
+export function failure(reason: Exclude<FailureReason, "ageRequired" | "attestationRequired" | "ignored">): ActionResult {
   return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
 }
 
 function checkEntry(entry: EmailEntry): ActionResult | null {
   if (!isAgeConfirmed(entry)) {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
+  }
+  if (!isSignUpAttestationAccepted(entry)) {
+    return ATTESTATION_REQUIRED;
   }
   if (!isEmailAddress(entry.email)) {
     return failure("invalidEmail");
@@ -72,6 +87,9 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
   if (error.code === AGE_CONFIRMATION_REQUIRED_CODE) {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
+  if (error.code === SIGN_UP_ATTESTATION_REQUIRED_CODE) {
+    return ATTESTATION_REQUIRED;
+  }
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return failure("rateLimited");
   }
@@ -87,7 +105,12 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
   return failure("unknown");
 }
 
-/** Emails a 6-digit sign-in code. No request is sent unless the 16+ box is ticked. */
+/** The sign-up answers every send carries: 16+, the optional 18+, and the attestation text version the user accepted (HEN-183). */
+function signUpAnswers(entry: EmailEntry) {
+  return { age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+}
+
+/** Emails a 6-digit sign-in code. No request is sent unless the 16+ and attestation boxes are ticked. */
 export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -95,11 +118,11 @@ export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/email-otp/send-verification-otp",
-    body: { email: entry.email.trim(), type: "sign-in", age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
+    body: { email: entry.email.trim(), type: "sign-in", ...signUpAnswers(entry) },
   });
 }
 
-/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 16+ box is ticked. */
+/** Emails a magic link that opens the app at bjjroll://auth. No request unless the 16+ and attestation boxes are ticked. */
 export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
@@ -107,7 +130,7 @@ export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry)
   }
   return await postAuth(client, {
     path: "/sign-in/magic-link",
-    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true },
+    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ...signUpAnswers(entry) },
   });
 }
 
@@ -152,6 +175,9 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   const reason = parsed.searchParams.get(MAGIC_LINK_REASON_PARAM);
   if (reason === MAGIC_LINK_REASONS.ageRefused) {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
+  }
+  if (reason === MAGIC_LINK_REASONS.attestationRefused) {
+    return ATTESTATION_REQUIRED;
   }
   if (reason === MAGIC_LINK_REASONS.linkInvalid) {
     return failure("invalidLink");

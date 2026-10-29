@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -46,6 +47,7 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
   type Screen = Awaited<ReturnType<typeof launchApp>>;
   const signIn = async (screen: Screen) => {
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");

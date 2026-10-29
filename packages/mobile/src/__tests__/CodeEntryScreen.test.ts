@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
@@ -154,7 +154,13 @@ describe("CodeEntryScreen", () => {
     await screen.press("Resend code");
 
     expect(sendRequests()).toHaveLength(1);
-    expect(sendRequests()[0]?.body).toEqual({ email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: false });
+    expect(sendRequests()[0]?.body).toEqual({
+      email: "member@example.test",
+      type: "sign-in",
+      age16Confirmed: true,
+      age18Confirmed: false,
+      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+    });
     const notice = "We sent a new code to member@example.test.";
     expect(screen.queryByText(notice)?.props.accessibilityLiveRegion).toBe("polite");
     // A muted confirmation line, not plain white body text and not an error.
@@ -171,7 +177,13 @@ describe("CodeEntryScreen", () => {
     await screen.press("Resend code");
 
     expect(sendRequests().map((request) => request.body)).toEqual([
-      { email: "member@example.test", type: "sign-in", age16Confirmed: true, age18Confirmed: true },
+      {
+        email: "member@example.test",
+        type: "sign-in",
+        age16Confirmed: true,
+        age18Confirmed: true,
+        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      },
     ]);
   });
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { identifierSchema, timestampSchema } from "./common.js";
-import { ageConfirmationRecordSchema } from "./consentRecord.js";
+import { ageConfirmationRecordSchema, signUpAttestationRecordSchema } from "./consentRecord.js";
 import { handleSchema } from "./handle.js";
 
 /**
@@ -22,7 +22,8 @@ export const accountExportSchema = z.strictObject({
     /** Linked Apple or Google sign-in, by provider name only. Empty for email-only accounts. */
     linkedProviders: z.array(socialProviderNameSchema),
   }),
-  consentRecords: z.array(ageConfirmationRecordSchema), // HEN-263: deleted with the account, exported like HEN-183
+  /** HEN-263 age confirmations and HEN-183 sign-up attestations; deleted with the account. */
+  consentRecords: z.array(z.discriminatedUnion("consentType", [ageConfirmationRecordSchema, signUpAttestationRecordSchema])),
 });
 
 export type AccountExport = z.infer<typeof accountExportSchema>;

@@ -34,7 +34,8 @@ export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = 
   {
     table: "consent_records",
     mechanism: "foreign_key_cascade",
-    description: "Deletes the age confirmation consent records via consent_records.user_id ON DELETE CASCADE (HEN-263).",
+    description:
+      "Deletes the age confirmation and sign-up attestation consent records via consent_records.user_id ON DELETE CASCADE (HEN-263, HEN-183).",
   },
   {
     table: "users",

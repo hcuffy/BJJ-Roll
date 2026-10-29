@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +57,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   };
   const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");

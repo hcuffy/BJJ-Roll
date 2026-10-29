@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -48,6 +49,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
   const startSignedIn = async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
@@ -103,6 +105,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
 
     serverDown = false;
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
     await screen.press("Continue with email");
@@ -114,6 +117,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
   it("a retry that also fails on the network shows the same calm note again, not red (HEN-287)", async () => {
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Continue with email");
 
@@ -153,6 +157,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     serverDown = false;
     const screen = await startApp();
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
     await screen.press("Email me a sign-in link instead");
     expect(screen.text()).toContain("Check your email");

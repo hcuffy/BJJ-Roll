@@ -1,4 +1,4 @@
-import { ageConfirmationStatusSchema } from "@bjj-roll/shared";
+import { ageConfirmationStatusSchema, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { afterAll, beforeAll, expect, vi } from "vitest";
 import { createAccountTestFlow, type SignedInUser } from "./accountTestFlow.js";
 import { extractSessionCookie, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
@@ -18,9 +18,10 @@ export interface ConsentRow {
   withdrawn_at: Date | null;
 }
 
+/** Age confirmation rows only; HEN-183 attestation rows have their own suite. */
 const consentRowsQuery = [
   "SELECT user_id, consent_type, text_version_id, age16_confirmed, age18_confirmed, accepted_at, withdrawn_at",
-  "FROM public.consent_records WHERE user_id = $1 ORDER BY accepted_at",
+  "FROM public.consent_records WHERE user_id = $1 AND consent_type = 'age_confirmation' ORDER BY accepted_at",
 ].join(" ");
 
 /** Shared setup for the HEN-263 age-gate suites: call inside a describe; it starts and stops the auth environment there. */
@@ -67,7 +68,11 @@ export function createAgeGateTestContext() {
     [...after.entries()].filter(([key, count]) => before.get(key) !== count).map(([key]) => key);
 
   const sendOtp = (email: string, ipAddress: string, ageAnswers: Record<string, unknown>): Promise<Response> =>
-    postAuthJson(current().app, otpSendPath, { body: { email, type: "sign-in", ...ageAnswers }, ipAddress });
+    postAuthJson(current().app, otpSendPath, {
+      // HEN-183: every send carries the current attestation unless a test overrides it.
+      body: { email, type: "sign-in", signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, ...ageAnswers },
+      ipAddress,
+    });
 
   const signUpWithOtp = async (email: string, ipAddress: string, ageAnswers: Record<string, unknown>): Promise<SignedInUser> => {
     expect((await sendOtp(email, ipAddress, ageAnswers)).status).toBe(200);

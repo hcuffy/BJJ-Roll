@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BiometricOfferScreen } from "../screens/BiometricOfferScreen";
 import { colours, radius, sizes } from "../theme/tokens";
-import { pressAndroidBack, resetBackListeners } from "./backHandlerHarness";
+import { pressHardwareBack, resetBackListeners } from "./backHandlerHarness";
 import { flattenStyle, renderScreen } from "./screenHarness";
 
 const renderOffer = async (onDone: () => void = () => undefined, kind: "faceId" | "biometrics" = "biometrics") =>
@@ -43,12 +43,12 @@ describe("BiometricOfferScreen design (Vera round 2)", () => {
         : null;
     const screen = await renderScreen(createElement(Host));
 
-    expect(pressAndroidBack()).toBe(true);
+    expect(pressHardwareBack()).toBe(true);
     expect(onDone).toHaveBeenCalledTimes(1);
 
     shown.offer = false;
     await screen.rerender();
-    expect(pressAndroidBack()).toBe(false);
+    expect(pressHardwareBack()).toBe(false);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 });

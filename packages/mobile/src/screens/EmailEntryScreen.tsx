@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { signInWithProvider, socialFailureMessage, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
-import { textStyles } from "../theme/tokens";
+import { SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "../auth/signUpAttestation";
 import { AgeConfirmationFields } from "./AgeConfirmationFields";
-import { AuthButton } from "./AuthButton";
+import { EmailSendButtons } from "./EmailSendButtons";
 import { AuthScreenLayout } from "./AuthScreenLayout";
-import { type LinkErrorCardProps, LinkErrorCard } from "./LinkErrorCard";
+import type { LinkErrorCardProps } from "./LinkErrorCard";
 import { LinkSentScreen } from "./LinkSentScreen";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
+import { SignInHeader } from "./SignInHeader";
+import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
@@ -60,6 +62,9 @@ export function EmailEntryScreen({
   const [email, setEmail] = useState("");
   const [age16Confirmed, setAge16Confirmed] = useState(false);
   const [age18Confirmed, setAge18Confirmed] = useState(false);
+  // HEN-183: the sign-up duties box; every send carries the current text version id once it is ticked.
+  const [attestationAccepted, setAttestationAccepted] = useState(false);
+  const [attestationError, setAttestationError] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
@@ -73,8 +78,9 @@ export function EmailEntryScreen({
   const [socialProgress, setSocialProgress] = useState<"opening" | "signingIn">("opening");
   const [socialError, setSocialError] = useState<string | null>(null);
   const linkCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
-  const ready = age16Confirmed && isEmailAddress(email);
-  const sendHint = missingHint(isEmailAddress(email), age16Confirmed);
+  const ready = age16Confirmed && attestationAccepted && isEmailAddress(email);
+  const sendHint = missingHint(isEmailAddress(email), age16Confirmed, attestationAccepted);
+  const answers = { age16Confirmed, age18Confirmed, signUpAttestationAccepted: attestationAccepted };
 
   const startAction = () => {
     onClearLinkError?.();
@@ -88,6 +94,8 @@ export function EmailEntryScreen({
   const showFailure = (result: Extract<ActionResult, { ok: false }>, showOther: (message: string | null) => void = setFormError) => {
     if (result.reason === "ageRequired") {
       setAgeError(result.message);
+    } else if (result.reason === "attestationRequired") {
+      setAttestationError(result.message);
     } else if (result.reason === "invalidEmail") {
       setEmailError(result.message);
     } else if (result.reason === "network") {
@@ -104,7 +112,8 @@ export function EmailEntryScreen({
     // An email error already showing from blur is not read again, so the age error must be heard instead.
     setAnnounceAgeError(emailValid || emailError !== null);
     setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
-    return emailValid && age16Confirmed;
+    setAttestationError(attestationAccepted ? null : SIGN_UP_ATTESTATION_REFUSAL_MESSAGE);
+    return emailValid && age16Confirmed && attestationAccepted;
   };
 
   const send = async (kind: "code" | "link") => {
@@ -116,7 +125,7 @@ export function EmailEntryScreen({
     }
     setSending(kind);
     const action = kind === "code" ? sendEmailCode : sendMagicLink;
-    const result = await action(client, { email, age16Confirmed, age18Confirmed });
+    const result = await action(client, { email, ...answers });
     setSending(null);
     if (!result.ok) {
       showFailure(result);
@@ -131,7 +140,7 @@ export function EmailEntryScreen({
     }
   };
 
-  /** Social sign-in needs only the 16+ box (the provider gives the email) and sends the 18+ answer like the email buttons. */
+  /** Social sign-in needs the 16+ and duties boxes, not the email (the provider gives it), and sends the answers like the email buttons. */
   const signInWithSocial = async (provider: SocialProvider) => {
     startAction();
     // A new attempt: an offline note from an earlier one must not sit next to this one's result (HEN-287, Vera interim item 4).
@@ -147,10 +156,14 @@ export function EmailEntryScreen({
       return;
     }
     setAgeError(null);
+    if (!attestationAccepted) {
+      setAttestationError(SIGN_UP_ATTESTATION_REFUSAL_MESSAGE);
+      return;
+    }
     setSending(provider);
     setSocialProgress("opening");
     const dependencies = { ...socialSignIn, onReturned: () => setSocialProgress("signingIn") };
-    const result = await signInWithProvider(dependencies, provider, { age16Confirmed, age18Confirmed });
+    const result = await signInWithProvider(dependencies, provider, answers);
     setSending(null);
     if (result.ok) {
       onSignedIn?.();
@@ -181,18 +194,7 @@ export function EmailEntryScreen({
 
   return (
     <AuthScreenLayout>
-      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
-      {accountNotice ? (
-        <View style={authStyles.card}>
-          <StatusText message={accountNotice} style={authStyles.notice} />
-        </View>
-      ) : null}
-      <View style={authStyles.heading}>
-        <Text accessibilityRole="header" style={textStyles.display}>
-          Sign in to BJJ Roll
-        </Text>
-        <Text style={textStyles.bodyMuted}>New here? We&apos;ll create your account.</Text>
-      </View>
+      <SignInHeader linkError={linkError} linkErrorReason={linkErrorReason} accountNotice={accountNotice} />
       <TextField
         label="Email"
         error={emailError}
@@ -238,31 +240,25 @@ export function EmailEntryScreen({
           setAge18Confirmed(!age18Confirmed);
         }}
       />
+      <SignUpAttestationFields
+        accepted={attestationAccepted}
+        error={attestationError}
+        // Announced only when it is the one thing missing; the email or 16+ error is read first otherwise.
+        announceError={isEmailAddress(email) && age16Confirmed}
+        onPress={() => {
+          startAction();
+          setAttestationAccepted(!attestationAccepted);
+          setAttestationError(null);
+        }}
+      />
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
-        <AuthButton
-          title="Continue with email"
-          looksDisabled={!ready}
-          accessibilityHint={sendHint}
-          loading={sending === "code"}
-          loadingTitle="Sending code…"
-          disabled={sending !== null && sending !== "code"}
-          onPress={() => void send("code")}
-        />
-        <AuthButton
-          title="Email me a sign-in link instead"
-          variant="secondary"
-          looksDisabled={!ready}
-          accessibilityHint={sendHint}
-          loading={sending === "link"}
-          loadingTitle="Sending link…"
-          disabled={sending !== null && sending !== "link"}
-          onPress={() => void send("link")}
-        />
+        <EmailSendButtons ready={ready} hint={sendHint} sending={sending} onSend={(kind) => void send(kind)} />
         {socialSignIn ? (
           <SocialSignInButtons
             providers={socialProviders}
             age16Confirmed={age16Confirmed}
+            attestationAccepted={attestationAccepted}
             sending={sending}
             progress={socialProgress}
             error={socialError}

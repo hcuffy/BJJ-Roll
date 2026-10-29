@@ -1,12 +1,14 @@
 import * as Linking from "expo-linking";
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, StatusBar, Text, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
+  acceptSignUpAttestation,
   confirmAdult,
   deleteAccount,
   exportAccountData,
   readAgeConfirmation,
+  readSignUpAttestation,
   requestAccountDeletionCode,
   type AccountSession,
 } from "./auth/accountActions";
@@ -26,9 +28,10 @@ import { BiometricLockScreen } from "./screens/BiometricLockScreen";
 import { BiometricOfferScreen } from "./screens/BiometricOfferScreen";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
+import { LoadingScreen } from "./screens/LoadingScreen";
+import { SignUpAttestationGate } from "./screens/SignUpAttestationGate";
 import { SignedInScreen } from "./screens/SignedInScreen";
-import { authStyles } from "./screens/authStyles";
-import { colours, textStyles } from "./theme/tokens";
+import { colours } from "./theme/tokens";
 
 type AuthScreen =
   | { readonly name: "loading" }
@@ -79,7 +82,7 @@ export function App() {
     if (!startupScreen) {
       return;
     }
-    // Leaves Loading only once; a link opened later in the running app does not move the user.
+    // Leaves Loading only once. A failed link leaves the user where they are; one that signs in moves them (to the lock if biometric unlock is on).
     const showStartupScreen = () => setScreen((current) => (current.name === "loading" ? startupScreen : current));
     if (!deepLinkUrl) {
       showStartupScreen();
@@ -132,6 +135,14 @@ export function App() {
       .finally(() => setScreen({ name: "email" }));
   };
 
+  const handleAccountDeleted = () => {
+    void clearBiometricUnlock(appSecureStore);
+    // A note from a link that failed while signed in must not sit next to the deleted card.
+    setServerUnreachable(false);
+    setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
+    setScreen({ name: "email" });
+  };
+
   return (
     // One provider at the root measures the real insets (status bar, notch, home indicator) on iOS and Android.
     <SafeAreaProvider>
@@ -144,35 +155,30 @@ export function App() {
   function renderScreen(): ReactNode {
     switch (screen.name) {
       case "loading": {
-        return (
-          <SafeAreaView style={authStyles.safeArea}>
-            <View style={authStyles.centred}>
-              {/* Muted spinner (lime is for the primary action); the visible word is the one thing screen readers read. */}
-              <ActivityIndicator size="large" color={colours.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-              <Text style={textStyles.bodyMuted}>Loading</Text>
-            </View>
-          </SafeAreaView>
-        );
+        return <LoadingScreen />;
       }
       case "signedIn": {
+        // HEN-183: an account without the current sign-up attestation stays on the prompt until it accepts.
         return (
-          <SignedInScreen
+          <SignUpAttestationGate
+            onReadStatus={() => readSignUpAttestation(accountSession())}
+            onAccept={() => acceptSignUpAttestation(accountSession())}
             onSignOut={handleSignOut}
-            onExportData={() => exportAccountData(accountSession())}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
             onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
-            onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
-            onConfirmAdult={() => confirmAdult(accountSession())}
-            onReadBiometricSetting={() => readBiometricSetting(appSecureStore)}
-            onChangeBiometricUnlock={(on) => changeBiometricUnlock(appSecureStore, on)}
-            onAccountDeleted={() => {
-              void clearBiometricUnlock(appSecureStore);
-              // A note from a link that failed while signed in must not sit next to the deleted card.
-              setServerUnreachable(false);
-              setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
-              setScreen({ name: "email" });
-            }}
-          />
+            onAccountDeleted={handleAccountDeleted}>
+            <SignedInScreen
+              onSignOut={handleSignOut}
+              onExportData={() => exportAccountData(accountSession())}
+              onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
+              onDeleteAccount={(code) => deleteAccount(accountSession(), code)}
+              onReadAgeConfirmation={() => readAgeConfirmation(accountSession())}
+              onConfirmAdult={() => confirmAdult(accountSession())}
+              onReadBiometricSetting={() => readBiometricSetting(appSecureStore)}
+              onChangeBiometricUnlock={(on) => changeBiometricUnlock(appSecureStore, on)}
+              onAccountDeleted={handleAccountDeleted}
+            />
+          </SignUpAttestationGate>
         );
       }
       case "biometricOffer": {
