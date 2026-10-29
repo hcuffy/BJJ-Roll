@@ -100,6 +100,14 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
     expect(redTexts(screen)).toEqual([]);
     expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
   };
+  /** Past the resend cooldown, the next request is refused (429, or 400 with `code`), so `act` leaves a red error. */
+  const actRefused = async (screen: Screen, act: () => Promise<unknown>, code?: string) => {
+    await vi.advanceTimersByTimeAsync(30_000).then(() => screen.rerender());
+    backend.fetchImplementation.mockResolvedValueOnce(Response.json({ code, message: "Refused" }, { status: code ? 400 : 429 }));
+    await act();
+    expect(redTexts(screen).length).toBeGreaterThan(0);
+  };
+  const expectOnlyTheCardIsRed = (screen: Screen, message: string) => expect(redTexts(screen).map((text) => text.props.children)).toEqual([message]);
   const announcementsOf = (message: string) =>
     vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls.filter(([announced]) => announced === message).length;
 
@@ -190,6 +198,13 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       expectLinkErrorCardBetween(screen, "Link expires in", "Resend");
     });
 
+    it("an old red form error goes when a new link fails: a failed Resend link is replaced by the card (Bill)", async () => {
+      const screen = await startOnLinkSent();
+      await actRefused(screen, () => screen.press("Resend link"));
+      await openLink(screen, REJECTED_LINK);
+      expectOnlyTheCardIsRed(screen, EXPIRED_MESSAGE);
+    });
+
     it("screen reader: the card is announced once when it mounts", async () => {
       Platform.OS = "ios";
       const screen = await startOnLinkSent();
@@ -252,7 +267,21 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await screen.press("Use a different email");
 
       expect(screen.text()).toContain("Sign in to BJJ Roll");
+      // The email form would show the shared copy, so check both texts are gone.
+      expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
       expect(screen.text()).not.toContain(CODE_SCREEN_INVALID_LINK);
+    });
+
+    it("old red errors go when a new link fails: a failed Resend code, then a wrong code, are replaced by the card (Bill)", async () => {
+      const screen = await startOnCodeScreen();
+      await actRefused(screen, () => screen.press("Resend code"));
+      await openLink(screen, REJECTED_LINK);
+      expectOnlyTheCardIsRed(screen, CODE_SCREEN_INVALID_LINK);
+
+      // A wrong code: the field's own red error.
+      await actRefused(screen, () => screen.changeText("6-digit code", "123456"), "INVALID_OTP");
+      await openLink(screen, REJECTED_LINK);
+      expectOnlyTheCardIsRed(screen, CODE_SCREEN_INVALID_LINK);
     });
 
     it("screen reader: the card is announced once when it mounts", async () => {
