@@ -41,14 +41,16 @@ export interface EmailQueue {
 }
 
 /**
- * The final-failure log line: only the job id, the template and a fixed error class. Never the address, code, link,
- * a token or any provider text.
+ * The final-failure log line: only the job id, the template, a fixed error class and how many tries were made. Never the
+ * address, code, link, a token or any provider text. `template` is "unknown" only when the payload could not be opened.
  */
 export interface EmailQueueLogLine {
   readonly event: "email_dead_lettered";
   readonly jobId: string;
-  readonly template: QueuedEmail["kind"];
+  readonly template: QueuedEmail["kind"] | "unknown";
   readonly errorClass: EmailSendError["reason"] | "unknown";
+  /** Tries made, the failed one included (pg-boss `retryCount + 1`). */
+  readonly attempts: number;
 }
 
 export type EmailQueueLogger = (line: EmailQueueLogLine) => void;
@@ -203,18 +205,23 @@ export class PgBossEmailQueue implements EmailQueue {
   }
 
   async #deliver(job: JobWithMetadata<SealedEmailJob>): Promise<void> {
-    const email = JSON.parse(this.#codec.decryptVerificationPayload(job.data.sealed)) as QueuedEmail;
+    const attempts = job.retryCount + 1;
+    let template: EmailQueueLogLine["template"] = "unknown";
     try {
+      // Inside the try: a payload that cannot be opened (wrong key, corrupt row) is dead-lettered, not left to fail silently.
+      const email = JSON.parse(this.#codec.decryptVerificationPayload(job.data.sealed)) as QueuedEmail;
+      template = email.kind;
       await sendQueuedEmail(this.#emailSender, email, job.id);
     } catch (error) {
-      const retryable = isRetryableEmailError(error);
+      // A payload that cannot be opened never will be, so only a send failure is retried.
+      const retryable = template !== "unknown" && isRetryableEmailError(error);
       if (retryable && job.retryCount < job.retryLimit) {
         // pg-boss stores this error on the job, so it carries only the reason, never the provider error text.
         throw error instanceof EmailSendError ? new EmailSendError(error.reason, error.statusCode) : new Error("Email send failed (unknown)");
       }
       // Final failure (no retry left, or one the provider would refuse again): log it, then delete the row like a sent one.
       const errorClass = error instanceof EmailSendError ? error.reason : "unknown";
-      this.#logEvent({ event: "email_dead_lettered", jobId: job.id, template: email.kind, errorClass });
+      this.#logEvent({ event: "email_dead_lettered", jobId: job.id, template, errorClass, attempts });
     }
     // Sent or finally failed: the encrypted payload is not kept a moment longer.
     await this.#boss.deleteJob(EMAIL_QUEUE_NAME, job.id);

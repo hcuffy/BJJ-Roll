@@ -97,7 +97,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
     // Queuing worked, so the route logs nothing; the queue tried 3 times and wrote the dead-letter line.
     expect(lines.filter((line) => line.includes("account_deletion_email_failed"))).toEqual([]);
     expect(current().emailQueueLogLines).toEqual([
-      { event: "email_dead_lettered", jobId: expect.any(String) as unknown, template: "account_deleted_notice", errorClass: "network" },
+      { event: "email_dead_lettered", jobId: expect.any(String) as unknown, template: "account_deleted_notice", errorClass: "network", attempts: 3 },
     ]);
     const allLogs = [...lines, ...current().emailQueueLogLines.map((line) => JSON.stringify(line))].join("\n").toLowerCase();
     expect(allLogs).not.toContain(email);

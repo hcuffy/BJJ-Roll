@@ -441,8 +441,9 @@ needs CREATE on the database (without it the server stops with a message naming 
 - Duplicates: the job id is derived from a keyed hash of the email (or a caller key, such as the user id for the deleted notice), so the same request twice
   stores one job. The job id is sent to Lettermint as `Idempotency-Key`, so a retry after a slow or timed-out send does not send a second email.
 - No dead-letter queue (Sara, 2026-10-27): after the last try, or at once for a non-retried error, the worker writes one JSON line
-  `email_dead_lettered` to stdout with only the job id, the template and an error class (never the address, code, link or provider text), then deletes
-  the job. There is no `_dead_letter` queue for emails, so the payload is not kept.
+  `email_dead_lettered` to stdout with only the job id, the template, an error class and `attempts` (tries made, pg-boss `retryCount + 1`; never the
+  address, code, link or provider text), then deletes the job. A payload the worker cannot decrypt is logged the same way at once, with template
+  `unknown`. There is no `_dead_letter` queue for emails, so the payload is not kept.
 - Privacy: the job row holds only what the send needs (address, and the code or link), sealed with the app data key (D18). The row is deleted as soon as
   the email is sent or finally fails. Unsent, a code or link job is dropped when the code or link expires; the deleted notice job, which has none, after
   at most 6 hours (`EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS`), so it outlives the account by at most that.

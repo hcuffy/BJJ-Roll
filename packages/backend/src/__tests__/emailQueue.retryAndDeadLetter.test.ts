@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { EmailSendError, FakeEmailSender, type QueuedEmail, type SendOneTimeCodeInput } from "../email/index.js";
+import { EMAIL_QUEUE_RETRY_DELAY_SECONDS, EmailSendError, FakeEmailSender, type QueuedEmail, type SendOneTimeCodeInput } from "../email/index.js";
 import { isPostgresTestEnvironmentAvailable, startMigratedTestDatabase, type MigratedTestDatabase } from "./databaseTestHarness.js";
 import { createTestEmailQueue, createTestKeyring, waitUntil } from "./emailQueueTestSupport.js";
 
-/** Fails the first `failures` tries with `error`, then sends. Records every try and the idempotency key it carried. */
+/** Fails the first `failures` tries with `error`, then sends. Records every try, the idempotency key it carried and when it started. */
 class FlakyEmailSender extends FakeEmailSender {
   readonly tries: (string | undefined)[] = [];
+  readonly triedAt: number[] = [];
 
   constructor(
     private readonly failures: number,
@@ -16,6 +17,7 @@ class FlakyEmailSender extends FakeEmailSender {
 
   override async sendOneTimeCode(input: SendOneTimeCodeInput): Promise<void> {
     this.tries.push(input.idempotencyKey);
+    this.triedAt.push(performance.now());
     if (this.tries.length <= this.failures) {
       throw this.error;
     }
@@ -91,7 +93,27 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
     }
   }, 30_000);
 
-  it("after the last try writes one log line with only the job id, template and error class, and deletes the job row", async () => {
+  it("waits before each retry, and longer before the second: first gap at least the 1 s retry delay, second at least double it", async () => {
+    const emailSender = new FlakyEmailSender(2);
+    const { queue } = createTestEmailQueue({ connectionString: connectionString(), emailSender });
+    await queue.start();
+    try {
+      await queue.enqueue(email, { idempotencyKey: "retry-backoff-gaps" });
+      await waitUntil(() => emailSender.sentMessages.length === 1, 20_000);
+      expect(emailSender.triedAt).toHaveLength(3);
+      const [first = 0, second = 0, third = 0] = emailSender.triedAt;
+      const baseDelayMilliseconds = EMAIL_QUEUE_RETRY_DELAY_SECONDS * 1000;
+      // Without any retry delay the next try follows within one poll (0.5 s); with a fixed delay both gaps are about 1 s.
+      // pg-boss backoff makes the first gap 1-2 s and the second 2-4 s (plus up to one poll), so only real backoff passes both.
+      // 100 ms of slack covers timer rounding between the database clock and this process.
+      expect(second - first).toBeGreaterThanOrEqual(baseDelayMilliseconds - 100);
+      expect(third - second).toBeGreaterThanOrEqual(2 * baseDelayMilliseconds - 100);
+    } finally {
+      await queue.stop();
+    }
+  }, 30_000);
+
+  it("after the last try writes one log line with only the job id, template, error class and tries made, and deletes the job row", async () => {
     const emailSender = new FlakyEmailSender(Number.POSITIVE_INFINITY);
     const { queue, logLines } = createTestEmailQueue({ connectionString: connectionString(), emailSender });
     await queue.start();
@@ -99,7 +121,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
       await queue.enqueue(email, { idempotencyKey: "always-fails" });
       await waitUntil(() => logLines.length === 1, 20_000);
       const jobId = emailSender.tries[0];
-      expect(logLines).toEqual([{ event: "email_dead_lettered", jobId, template: "one_time_code", errorClass: "network" }]);
+      expect(logLines).toEqual([{ event: "email_dead_lettered", jobId, template: "one_time_code", errorClass: "network", attempts: 3 }]);
       expect(emailSender.tries).toHaveLength(3);
       const logged = JSON.stringify(logLines);
       expect(logged).not.toContain(address);
@@ -124,7 +146,9 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
         await waitUntil(() => logLines.length === 1);
         await new Promise((resolve) => setTimeout(resolve, 3_000));
         expect(emailSender.tries).toHaveLength(1);
-        expect(logLines).toEqual([{ event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: reason }]);
+        expect(logLines).toEqual([
+          { event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: reason, attempts: 1 },
+        ]);
       } finally {
         await queue.stop();
       }
@@ -188,13 +212,44 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
     try {
       await queue.enqueue(email, { idempotencyKey: "unexpected-error" });
       await waitUntil(() => logLines.length === 1, 20_000);
-      expect(logLines).toEqual([{ event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: "unknown" }]);
+      expect(logLines).toEqual([
+        { event: "email_dead_lettered", jobId: emailSender.tries[0], template: "one_time_code", errorClass: "unknown", attempts: 3 },
+      ]);
       const logged = JSON.stringify(logLines);
       expect(logged).not.toContain(address);
       expect(logged).not.toContain(code);
       expect(logged).not.toContain("provider said");
     } finally {
       await queue.stop();
+    }
+  }, 30_000);
+
+  it("a payload that cannot be opened is dead-lettered at once with an unknown template, and its row is deleted", async () => {
+    const emailSender = new FlakyEmailSender(0);
+    // Stored under one key, worked under another: the worker cannot decrypt the job.
+    const storer = createTestEmailQueue({ connectionString: connectionString(), emailSender, keyring: createTestKeyring() });
+    const worker = createTestEmailQueue({ connectionString: connectionString(), emailSender, keyring: createTestKeyring() });
+    await storer.queue.start({ worker: false });
+    try {
+      await storer.queue.enqueue(email, { idempotencyKey: "unreadable-payload" });
+      await worker.queue.start();
+      await waitUntil(() => worker.logLines.length === 1, 20_000);
+      const [line] = worker.logLines;
+      expect(line).toEqual({
+        event: "email_dead_lettered",
+        jobId: expect.any(String) as unknown,
+        template: "unknown",
+        errorClass: "unknown",
+        attempts: 1,
+      });
+      expect(emailSender.tries).toEqual([]);
+      const logged = JSON.stringify(worker.logLines);
+      expect(logged).not.toContain(address);
+      expect(logged).not.toContain(code);
+      await waitUntil(async () => (await database?.pool.query("SELECT 1 FROM pgboss.job WHERE id = $1", [line?.jobId]))?.rows.length === 0, 5_000);
+    } finally {
+      await worker.queue.stop();
+      await storer.queue.stop();
     }
   }, 30_000);
 });

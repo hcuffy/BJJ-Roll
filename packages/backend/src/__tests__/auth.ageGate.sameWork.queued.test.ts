@@ -142,7 +142,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
             (await environment?.pool.query("SELECT 1 FROM pgboss.job WHERE name = $1 AND state < 'completed'", [EMAIL_QUEUE_NAME]))?.rows,
           ).toEqual([]),
         {
-          timeout: 15_000,
+          // Jobs left by the earlier tests drain on their own; a full parallel run once needed more than 15 s.
+          timeout: 30_000,
           interval: 100,
         },
       );
@@ -167,6 +168,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
           jobId: expect.any(String) as unknown,
           template: "one_time_code",
           errorClass: "network",
+          attempts: 3,
         });
         expect(JSON.stringify(line)).not.toContain(knownEmail);
         expect(JSON.stringify(line)).not.toContain(unknownEmail);
@@ -174,5 +176,5 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
     } finally {
       emailSender.fail = false;
     }
-  }, 45_000);
+  }, 60_000);
 });
