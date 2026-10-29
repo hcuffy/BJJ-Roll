@@ -186,7 +186,7 @@ export function EmailEntryScreen({
         notice={notice}
         linkError={linkError}
         linkErrorReason={linkErrorReason}
-        offline={serverUnreachable || offline}
+        offline={serverUnreachable || (offline && !linkError)}
         formError={formError}
         cooldownSecondsLeft={linkCooldown.secondsLeft}
         sending={sending === "link"}

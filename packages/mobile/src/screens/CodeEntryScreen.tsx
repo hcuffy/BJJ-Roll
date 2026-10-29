@@ -13,6 +13,8 @@ import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 const CODE_LENGTH = 6;
+/** The code screen's link-error copy: the code is still a way in here (CTO decision, HEN-304). */
+export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter your code below, or send a new one.";
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
@@ -149,8 +151,10 @@ export function CodeEntryScreen({
         }}
         onSubmitEditing={() => void verify(latestCode.current)}
       />
-      <ServerUnreachableNote visible={serverUnreachable || offline} />
-      {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
+      <ServerUnreachableNote visible={serverUnreachable || (offline && !linkError)} />
+      {linkError ? (
+        <LinkErrorCard message={linkErrorReason === "invalidLink" ? CODE_SCREEN_INVALID_LINK : linkError} reason={linkErrorReason} />
+      ) : null}
       <StatusText message={formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton

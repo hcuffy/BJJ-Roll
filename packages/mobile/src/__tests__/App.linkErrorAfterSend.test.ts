@@ -21,6 +21,7 @@ vi.mock("../auth/appAuthClient", () => ({
 
 const { App } = await import("../App");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
+const { CODE_SCREEN_INVALID_LINK } = await import("../screens/CodeEntryScreen");
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
@@ -79,13 +80,16 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
   };
   const redTexts = (screen: Screen) => screen.findAllByType("Text").filter((text) => flattenStyle(text.props.style).color === colours.danger);
   const expectLinkErrorCardBetween = (screen: Screen, above: string, below: string) => {
-    const card = screen.queryByText(EXPIRED_MESSAGE);
+    // The code screen has its own copy (CTO decision); "Check your email" keeps the shared one.
+    const message = screen.text().includes("Enter your code") ? CODE_SCREEN_INVALID_LINK : EXPIRED_MESSAGE;
+    const card = screen.queryByText(message);
     expect(card?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
     expect(flattenStyle(card?.props.style).color).toBe(colours.danger);
     // The red error slot of the view: under its content, above its buttons.
     const text = screen.text();
-    expect(text.indexOf(EXPIRED_MESSAGE)).toBeGreaterThan(text.indexOf(above));
-    expect(text.indexOf(EXPIRED_MESSAGE)).toBeLessThan(text.indexOf(below));
+    expect(text.indexOf(message)).toBeGreaterThan(text.indexOf(above));
+    expect(text.indexOf(message)).toBeLessThan(text.indexOf(below));
+    expect(text.split(message)).toHaveLength(2);
     expect(text).not.toContain(SERVER_UNREACHABLE_NOTE);
   };
   const expectCalmNoteOnly = (screen: Screen) => {
@@ -171,6 +175,21 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       expectLinkErrorCardBetween(screen, "Link expires in", "Resend");
     });
 
+    it("an old card goes when a new link fails: on the network it becomes the calm note, rejected again it is one card (Bill)", async () => {
+      const screen = await startOnLinkSent();
+      await openLink(screen, REJECTED_LINK);
+      expectLinkErrorCardBetween(screen, "Link expires in", "Resend");
+
+      await openNetworkFailingLink(screen);
+      expectCalmNoteOnly(screen);
+
+      unreachablePaths.clear();
+      await openLink(screen, REJECTED_LINK);
+      expectLinkErrorCardBetween(screen, "Link expires in", "Resend");
+      await openLink(screen, REJECTED_LINK);
+      expectLinkErrorCardBetween(screen, "Link expires in", "Resend");
+    });
+
     it("screen reader: the card is announced once when it mounts", async () => {
       Platform.OS = "ios";
       const screen = await startOnLinkSent();
@@ -212,7 +231,7 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await screen.rerender();
       await screen.press("Resend code");
       expect(screen.text()).toContain(`We sent a new code to ${EMAIL}.`);
-      expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
+      expect(screen.text()).not.toContain(CODE_SCREEN_INVALID_LINK);
 
       await openNetworkFailingLink(screen);
       expectCalmNoteOnly(screen);
@@ -233,7 +252,7 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await screen.press("Use a different email");
 
       expect(screen.text()).toContain("Sign in to BJJ Roll");
-      expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
+      expect(screen.text()).not.toContain(CODE_SCREEN_INVALID_LINK);
     });
 
     it("screen reader: the card is announced once when it mounts", async () => {
@@ -242,7 +261,7 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await openLink(screen, REJECTED_LINK);
       await screen.rerender();
 
-      expect(announcementsOf(EXPIRED_MESSAGE)).toBe(1);
+      expect(announcementsOf(CODE_SCREEN_INVALID_LINK)).toBe(1);
     });
   });
 });
