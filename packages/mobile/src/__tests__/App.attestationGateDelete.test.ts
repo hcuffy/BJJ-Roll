@@ -1,8 +1,9 @@
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
+import { Share } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_ACCOUNT_EXPORT, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 import { pressHardwareBack, resetBackListeners } from "./backHandlerHarness";
 import { deepLinkState, renderScreen } from "./screenHarness";
 import { deferred } from "./signedInScreenHarness";
@@ -70,6 +71,29 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
       "DELETE /account",
     ]);
     expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
+  });
+
+  // HEN-308 (Sara Q3): export is not attestation-gated, so the gate's confirm exports first; that records no acceptance.
+  it("a gated account exports its data from the confirm without accepting, then still deletes with the emailed code", async () => {
+    const shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
+    const screen = await signInToGate();
+
+    await screen.press("Delete account");
+    await screen.press("Export my data first");
+    expect(shareSpy).toHaveBeenCalledWith({ title: "BJJ Roll data export", message: JSON.stringify(TEST_ACCOUNT_EXPORT, null, 2) });
+    expect(screen.text()).toContain("Delete your account?");
+    await screen.press("Email me a code");
+    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.press("Delete my account");
+
+    expect(screen.text()).toContain("Your account was deleted.");
+    const accountRequests = backend.requests.filter((request) => new URL(request.url).pathname.startsWith("/account"));
+    expect(accountRequests.map((request) => `${request.method} ${new URL(request.url).pathname}`)).toEqual([
+      "GET /account/signup-attestation",
+      "GET /account/export",
+      "POST /account/delete-code",
+      "DELETE /account",
+    ]);
   });
 
   // Vera #74 round 5: Android back is ignored while the DELETE is in flight, like the disabled Cancel.
