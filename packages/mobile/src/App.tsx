@@ -14,7 +14,15 @@ import {
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
+import {
+  cancelPendingSignOut,
+  completeMagicLink,
+  type FailureReason,
+  finishPendingSignOut,
+  readSignedInUserId,
+  signOut,
+  withStartupTimeout,
+} from "./auth/signInActions";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { LoadingScreen } from "./screens/LoadingScreen";
@@ -47,8 +55,9 @@ export function App() {
 
   useEffect(() => {
     // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
-    void finishPendingSignOut(appAuthClient, appSecureStore)
-      .then(async (signOutPending) => (signOutPending ? null : await readSignedInUserId(appAuthClient)))
+    // Each step has a deadline, so a host that never answers cannot hold Loading (HEN-303); a timeout lands like a network failure.
+    void withStartupTimeout((signal) => finishPendingSignOut(appAuthClient, appSecureStore, signal))
+      .then(async (signOutPending) => (signOutPending ? null : await withStartupTimeout((signal) => readSignedInUserId(appAuthClient, signal))))
       .then((userId) => setStartupScreen(userId ? { name: "signedIn" } : { name: "email" }))
       .catch(() => {
         // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
@@ -68,7 +77,7 @@ export function App() {
       showStartupScreen();
       return;
     }
-    void completeMagicLink(appAuthClient, deepLinkUrl)
+    void withStartupTimeout((signal) => completeMagicLink(appAuthClient, deepLinkUrl, signal))
       .then((result) => {
         if (result.ok) {
           setLinkError(null);

@@ -71,12 +71,14 @@ export interface AuthRequest {
   readonly body: Record<string, unknown>;
   /** How to read a 4xx that is not the age refusal or a rate limit. */
   readonly clientErrorReason?: ClientErrorReason;
+  /** Aborts the request, e.g. when a startup step times out. */
+  readonly signal?: AbortSignal;
 }
 
-export async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason }: AuthRequest): Promise<ActionResult> {
+export async function postAuth(client: MobileAuthClient, { path, body, clientErrorReason, signal }: AuthRequest): Promise<ActionResult> {
   let error: { readonly status: number; readonly code?: unknown } | null;
   try {
-    ({ error } = await client.$fetch(path, { method: "POST", body }));
+    ({ error } = await client.$fetch(path, { method: "POST", body, signal }));
   } catch {
     // fetch rejects when the phone is offline or the backend cannot be reached.
     return failure("network");
@@ -159,7 +161,7 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
 export const SOCIAL_SIGN_IN_CALLBACK_PATH = "/social";
 
 /** Handles a bjjroll://auth deep link: swaps its one-time code for a session. Other URLs are ignored (message null). */
-export async function completeMagicLink(client: MobileAuthClient, url: string): Promise<ActionResult> {
+export async function completeMagicLink(client: MobileAuthClient, url: string, signal?: AbortSignal): Promise<ActionResult> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -189,12 +191,12 @@ export async function completeMagicLink(client: MobileAuthClient, url: string): 
   if (!code) {
     return { ok: false, reason: "ignored", message: null };
   }
-  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink" });
+  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink", signal });
 }
 
 /** User id of the stored session, or null when signed out (also on network errors). */
-export async function readSignedInUserId(client: MobileAuthClient): Promise<string | null> {
-  const { data } = await client.getSession();
+export async function readSignedInUserId(client: MobileAuthClient, signal?: AbortSignal): Promise<string | null> {
+  const { data } = await client.getSession({ fetchOptions: { signal } });
   return data?.user.id ?? null;
 }
 
@@ -210,9 +212,9 @@ export interface SessionKeyStore {
 /** Set when sign-out starts; removed only once the server sign-out and the key delete both succeeded (HEN-286). */
 export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
 
-async function signOutOnServer(client: MobileAuthClient): Promise<boolean> {
+async function signOutOnServer(client: MobileAuthClient, signal?: AbortSignal): Promise<boolean> {
   try {
-    const { error } = await client.signOut();
+    const { error } = await client.signOut({ fetchOptions: { signal } });
     return !error;
   } catch {
     // Offline or the backend cannot be reached.
@@ -221,8 +223,12 @@ async function signOutOnServer(client: MobileAuthClient): Promise<boolean> {
 }
 
 /** Ends the session on the server and on the phone; clears the pending marker only when both succeeded. */
-async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
-  const serverSignedOut = await signOutOnServer(client);
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
+  const serverSignedOut = await signOutOnServer(client, signal);
+  // Timed out: leave keys and marker as they are, so a late answer cannot touch a session made since; the next launch retries (HEN-303).
+  if (signal?.aborted) {
+    return;
+  }
   const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
   if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
     await secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY).catch(() => undefined);
@@ -245,11 +251,39 @@ export async function cancelPendingSignOut(secureStore: SessionKeyStore): Promis
  * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
  * so the user stays signed out on this launch even if the retry fails again.
  */
-export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<boolean> {
+export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
   const pending = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY).catch(() => null);
   if (pending === null) {
     return false;
   }
-  await finishSignOut(client, secureStore);
+  await finishSignOut(client, secureStore, signal);
   return true;
+}
+
+/** How long each startup request (sign-out retry, session read, link exchange) may take; React Native's fetch has no timeout (HEN-303). */
+export const STARTUP_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Thrown by withStartupTimeout; the app treats it like an unreachable server. */
+class StartupTimeoutError extends Error {
+  override readonly name = "StartupTimeoutError";
+}
+
+/**
+ * Runs one startup step with a deadline: after STARTUP_REQUEST_TIMEOUT_MS it rejects and aborts the step's requests.
+ * An answer that arrives later is ignored, so the screen changes once.
+ */
+export async function withStartupTimeout<T>(step: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new StartupTimeoutError("Startup request timed out"));
+      controller.abort();
+    }, STARTUP_REQUEST_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([step(controller.signal), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
