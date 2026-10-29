@@ -319,7 +319,7 @@ A1 records a known risk: Python workers claiming pg-boss jobs over SQL is untest
 queue policy and partition, with group concurrency, heartbeats and dead-letter lineage. Copying that in Python would tie the workers to pg-boss internals.
 
 - **Option A (decided):** only Node touches pg-boss. A `jobRunner` process in `packages/backend` claims jobs with `work()` and calls the Modal function
-  synchronously with `.remote(jobId, objectKey)` through the Modal JavaScript SDK (`modal` on npm, 0.11.1, which lists "call a deployed Function" and
+  synchronously with `.remote(jobId, objectKey)` through the Modal JavaScript SDK (`modal` on npm, pinned to 0.11.0 in HEN-227 under the 14-day release age, which lists "call a deployed Function" and
   "override its routing region" examples). This matches HEN-227: no `.spawn()`, async handling in pg-boss, payload only a job ID and an object key. Python
   stays inside Modal functions. **Required spike:** the JS SDK call to an `eu` function with `routing_region="eu-west"` is not tested yet. Test it in HEN-48 before building on it.
 - **Option B (rejected):** a Python dispatcher claims jobs from `pgboss.job` with its own `FOR UPDATE SKIP LOCKED` query. This is the path A1 flags as risky, and it
@@ -389,10 +389,15 @@ export const jobPayloadSchema = z.object({
   inputObjectKey: z.string().regex(/^videos\/[0-9a-f-]{36}\//),
 });
 
-// The only arguments the Modal function receives.
-export const modalCallInputSchema = z.object({
+// Server-built key of the video a Modal function reads: never an uploaded filename, URL, query string or email (HEN-227).
+export const modalInputObjectKeySchema = z
+  .string()
+  .regex(/^videos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(source|transcode)\.[a-z0-9]{2,4}$/);
+
+// The only arguments the Modal function receives. Strict: any extra field (bytes, URL, email, filename) is rejected (HEN-227).
+export const modalCallInputSchema = z.strictObject({
   jobId: identifierSchema,
-  inputObjectKey: jobPayloadSchema.shape.inputObjectKey,
+  inputObjectKey: modalInputObjectKeySchema,
 });
 
 // Fetched by the worker from GET /internal/jobs/{jobId} while the job is active.
@@ -427,7 +432,7 @@ export const jobResultSchema = z.discriminatedUnion("outcome", [
   days. Modal's US-held metadata is already on the lawyer list.
 - The Python side validates against JSON Schema generated from these Zod schemas (Zod 4 `z.toJSONSchema`) and committed to `packages/workers`. A test in
   `shared` fails if the committed JSON Schema is stale.
-- Logs: job id, queue, timings and error class only (HEN-227 log-scrub test). Partner pose, masks and metrics are never persisted (D6).
+- Logs: job id, queue, timings and error class only (HEN-227 log-scrub test). EU pinning, `.remote()`-only calls and cost: `docs/security/modal-eu-residency.md`. Partner pose, masks and metrics are never persisted (D6).
 
 ## 4. Row-level security
 
