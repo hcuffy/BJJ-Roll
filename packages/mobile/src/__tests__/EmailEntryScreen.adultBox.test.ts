@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +80,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false, disabled: false });
 
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(adult().props).toMatchObject({ disabled: false, accessibilityState: { checked: false, disabled: false } });
     expect(adult().props.accessibilityHint).toBeUndefined();
     expect(adultBoxStyle().borderColor).toBe(colours.textSecondary);
@@ -89,6 +91,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(adult().props.accessibilityState).toEqual({ checked: true, disabled: false });
 
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     expect(screen.getByRole("checkbox").props.accessibilityState).toEqual({ checked: false, disabled: false });
     expect(adult().props.accessibilityState).toEqual({ checked: false, disabled: true });
   });

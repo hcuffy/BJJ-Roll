@@ -55,7 +55,7 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
     setNotice(null);
     setOffline(false);
     // The user ticked the 16+ box on the email screen; it is required to get here.
-    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true });
+    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true });
     inFlight.current = false;
     setIsVerifying(false);
     if (result.ok) {
@@ -73,7 +73,7 @@ export function CodeEntryScreen({ client, email, age18Confirmed = false, onSigne
     setFormError(null);
     setNotice(null);
     setOffline(false);
-    const result = await sendEmailCode(client, { email, age16Confirmed: true, age18Confirmed });
+    const result = await sendEmailCode(client, { email, age16Confirmed: true, age18Confirmed, signUpAttestationAccepted: true });
     setIsResending(false);
     if (result.ok) {
       setNotice(`We sent a new code to ${email}.`);

@@ -204,7 +204,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
           }
         }
       }),
-      after: createAuthMiddleware(async (middlewareContext) => await afterAuthRequest(middlewareContext, appleSignIn)),
+      after: createAuthMiddleware(async (middlewareContext) => await afterAuthRequest(middlewareContext, appleSignIn, options.pool)),
     },
     plugins: [
       expo(),

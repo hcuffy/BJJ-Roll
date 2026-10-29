@@ -1,3 +1,4 @@
+import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -44,6 +45,7 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     );
   const fillEmailForm = async (screen: Screen) => {
     await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", "member@example.test");
   };
   const redTexts = (screen: Screen) => screen.findAllByType("Text").filter((text) => flattenStyle(text.props.style).color === colours.danger);

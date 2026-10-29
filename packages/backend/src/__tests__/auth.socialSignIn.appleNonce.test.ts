@@ -2,7 +2,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { claimNonceOnce } from "../auth/socialSignInSafety.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { extractSessionCookie, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import {
+  extractSessionCookie,
+  postAuthJson,
+  startAuthTestEnvironment,
+  type StartedAuthTestEnvironment,
+  currentSignUpAttestation,
+} from "./authTestHelper.js";
 import { createFakeAppleIdentityTokenSigner, createFakeSocialProviderConfig, stubProviderFetch } from "./socialSignInTestDoubles.js";
 
 const socialProviders = createFakeSocialProviderConfig();
@@ -66,7 +72,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Apple native sig
   const postAppleIdToken = (idToken: { token: string; nonce?: unknown }): Promise<Response> => {
     nextIp += 1;
     return postAuthJson(current().app, "/sign-in/social", {
-      body: { provider: "apple", idToken, additionalData: { age16Confirmed: true, age18Confirmed: false } },
+      body: { provider: "apple", idToken, additionalData: { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false } },
       ipAddress: `198.51.100.${nextIp}`,
     });
   };

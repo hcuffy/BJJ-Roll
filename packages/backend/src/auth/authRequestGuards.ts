@@ -1,5 +1,11 @@
 import { isIP } from "node:net";
-import { AGE_GATE_REFUSAL_MESSAGE, MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, type MagicLinkReason } from "@bjj-roll/shared";
+import {
+  AGE_GATE_REFUSAL_MESSAGE,
+  MAGIC_LINK_REASON_PARAM,
+  MAGIC_LINK_REASONS,
+  SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
+  type MagicLinkReason,
+} from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
@@ -105,12 +111,22 @@ export async function prepareMagicLinkRequest(request: Request): Promise<Request
 
 /** Strips cookies/tokens from the magic-link redirect and never lets a non-deep-link Location out. */
 function magicLinkVerifyErrorMessage(errorCode: string): string {
-  // HEN-263: a new account refused at link time for a missing 16+ tick says so; every other failure keeps the generic text.
-  return errorCode === "AGE_CONFIRMATION_REQUIRED" ? AGE_GATE_REFUSAL_MESSAGE : "Magic link token is invalid, expired, or has already been used";
+  // HEN-263: a new account refused at link time for a missing 16+ tick says so (HEN-183: the same for a missing attestation);
+  // every other failure keeps the generic text.
+  if (errorCode === "AGE_CONFIRMATION_REQUIRED") {
+    return AGE_GATE_REFUSAL_MESSAGE;
+  }
+  if (errorCode === "SIGN_UP_ATTESTATION_REQUIRED") {
+    return SIGN_UP_ATTESTATION_REFUSAL_MESSAGE;
+  }
+  return "Magic link token is invalid, expired, or has already been used";
 }
 
 function magicLinkReason(errorCode: string): MagicLinkReason {
-  return errorCode === "AGE_CONFIRMATION_REQUIRED" ? MAGIC_LINK_REASONS.ageRefused : MAGIC_LINK_REASONS.linkInvalid;
+  if (errorCode === "AGE_CONFIRMATION_REQUIRED") {
+    return MAGIC_LINK_REASONS.ageRefused;
+  }
+  return errorCode === "SIGN_UP_ATTESTATION_REQUIRED" ? MAGIC_LINK_REASONS.attestationRefused : MAGIC_LINK_REASONS.linkInvalid;
 }
 
 function reasonOnlyLocation(redirectUrl: URL, reason: MagicLinkReason): string {

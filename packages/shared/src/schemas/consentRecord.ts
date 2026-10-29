@@ -4,10 +4,13 @@ import { identifierSchema, timestampSchema } from "./common.js";
 // ARCHITECTURE.md §2.4: consent record. No free text is stored; textVersionId points to a versioned, lawyer-reviewed text (M4-24, HEN-189).
 export const consentRecipientTypeSchema = z.enum(["ai_vendor", "gym_mate", "reviewer"]);
 
+/** Names a versioned text; the wording itself is never stored. */
+export const consentTextVersionIdSchema = z.string().min(1).max(100);
+
 const consentRecordBaseSchema = z.object({
   id: identifierSchema,
   userId: identifierSchema,
-  textVersionId: z.string().min(1),
+  textVersionId: consentTextVersionIdSchema,
   acceptedAt: timestampSchema,
   withdrawnAt: timestampSchema.nullable(),
 });
@@ -19,9 +22,15 @@ export const ageConfirmationRecordSchema = consentRecordBaseSchema.extend({
   age18Confirmed: z.boolean(),
 });
 
+/** HEN-183 (M2-13): the sign-up attestation. Strict: no age answers and no free text on this record. */
+export const signUpAttestationRecordSchema = z.strictObject({
+  ...consentRecordBaseSchema.shape,
+  consentType: z.literal("attestation_signup"),
+});
+
 export const consentRecordSchema = z.discriminatedUnion("consentType", [
   ageConfirmationRecordSchema,
-  consentRecordBaseSchema.extend({ consentType: z.literal("attestation_signup") }), // M2-13, HEN-183 (type name proposed)
+  signUpAttestationRecordSchema,
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_upload"), videoId: identifierSchema }), // M4-25, HEN-190
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_share"), videoId: identifierSchema }), // M6-11 (type name proposed)
   consentRecordBaseSchema.extend({ consentType: z.literal("attestation_review_request"), videoId: identifierSchema }), // M10-09 (type name proposed)
@@ -38,3 +47,4 @@ export const consentRecordSchema = z.discriminatedUnion("consentType", [
 export type ConsentRecipientType = z.infer<typeof consentRecipientTypeSchema>;
 export type ConsentRecord = z.infer<typeof consentRecordSchema>;
 export type AgeConfirmationRecord = z.infer<typeof ageConfirmationRecordSchema>;
+export type SignUpAttestationRecord = z.infer<typeof signUpAttestationRecordSchema>;

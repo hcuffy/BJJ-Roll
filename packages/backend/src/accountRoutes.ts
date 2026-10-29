@@ -1,10 +1,14 @@
 import {
   AGE_CONFIRMATION_TEXT_VERSION_ID,
+  SIGN_UP_ATTESTATION_TEXT_VERSION,
   accountExportSchema,
   adultConfirmationRequestSchema,
+  isCurrentSignUpAttestationTextVersion,
+  signUpAttestationAcceptRequestSchema,
   socialProviderNames,
   type AccountExport,
   type AgeConfirmationStatus,
+  type SignUpAttestationStatus,
   type SocialProviderName,
 } from "@bjj-roll/shared";
 import { randomUUID } from "node:crypto";
@@ -64,7 +68,7 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
       .select(["id", "emailCiphertext", "keyVersion", "handle", "createdAt"])
       .where("id", "=", authenticatedUserId)
       .executeTakeFirst(),
-    consentRecords: await selectAgeConfirmationRecords(transaction, authenticatedUserId),
+    consentRecords: await selectConsentRecords(transaction, authenticatedUserId),
   }));
   if (!row) {
     return context.json({ error: "User not found" }, 404);
@@ -84,8 +88,10 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
       createdAt: formatTimestamp(row.createdAt),
       linkedProviders,
     },
-    consentRecords: consentRecords.map((record) => ({
+    consentRecords: consentRecords.map(({ age16Confirmed, age18Confirmed, ...record }) => ({
       ...record,
+      // HEN-183: the attestation record has no age answers; only age records carry them.
+      ...(record.consentType === "age_confirmation" ? { age16Confirmed, age18Confirmed } : {}),
       acceptedAt: formatTimestamp(record.acceptedAt),
       withdrawnAt: record.withdrawnAt === null ? null : formatTimestamp(record.withdrawnAt),
     })),
@@ -93,6 +99,18 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
   options.logAccountEvent("account_exported", authenticatedUserId);
   context.header("Cache-Control", "no-store");
   return context.json(exported, 200);
+}
+
+/** Every consent record of the user, oldest first; records from one sign-up share a timestamp, so the type breaks the tie. */
+function selectConsentRecords(transaction: Kysely<BjjRollDatabase>, userId: string) {
+  return transaction
+    .selectFrom("consentRecords")
+    .select(["id", "userId", "consentType", "textVersionId", "age16Confirmed", "age18Confirmed", "acceptedAt", "withdrawnAt"])
+    .where("userId", "=", userId)
+    .orderBy("acceptedAt")
+    .orderBy("consentType")
+    .orderBy("id")
+    .execute();
 }
 
 function selectAgeConfirmationRecords(transaction: Kysely<BjjRollDatabase>, userId: string) {
@@ -152,13 +170,74 @@ async function handleConfirmAdult(context: Context, options: AccountRoutesOption
   return context.json(status, 200);
 }
 
-/** GET /account/export, GET/POST /account/age-confirmation, POST /account/delete-code and DELETE /account, for the signed-in user only (HEN-65). */
+/**
+ * HEN-183: the user must have accepted the current attestation text version. An account with no record (made before HEN-183)
+ * or with an older version only is `required`, and the app stays on the prompt until it accepts.
+ */
+async function readSignUpAttestationStatus(transaction: Kysely<BjjRollDatabase>, userId: string): Promise<SignUpAttestationStatus> {
+  const latest = await transaction
+    .selectFrom("consentRecords")
+    .select(["textVersionId"])
+    .where("userId", "=", userId)
+    .where("consentType", "=", "attestation_signup")
+    .where("withdrawnAt", "is", null)
+    .orderBy("acceptedAt", "desc")
+    .orderBy("id", "desc")
+    .executeTakeFirst();
+  const acceptedTextVersionId = latest?.textVersionId ?? null;
+  return {
+    required: !isCurrentSignUpAttestationTextVersion(acceptedTextVersionId),
+    currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+    acceptedTextVersionId,
+  };
+}
+
+async function handleReadSignUpAttestation(context: Context, options: AccountRoutesOptions): Promise<Response> {
+  const authenticatedUserId = await options.resolveAuthenticatedUserId(context);
+  if (!authenticatedUserId) {
+    return context.json({ error: "Authentication required" }, 401);
+  }
+  const status = await withUserContext(options.db, authenticatedUserId, (transaction) =>
+    readSignUpAttestationStatus(transaction, authenticatedUserId),
+  );
+  context.header("Cache-Control", "no-store");
+  return context.json(status, 200);
+}
+
+/** Accepting adds a new record with its own timestamp; earlier records are kept, never updated. Only the current version is accepted. */
+async function handleAcceptSignUpAttestation(context: Context, options: AccountRoutesOptions): Promise<Response> {
+  const authenticatedUserId = await options.resolveAuthenticatedUserId(context);
+  if (!authenticatedUserId) {
+    return context.json({ error: "Authentication required" }, 401);
+  }
+  const body: unknown = await context.req.json().catch(() => undefined);
+  const parsed = signUpAttestationAcceptRequestSchema.safeParse(body);
+  if (!parsed.success || !isCurrentSignUpAttestationTextVersion(parsed.data.textVersionId)) {
+    return context.json({ error: "Invalid request" }, 400);
+  }
+  const status = await withUserContext(options.db, authenticatedUserId, async (transaction) => {
+    await transaction
+      .insertInto("consentRecords")
+      .values({ id: randomUUID(), userId: authenticatedUserId, consentType: "attestation_signup", textVersionId: parsed.data.textVersionId })
+      .execute();
+    return readSignUpAttestationStatus(transaction, authenticatedUserId);
+  });
+  context.header("Cache-Control", "no-store");
+  return context.json(status, 200);
+}
+
+/**
+ * GET /account/export, GET/POST /account/age-confirmation, GET/POST /account/signup-attestation (HEN-183),
+ * POST /account/delete-code and DELETE /account, for the signed-in user only (HEN-65).
+ */
 export function createAccountRoutes(input: AccountRoutesInput): Hono {
   const options: AccountRoutesOptions = { ...input, logAccountEvent: input.logAccountEvent ?? defaultLogAccountEvent };
   const routes = new Hono();
   routes.get("/account/export", (context) => handleExportAccount(context, options));
   routes.get("/account/age-confirmation", (context) => handleReadAgeConfirmation(context, options));
   routes.post("/account/age-confirmation", (context) => handleConfirmAdult(context, options));
+  routes.get("/account/signup-attestation", (context) => handleReadSignUpAttestation(context, options));
+  routes.post("/account/signup-attestation", (context) => handleAcceptSignUpAttestation(context, options));
   routes.post("/account/delete-code", (context) => handleSendAccountDeletionCode(context, options));
   routes.delete("/account", (context) => handleDeleteAccount(context, options));
   return routes;
