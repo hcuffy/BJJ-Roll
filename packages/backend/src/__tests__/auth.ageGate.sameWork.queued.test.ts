@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Client } from "pg";
+import { PgBoss } from "pg-boss";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { EMAIL_QUEUE_NAME, EmailSendError, FakeEmailSender, type SendMagicLinkInput, type SendOneTimeCodeInput } from "../email/index.js";
 import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
@@ -31,6 +32,7 @@ interface Observed {
   readonly headers: [string, string][];
   /** App SQL only: pg-boss runs its own timers in the same process, so its `pgboss.*` queries are left out. */
   readonly appQueries: string[];
+  /** Jobs this request stored. Counting rows instead races the worker, which deletes earlier jobs as it sends them (HEN-313). */
   readonly jobsAdded: number;
 }
 
@@ -46,25 +48,27 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
   let environment: StartedAuthTestEnvironment | undefined;
   let ipSuffix = 10;
   const originalQuery = Object.getOwnPropertyDescriptor(Client.prototype, "query")?.value as (this: Client, ...queryArguments: unknown[]) => unknown;
-
-  const countJobs = async (): Promise<number> => {
-    const result = await (environment as StartedAuthTestEnvironment).pool.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM pgboss.job WHERE name = $1",
-      [EMAIL_QUEUE_NAME],
-    );
-    return result.rows[0]?.count ?? -1;
-  };
+  type SendJob = (this: PgBoss, ...sendArguments: unknown[]) => Promise<string | null>;
+  const originalSend = Object.getOwnPropertyDescriptor(PgBoss.prototype, "send")?.value as SendJob;
 
   const observeSend = async (path: string, body: Record<string, unknown>): Promise<Observed> => {
     const { app, pool } = environment as StartedAuthTestEnvironment;
     await pool.query("DELETE FROM public.rate_limits");
-    const jobsBefore = await countJobs();
     const queries: string[] = [];
+    const storedJobIds: string[] = [];
     const querySpy = vi.spyOn(Client.prototype, "query").mockImplementation(function (this: Client, ...queryArguments: unknown[]) {
       const [config] = queryArguments;
       const text = typeof config === "string" ? config : (config as { text?: string } | undefined)?.text;
       queries.push((text ?? "").replace(/\s+/gu, " ").trim());
       return originalQuery.apply(this, queryArguments) as never;
+    });
+    // pg-boss answers the new job id, or null when it stored nothing (for example a repeated id).
+    const sendSpy = vi.spyOn(PgBoss.prototype, "send").mockImplementation(async function (this: PgBoss, ...sendArguments: unknown[]) {
+      const jobId = await originalSend.apply(this, sendArguments);
+      if (sendArguments[0] === EMAIL_QUEUE_NAME && jobId !== null) {
+        storedJobIds.push(jobId);
+      }
+      return jobId;
     });
     ipSuffix += 1;
     let response: Response;
@@ -72,6 +76,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
       response = await postAuthJson(app, path, { body, ipAddress: `198.51.100.${ipSuffix}` });
     } finally {
       querySpy.mockRestore();
+      sendSpy.mockRestore();
     }
     const headers = [...response.headers.entries()].filter(([name]) => name !== "date").sort();
     return {
@@ -79,7 +84,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
       body: await response.text(),
       headers,
       appQueries: queries.filter((query) => !query.includes("pgboss")),
-      jobsAdded: (await countJobs()) - jobsBefore,
+      jobsAdded: storedJobIds.length,
     };
   };
 
