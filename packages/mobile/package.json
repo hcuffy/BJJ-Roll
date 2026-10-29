@@ -20,7 +20,7 @@
     "expo-apple-authentication": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-crypto": "57.0.4",
-    "expo-linking": "~57.0.12",
+    "expo-linking": "~57.0.13",
     "expo-network": "~57.0.2",
     "expo-secure-store": "~57.0.4",
     "expo-web-browser": "~57.0.3",
