@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
@@ -36,6 +36,8 @@ export interface EmailEntryScreenProps {
   /** The backend could not be reached (startup or sign-in link); shows a muted note under the email field. */
   readonly serverUnreachable?: boolean;
   readonly onClearServerUnreachable?: () => void;
+  /** Changes when an opened sign-in link failed: a new attempt, so this screen's own note and red error go (HEN-304). */
+  readonly linkAttempt?: number;
   /** Apple and Google buttons to show (HEN-239); none without `socialSignIn`. */
   readonly socialProviders?: readonly SocialProvider[];
   readonly socialSignIn?: SocialSignInDependencies;
@@ -55,6 +57,7 @@ export function EmailEntryScreen({
   onClearAccountNotice,
   serverUnreachable = false,
   onClearServerUnreachable,
+  linkAttempt = 0,
   socialProviders = [],
   socialSignIn,
   onSignedIn,
@@ -81,6 +84,10 @@ export function EmailEntryScreen({
   const ready = age16Confirmed && attestationAccepted && isEmailAddress(email);
   const sendHint = missingHint(isEmailAddress(email), age16Confirmed, attestationAccepted);
   const answers = { age16Confirmed, age18Confirmed, signUpAttestationAccepted: attestationAccepted };
+
+  // A failed sign-in link is a new attempt: this screen's own offline note and red error from the last one go (HEN-304).
+  useEffect(() => setOffline(false), [linkAttempt]);
+  useEffect(() => setFormError(null), [linkAttempt]);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -177,7 +184,9 @@ export function EmailEntryScreen({
       <LinkSentScreen
         email={linkSentTo}
         notice={notice}
-        offline={serverUnreachable || offline}
+        linkError={linkError}
+        linkErrorReason={linkErrorReason}
+        offline={serverUnreachable || (offline && !linkError)}
         formError={formError}
         cooldownSecondsLeft={linkCooldown.secondsLeft}
         sending={sending === "link"}
