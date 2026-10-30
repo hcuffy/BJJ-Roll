@@ -3,22 +3,26 @@ import { Share, StyleSheet, View } from "react-native";
 import type { AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { spacing } from "../theme/tokens";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { AuthButton } from "./AuthButton";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 import { whileFlagged } from "./whileFlagged";
 
-/** Runs the export and opens the share sheet; resolves to the error to show, or null. Both delete paths use it (HEN-308). */
-export async function shareAccountExport(onExportData: () => Promise<AccountExportResult>): Promise<string | null> {
+const EXPORT_FAILED = "Export failed.";
+const exportFailedUnknown: AccountFailureView = { offline: false, error: `${EXPORT_FAILED} ${FAILURE_MESSAGES.unknown}` };
+
+/** Runs the export and opens the share sheet; resolves to what to show, or null. Both delete paths use it (HEN-308). */
+export async function shareAccountExport(onExportData: () => Promise<AccountExportResult>): Promise<AccountFailureView | null> {
   const result = await onExportData();
   if (!result.ok) {
-    return `Export failed. ${result.message}`;
+    return accountFailureView(result, EXPORT_FAILED);
   }
   try {
     await Share.share({ title: "BJJ Roll data export", message: result.json });
     return null;
   } catch {
-    return `Export failed. ${FAILURE_MESSAGES.unknown}`;
+    return exportFailedUnknown;
   }
 }
 
@@ -77,18 +81,12 @@ export function useExportDataFirst(
     hooks.onStart();
     setExporting(true);
     // A network failure gets the calm grey note, not red "Export failed" (Vera, HEN-308).
-    let offline = false;
-    const watched = async () => {
-      const result = await exportData();
-      offline = !result.ok && result.reason === "network";
-      return result;
-    };
-    const exportError = await whileFlagged(inFlight, shareAccountExport)(watched).catch(() => `Export failed. ${FAILURE_MESSAGES.unknown}`);
+    const failure = await whileFlagged(inFlight, shareAccountExport)(exportData).catch(() => exportFailedUnknown);
     setExporting(false);
-    if (offline) {
+    if (failure?.offline) {
       hooks.setOffline(true);
     } else {
-      setError(exportError);
+      setError(failure?.error ?? null);
     }
   };
 
