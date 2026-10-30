@@ -57,12 +57,12 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     expect(state.shareSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("export: a failure shows a plain message and the button retries", async () => {
-    state.exportResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+  it("export: a failure (not the network) shows a plain message and the button retries", async () => {
+    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     const screen = await renderSignedIn();
 
     await screen.press("Export my data");
-    expect(screen.text()).toContain(`Export failed. ${FAILURE_MESSAGES.network}`);
+    expect(screen.text()).toContain(`Export failed. ${FAILURE_MESSAGES.unknown}`);
     expect(state.shareSpy).not.toHaveBeenCalled();
 
     state.exportResult = Promise.resolve({ ok: true, json: EXPORT_JSON });
@@ -156,9 +156,9 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     expect(screen.text()).toContain("Delete your account?");
     expect(screen.isDisabled("Email me a code")).toBe(false);
 
-    state.exportResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     await screen.press("Export my data first");
-    expect(screen.queryByText(`Export failed. ${FAILURE_MESSAGES.network}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`Export failed. ${FAILURE_MESSAGES.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
   });
 
   it("the confirm is a binary choice: Sign out is hidden while it is open", async () => {

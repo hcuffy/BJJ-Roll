@@ -1,18 +1,23 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AdultConfirmStep } from "./AdultConfirmStep";
 import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { BiometricUnlockSetting, type BiometricUnlockSettingProps, useBiometricUnlockSetting } from "./BiometricUnlockSetting";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { moveScreenReaderFocus } from "./moveScreenReaderFocus";
 
-export interface SignedInScreenProps {
+/** The biometric unlock toggle's callbacks come from BiometricUnlockSettingProps (HEN-288). */
+export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onSignOut: () => void;
   readonly onExportData: () => Promise<AccountExportResult>;
   /** Emails a fresh code; DELETE /account only succeeds with it (Henry's decision, HEN-65). */
@@ -36,12 +41,6 @@ const styles = StyleSheet.create({
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
 });
 
-function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
-  if (target) {
-    AccessibilityInfo.sendAccessibilityEvent(target, "focus");
-  }
-}
-
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
 export function SignedInScreen({
   onSignOut,
@@ -51,11 +50,15 @@ export function SignedInScreen({
   onAccountDeleted,
   onReadAgeConfirmation,
   onConfirmAdult,
+  ...biometricCallbacks
 }: SignedInScreenProps) {
+  const biometricSetting = useBiometricUnlockSetting(biometricCallbacks);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
+  // One grey "can't reach the server" note for the export and the code request, like the gate's deleteOffline (HEN-305).
+  const [offline, setOffline] = useState(false);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
   const [adultError, setAdultError] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
@@ -116,15 +119,25 @@ export function SignedInScreen({
     }
   };
 
+  // Every action clears all three message slots and the note first: one message at a time (Sara; Bill Q1, Vera fix 1).
+  const clearMessages = () => {
+    setExportError(null);
+    setCodeRequestError(null);
+    setAdultError(null);
+    setOffline(false);
+  };
+
   const exportData = () =>
     runOnce("export", async () => {
-      setExportError(null);
-      setExportError(await shareAccountExport(onExportData));
+      clearMessages();
+      const failure = await shareAccountExport(onExportData);
+      setOffline(failure?.offline ?? false);
+      setExportError(failure?.error ?? null);
     });
 
   const confirmAdultAge = () =>
     runOnce("adult", async () => {
-      setAdultError(null);
+      clearMessages();
       const result = await onConfirmAdult();
       if (result.ok) {
         setAge18Confirmed(result.status.age18Confirmed);
@@ -134,21 +147,24 @@ export function SignedInScreen({
       }
     });
 
+  const showCodeFailure = (view: AccountFailureView) => {
+    setOffline(view.offline);
+    setCodeRequestError(view.error);
+  };
+
   const requestCode = () =>
     runOnce("code", async () => {
-      setCodeRequestError(null);
+      clearMessages();
       const result = await onRequestDeleteCode();
       if (result.ok) {
-        setExportError(null);
         setDeleteStep("code");
       } else {
-        setCodeRequestError(`We could not send the code. ${result.message}`);
+        showCodeFailure(accountFailureView(result, "We could not send the code."));
       }
     });
 
   const cancelDelete = () => {
-    setCodeRequestError(null);
-    setExportError(null);
+    clearMessages();
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -191,6 +207,7 @@ export function SignedInScreen({
         headingRef={confirmHeading}
         exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} />}
         codeRequestError={codeRequestError}
+        offline={offline}
         sendingCode={runningTask === "code"}
         emailCodeDisabled={runningTask === "export"}
         cancelDisabled={isBusy}
@@ -205,7 +222,18 @@ export function SignedInScreen({
       <Text accessibilityRole="header" style={textStyles.display}>
         You are signed in
       </Text>
-      <AuthButton title="Sign out" variant="secondary" disabled={isBusy} onPress={onSignOut} />
+      <AuthButton
+        title="Sign out"
+        variant="secondary"
+        disabled={isBusy}
+        onPress={() => {
+          // Only when shown: an extra render after sign-out would flash this screen again (HEN-314).
+          if (offline) {
+            setOffline(false);
+          }
+          onSignOut();
+        }}
+      />
       <View style={styles.accountSection}>
         <Text accessibilityRole="header" style={styles.sectionLabel}>
           Account
@@ -218,6 +246,7 @@ export function SignedInScreen({
             accessibilityHint="Opens the share sheet with a copy of your account data."
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
+          <ServerUnreachableNote visible={offline} />
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
@@ -226,12 +255,13 @@ export function SignedInScreen({
             disabled={isBusy && runningTask !== "adult"}
             loading={runningTask === "adult"}
             onConfirmPress={() => {
-              setAdultError(null);
+              clearMessages();
               returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
           />
           <StatusText message={adultError} style={authStyles.fieldError} />
+          <BiometricUnlockSetting {...biometricSetting} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"
@@ -239,7 +269,7 @@ export function SignedInScreen({
             disabled={isBusy}
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
-              setExportError(null);
+              clearMessages();
               setDeleteStep("confirm");
             }}
           />

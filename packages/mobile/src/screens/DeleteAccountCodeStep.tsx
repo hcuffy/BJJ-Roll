@@ -4,6 +4,8 @@ import type { AccountCodeResult, AccountDeletionResult } from "../auth/accountAc
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { TextField } from "./TextField";
 import { authStyles } from "./authStyles";
@@ -25,6 +27,8 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
   const [runningTask, setRunningTask] = useState<Task | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // The grey note in the form error's slot when delete or resend can't reach the server (HEN-305); typing keeps it.
+  const [offline, setOffline] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
@@ -45,6 +49,7 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
     setRunningTask(task);
     setCodeError(null);
     setFormError(null);
+    setOffline(false);
     setNotice(null);
     try {
       await work();
@@ -52,6 +57,11 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
       inFlight.current = false;
       setRunningTask(null);
     }
+  };
+
+  const showFailure = (view: AccountFailureView) => {
+    setOffline(view.offline);
+    setFormError(view.error);
   };
 
   const deleteAccount = () =>
@@ -62,7 +72,7 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
       } else if (result.reason === "invalidCode") {
         setCodeError(result.message);
       } else {
-        setFormError(`Your account was not deleted. ${result.message}`);
+        showFailure(accountFailureView(result, "Your account was not deleted."));
       }
     });
 
@@ -72,7 +82,7 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
       if (result.ok) {
         setNotice("We sent a new code to your email.");
       } else {
-        setFormError(`We could not send the code. ${result.message}`);
+        showFailure(accountFailureView(result, "We could not send the code."));
       }
     });
 
@@ -106,6 +116,7 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
         }}
       />
       <StatusText message={formError} style={authStyles.fieldError} />
+      <ServerUnreachableNote visible={offline} />
       <View style={authStyles.actions}>
         <AuthButton
           title="Delete my account"
