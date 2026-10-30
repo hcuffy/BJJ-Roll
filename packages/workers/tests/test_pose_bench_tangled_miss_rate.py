@@ -5,6 +5,8 @@ pose for the user, mean keypoint score < MIN_POSE_MEAN_SCORE, or fewer than MIN_
 keypoints (score >= MIN_KEYPOINT_SCORE) inside the user's own mask (the pose landed on the partner).
 """
 
+from dataclasses import replace
+
 from bjj_roll_workers.geometry import COCO17_KEYPOINT_NAMES, Box, Keypoint, box_iou
 from bjj_roll_workers.pose_bench import (
     MIN_KEYPOINT_SCORE,
@@ -45,6 +47,18 @@ def test_pose_bench_tangled_needs_box_overlap_at_the_threshold() -> None:
     assert not is_tangled(frame_tracks(apart, {"self": SELF_LABEL, "partner": PARTNER_LABEL}), "self")
     assert is_tangled(frame_tracks(wrapped, {"self": SELF_LABEL, "partner": PARTNER_LABEL}), "self")
     assert not is_tangled(frame_tracks(wrapped, {"self": SELF_LABEL}), "self")
+
+
+def test_pose_bench_iou_exactly_at_the_threshold_is_tangled() -> None:
+    frame = draw_rectangles(0, [(SELF_LABEL, SELF_RECTANGLE), (PARTNER_LABEL, (3, 3, 9, 9))])
+    tracks = frame_tracks(frame, {"self": SELF_LABEL, "partner": PARTNER_LABEL})
+    own_box, partner_box = Box(0, 0, 10, 10), Box(0, 0, 10, 3)
+    at_threshold = {"self": replace(tracks["self"], box=own_box), "partner": replace(tracks["partner"], box=partner_box)}
+    below = {"self": replace(tracks["self"], box=own_box), "partner": replace(tracks["partner"], box=Box(0, 0, 10, 2.9))}
+
+    assert box_iou(own_box, partner_box) == TANGLED_BOX_IOU_THRESHOLD
+    assert is_tangled(at_threshold, "self")
+    assert not is_tangled(below, "self")
 
 
 def test_pose_bench_counts_a_pose_on_the_partner_a_low_score_or_no_pose_as_a_miss() -> None:
