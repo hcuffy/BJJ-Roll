@@ -33,7 +33,7 @@ FORBIDDEN_FRAGMENTS = [
     VIDEO_ID,
     "mask_",
 ]
-ALLOWED_KEYS = {"event", "jobId", "durationSeconds", "peakRssBytes"}
+ALLOWED_KEYS = {"event", "jobId", "durationSeconds", "peakRssBytes", "chunkIndex", "chunkFrames"}
 
 
 def _jumping_layout(frame_index: int) -> dict[int, tuple[int, int]]:

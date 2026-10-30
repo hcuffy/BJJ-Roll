@@ -1,4 +1,4 @@
-"""Structured job logs for Modal functions: job IDs, timings and error classes only (HEN-227)."""
+"""Structured job logs for Modal functions: job IDs, timings, error classes, chunk counters and pose run settings only (HEN-227)."""
 
 import json
 import sys
@@ -11,6 +11,8 @@ def log_job_event(
     duration_seconds: float | None = None,
     error_class: str | None = None,
     peak_rss_bytes: int | None = None,
+    chunk_index: int | None = None,
+    chunk_frames: int | None = None,
     frames_per_second: int | None = None,
     intra_op_threads: int | None = None,
 ) -> None:
@@ -21,6 +23,10 @@ def log_job_event(
         entry["errorClass"] = error_class
     if peak_rss_bytes is not None:
         entry["peakRssBytes"] = peak_rss_bytes
+    if chunk_index is not None:
+        entry["chunkIndex"] = chunk_index
+    if chunk_frames is not None:
+        entry["chunkFrames"] = chunk_frames
     if frames_per_second is not None:
         entry["framesPerSecond"] = frames_per_second
     if intra_op_threads is not None:

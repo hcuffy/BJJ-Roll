@@ -29,7 +29,8 @@ def test_tracker_runner_drops_to_fifteen_second_chunks_after_peak_rss_goes_over_
     entries = _log_entries(capsys.readouterr().out)
     chunk_entries = [entry for entry in entries if entry["event"] == "tracker_chunk_finished"]
     assert [entry["peakRssBytes"] for entry in chunk_entries] == [1 * GIB] + [3 * GIB + 1] * 4
-    assert [entry["event"] for entry in entries].count("tracker_chunk_length_fallback") == 1
+    fallback_entries = [entry for entry in entries if entry["event"] == "tracker_chunk_length_fallback"]
+    assert fallback_entries == [{"event": "tracker_chunk_length_fallback", "jobId": JOB_ID, "chunkIndex": 1, "chunkFrames": 150}]
 
 
 def test_tracker_runner_keeps_thirty_second_chunks_at_exactly_the_limit() -> None:

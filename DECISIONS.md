@@ -161,8 +161,13 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
   The values live in `packages/workers/src/bjj_roll_workers/tracker_config.json` and are read from there, not hard-coded.
 - **Model:** SAM 2.1 small (Apache-2.0) as an ONNX export on onnxruntime's CPU provider, behind one `Tracker` interface so a Modal backend can replace it.
   numpy and onnxruntime are not CI dependencies (onnxruntime has no Python 3.15 wheel); CI runs a fake model only.
+- **ONNX export:** We export SAM 2.1 small ourselves from Meta's Apache-2.0 checkpoint with `packages/workers/scripts/export_sam21_small_onnx.py`
+  (see `packages/workers/scripts/README.md`). We never download the onnx-community export, because it carries no licence. The real export run
+  happens in HEN-67, not in HEN-318.
+- **Drift thresholds (UNTUNED):** `MIN_TRACK_SCORE` 0.5, `MAX_CENTRE_JUMP_IN_BOX_DIAGONALS` 0.5 and `MAX_AREA_CHANGE_RATIO` 2.0 in `drift_detector.py`
+  are first guesses and are not tuned on real footage. HEN-67 tunes them.
 - **Date:** 2026-10-30
-- **Decided by:** Henry (HEN-318)
+- **Decided by:** Sara (her calls, 30 Oct 07:59 CET) (HEN-318)
 - **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
 
 ## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads

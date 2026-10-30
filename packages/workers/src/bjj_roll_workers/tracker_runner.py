@@ -3,12 +3,12 @@
 The clip is split into chunks of `chunk_frames` (30 s at 10 fps) that overlap by `chunk_overlap_frames` (1 s). The first
 chunk starts at the user's tap; every later chunk starts inside the previous one's last second and is re-prompted from the
 previous chunk's masks on that first overlap frame. Overlap frames are kept from the earlier chunk. Peak RSS is logged after
-each chunk; once it is over `peak_rss_limit_bytes`, the following chunks use `fallback_chunk_frames` (15 s). All numbers come
-from `tracker_config`.
+each chunk; once it is over `peak_rss_limit_bytes`, the following chunks use `fallback_chunk_frames` (15 s), and the fallback log names the
+chunk that tripped it (0-based `chunkIndex`) and the new chunk length (`chunkFrames`). All numbers come from `tracker_config`.
 
 Only the user's own track ("self") is kept in the result; partner and bystander taps are tracked in memory to keep the
 user's mask apart and are dropped (D6). Each call starts from that video's own tap only (D15). Drift events are part of the
-result and are never logged; logs carry the job ID, timings and peak RSS only (`job_logging`).
+result and are never logged; logs carry the job ID, timings, peak RSS and chunk counters only (`job_logging`).
 """
 
 import resource
@@ -49,6 +49,7 @@ def _track_in_chunks(
 ) -> list[FrameTracks]:
     chunk_frames = config.chunk_frames
     kept: list[FrameTracks] = []
+    chunk_index = 0
     while True:
         started_at = time.monotonic()
         end = min(start + chunk_frames, len(frames))
@@ -62,12 +63,13 @@ def _track_in_chunks(
         log_job_event("tracker_chunk_finished", job_id, duration_seconds=time.monotonic() - started_at, peak_rss_bytes=peak_rss_bytes)
         if peak_rss_bytes > config.peak_rss_limit_bytes and chunk_frames != config.fallback_chunk_frames:
             chunk_frames = config.fallback_chunk_frames
-            log_job_event("tracker_chunk_length_fallback", job_id)
+            log_job_event("tracker_chunk_length_fallback", job_id, chunk_index=chunk_index, chunk_frames=chunk_frames)
         if end >= len(frames):
             return kept
         next_start = end - config.chunk_overlap_frames
         prompts = {athlete_id: MaskPrompt(frame_index=next_start, mask=tracked.mask) for athlete_id, tracked in output[next_start - start].items()}
         start = next_start
+        chunk_index += 1
 
 
 def track_video(
