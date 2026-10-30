@@ -120,12 +120,17 @@ export function SignedInScreen({
     }
   };
 
+  // Every action clears all three message slots and the note first: one message at a time (Sara; Bill Q1, Vera fix 1).
+  const clearMessages = () => {
+    setExportError(null);
+    setCodeRequestError(null);
+    setAdultError(null);
+    setOffline(false);
+  };
+
   const exportData = () =>
     runOnce("export", async () => {
-      // Every slot clears, so the note never shows next to an earlier red code error (Bill, gate Q1).
-      setExportError(null);
-      setCodeRequestError(null);
-      setOffline(false);
+      clearMessages();
       const failure = await shareAccountExport(onExportData);
       setOffline(failure?.offline ?? false);
       setExportError(failure?.error ?? null);
@@ -133,7 +138,7 @@ export function SignedInScreen({
 
   const confirmAdultAge = () =>
     runOnce("adult", async () => {
-      setAdultError(null);
+      clearMessages();
       const result = await onConfirmAdult();
       if (result.ok) {
         setAge18Confirmed(result.status.age18Confirmed);
@@ -150,9 +155,7 @@ export function SignedInScreen({
 
   const requestCode = () =>
     runOnce("code", async () => {
-      setCodeRequestError(null);
-      setExportError(null);
-      setOffline(false);
+      clearMessages();
       const result = await onRequestDeleteCode();
       if (result.ok) {
         setDeleteStep("code");
@@ -162,9 +165,7 @@ export function SignedInScreen({
     });
 
   const cancelDelete = () => {
-    setCodeRequestError(null);
-    setExportError(null);
-    setOffline(false);
+    clearMessages();
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -255,8 +256,7 @@ export function SignedInScreen({
             disabled={isBusy && runningTask !== "adult"}
             loading={runningTask === "adult"}
             onConfirmPress={() => {
-              setAdultError(null);
-              setOffline(false);
+              clearMessages();
               returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
@@ -269,8 +269,7 @@ export function SignedInScreen({
             disabled={isBusy}
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
-              setExportError(null);
-              setOffline(false);
+              clearMessages();
               setDeleteStep("confirm");
             }}
           />
