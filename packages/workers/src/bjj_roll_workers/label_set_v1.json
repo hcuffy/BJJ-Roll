@@ -1,0 +1,993 @@
+{
+  "version": 1,
+  "source": "HEN-44 label set v1 (level 1 and headquarters approved by Henry, 2026-10-17)",
+  "styles": ["gi", "no-gi"],
+  "roles": ["top", "bottom", "neutral"],
+  "submission_outcomes": ["attempt", "defended", "finish"],
+  "positions": [
+    {
+      "id": "standing",
+      "name": "Standing",
+      "details": [
+        {
+          "id": "neutral_stance",
+          "label": "neutral stance"
+        },
+        {
+          "id": "inside_position",
+          "label": "inside position"
+        },
+        {
+          "id": "wrist_control",
+          "label": "wrist control"
+        },
+        {
+          "id": "sleeve_control",
+          "label": "sleeve control",
+          "gi_only": true
+        }
+      ]
+    },
+    {
+      "id": "clinch",
+      "name": "Clinch",
+      "details": [
+        {
+          "id": "collar_tie",
+          "label": "collar tie"
+        },
+        {
+          "id": "double_underhooks",
+          "label": "double underhooks"
+        },
+        {
+          "id": "over_under",
+          "label": "over-under"
+        },
+        {
+          "id": "bodylock",
+          "label": "bodylock"
+        }
+      ]
+    },
+    {
+      "id": "closed_guard",
+      "name": "Closed guard",
+      "details": []
+    },
+    {
+      "id": "half_guard",
+      "name": "Half guard",
+      "details": [
+        {
+          "id": "knee_shield",
+          "label": "knee shield"
+        },
+        {
+          "id": "z_guard",
+          "label": "z_guard"
+        },
+        {
+          "id": "lockdown",
+          "label": "lockdown"
+        },
+        {
+          "id": "deep_half",
+          "label": "deep half"
+        },
+        {
+          "id": "quarter_guard",
+          "label": "quarter guard"
+        },
+        {
+          "id": "underhook_half",
+          "label": "underhook half"
+        },
+        {
+          "id": "dogfight",
+          "label": "dogfight"
+        }
+      ]
+    },
+    {
+      "id": "open_guard",
+      "name": "Open guard",
+      "details": [
+        {
+          "id": "seated",
+          "label": "seated"
+        },
+        {
+          "id": "butterfly",
+          "label": "butterfly"
+        },
+        {
+          "id": "x_guard",
+          "label": "x_guard"
+        },
+        {
+          "id": "single_leg_x",
+          "label": "single_leg_x"
+        },
+        {
+          "id": "de_la_riva",
+          "label": "de_la_riva"
+        },
+        {
+          "id": "reverse_de_la_riva",
+          "label": "reverse_de_la_riva"
+        },
+        {
+          "id": "shin_to_shin",
+          "label": "shin_to_shin"
+        },
+        {
+          "id": "k_guard",
+          "label": "k_guard"
+        },
+        {
+          "id": "rubber_guard",
+          "label": "rubber_guard"
+        },
+        {
+          "id": "mission_control",
+          "label": "mission_control"
+        },
+        {
+          "id": "octopus",
+          "label": "octopus"
+        },
+        {
+          "id": "inverted",
+          "label": "inverted"
+        },
+        {
+          "id": "spider",
+          "label": "spider",
+          "gi_only": true
+        },
+        {
+          "id": "lasso",
+          "label": "lasso",
+          "gi_only": true
+        },
+        {
+          "id": "collar_sleeve",
+          "label": "collar_sleeve",
+          "gi_only": true
+        },
+        {
+          "id": "worm",
+          "label": "worm",
+          "gi_only": true
+        },
+        {
+          "id": "squid",
+          "label": "squid",
+          "gi_only": true
+        },
+        {
+          "id": "lapel_guard_other",
+          "label": "lapel_guard_other",
+          "gi_only": true
+        }
+      ]
+    },
+    {
+      "id": "headquarters",
+      "name": "Headquarters",
+      "details": []
+    },
+    {
+      "id": "side_control",
+      "name": "Side control",
+      "details": [
+        {
+          "id": "standard",
+          "label": "standard"
+        },
+        {
+          "id": "chest_to_chest",
+          "label": "chest_to_chest"
+        },
+        {
+          "id": "hundred_kilos",
+          "label": "hundred_kilos"
+        },
+        {
+          "id": "kesa_gatame",
+          "label": "kesa_gatame"
+        },
+        {
+          "id": "reverse_kesa_gatame",
+          "label": "reverse_kesa_gatame"
+        },
+        {
+          "id": "kata_gatame",
+          "label": "kata_gatame"
+        }
+      ]
+    },
+    {
+      "id": "north_south",
+      "name": "North-south",
+      "details": []
+    },
+    {
+      "id": "knee_on_belly",
+      "name": "Knee on belly",
+      "details": []
+    },
+    {
+      "id": "mount",
+      "name": "Mount",
+      "details": [
+        {
+          "id": "low",
+          "label": "low"
+        },
+        {
+          "id": "high",
+          "label": "high"
+        },
+        {
+          "id": "s_mount",
+          "label": "s_mount"
+        },
+        {
+          "id": "technical",
+          "label": "technical"
+        },
+        {
+          "id": "gift_wrap",
+          "label": "gift_wrap"
+        }
+      ]
+    },
+    {
+      "id": "back_control",
+      "name": "Back control",
+      "details": [
+        {
+          "id": "two_hooks",
+          "label": "two hooks"
+        },
+        {
+          "id": "body_triangle",
+          "label": "body triangle"
+        },
+        {
+          "id": "one_hook",
+          "label": "one hook"
+        },
+        {
+          "id": "chest_to_back",
+          "label": "chest_to_back"
+        }
+      ]
+    },
+    {
+      "id": "turtle",
+      "name": "Turtle",
+      "details": []
+    },
+    {
+      "id": "front_headlock",
+      "name": "Front headlock",
+      "details": []
+    },
+    {
+      "id": "crucifix",
+      "name": "Crucifix",
+      "details": []
+    },
+    {
+      "id": "truck",
+      "name": "Truck",
+      "details": []
+    },
+    {
+      "id": "leg_entanglement",
+      "name": "Leg entanglement",
+      "details": [
+        {
+          "id": "outside_ashi",
+          "label": "outside_ashi"
+        },
+        {
+          "id": "inside_ashi",
+          "label": "inside_ashi"
+        },
+        {
+          "id": "cross_ashi",
+          "label": "cross_ashi"
+        },
+        {
+          "id": "fifty_fifty",
+          "label": "fifty_fifty"
+        },
+        {
+          "id": "backside_fifty_fifty",
+          "label": "backside_fifty_fifty"
+        },
+        {
+          "id": "saddle",
+          "label": "saddle"
+        }
+      ]
+    },
+    {
+      "id": "scramble",
+      "name": "Scramble",
+      "details": [],
+      "note": "no stable position (fallback)"
+    },
+    {
+      "id": "unknown",
+      "name": "Unknown",
+      "details": [],
+      "note": "model unsure, or off camera (fallback)"
+    }
+  ],
+  "events": [
+    {
+      "id": "takedown",
+      "name": "Takedown / throw",
+      "details": [
+        {
+          "id": "double_leg",
+          "label": "double_leg"
+        },
+        {
+          "id": "single_leg",
+          "label": "single_leg"
+        },
+        {
+          "id": "high_crotch",
+          "label": "high_crotch"
+        },
+        {
+          "id": "blast_double",
+          "label": "blast_double"
+        },
+        {
+          "id": "ankle_pick",
+          "label": "ankle_pick"
+        },
+        {
+          "id": "fireman_carry",
+          "label": "fireman_carry"
+        },
+        {
+          "id": "body_lock",
+          "label": "body_lock"
+        },
+        {
+          "id": "duck_under",
+          "label": "duck_under"
+        },
+        {
+          "id": "arm_drag",
+          "label": "arm_drag"
+        },
+        {
+          "id": "snap_down",
+          "label": "snap_down"
+        },
+        {
+          "id": "knee_tap",
+          "label": "knee_tap"
+        },
+        {
+          "id": "osoto_gari",
+          "label": "osoto_gari",
+          "group": "judo_throw"
+        },
+        {
+          "id": "ouchi_gari",
+          "label": "ouchi_gari",
+          "group": "judo_throw"
+        },
+        {
+          "id": "kouchi_gari",
+          "label": "kouchi_gari",
+          "group": "judo_throw"
+        },
+        {
+          "id": "kosoto_gari",
+          "label": "kosoto_gari",
+          "group": "judo_throw"
+        },
+        {
+          "id": "kosoto_gake",
+          "label": "kosoto_gake",
+          "group": "judo_throw"
+        },
+        {
+          "id": "de_ashi_barai",
+          "label": "de_ashi_barai",
+          "group": "judo_throw"
+        },
+        {
+          "id": "uchi_mata",
+          "label": "uchi_mata",
+          "group": "judo_throw"
+        },
+        {
+          "id": "harai_goshi",
+          "label": "harai_goshi",
+          "group": "judo_throw"
+        },
+        {
+          "id": "hane_goshi",
+          "label": "hane_goshi",
+          "group": "judo_throw"
+        },
+        {
+          "id": "tai_otoshi",
+          "label": "tai_otoshi",
+          "group": "judo_throw"
+        },
+        {
+          "id": "seoi_nage",
+          "label": "seoi_nage",
+          "group": "judo_throw"
+        },
+        {
+          "id": "o_goshi",
+          "label": "o_goshi",
+          "group": "judo_throw"
+        },
+        {
+          "id": "koshi_guruma",
+          "label": "koshi_guruma",
+          "group": "judo_throw"
+        },
+        {
+          "id": "tani_otoshi",
+          "label": "tani_otoshi",
+          "group": "judo_throw"
+        },
+        {
+          "id": "tomoe_nage",
+          "label": "tomoe_nage",
+          "group": "judo_throw"
+        },
+        {
+          "id": "sumi_gaeshi",
+          "label": "sumi_gaeshi",
+          "group": "judo_throw"
+        }
+      ]
+    },
+    {
+      "id": "guard_pull",
+      "name": "Guard pull",
+      "details": [
+        {
+          "id": "sit_to_guard",
+          "label": "sit_to_guard"
+        },
+        {
+          "id": "jump_to_closed_guard",
+          "label": "jump_to_closed_guard"
+        },
+        {
+          "id": "pull_to_open_guard",
+          "label": "pull_to_open_guard"
+        }
+      ]
+    },
+    {
+      "id": "guard_pass",
+      "name": "Guard pass",
+      "details": [
+        {
+          "id": "toreando",
+          "label": "toreando"
+        },
+        {
+          "id": "knee_slice",
+          "label": "knee_slice"
+        },
+        {
+          "id": "leg_drag",
+          "label": "leg_drag"
+        },
+        {
+          "id": "long_step",
+          "label": "long_step"
+        },
+        {
+          "id": "x_pass",
+          "label": "x_pass"
+        },
+        {
+          "id": "backstep",
+          "label": "backstep"
+        },
+        {
+          "id": "over_under",
+          "label": "over_under"
+        },
+        {
+          "id": "double_under",
+          "label": "double_under"
+        },
+        {
+          "id": "smash",
+          "label": "smash"
+        },
+        {
+          "id": "body_lock_pass",
+          "label": "body_lock_pass"
+        },
+        {
+          "id": "folding",
+          "label": "folding"
+        },
+        {
+          "id": "leg_weave",
+          "label": "leg_weave"
+        },
+        {
+          "id": "cartwheel",
+          "label": "cartwheel"
+        }
+      ]
+    },
+    {
+      "id": "sweep",
+      "name": "Sweep",
+      "details": [
+        {
+          "id": "scissor",
+          "label": "scissor"
+        },
+        {
+          "id": "hip_bump",
+          "label": "hip_bump"
+        },
+        {
+          "id": "flower",
+          "label": "flower"
+        },
+        {
+          "id": "balloon",
+          "label": "balloon"
+        },
+        {
+          "id": "guillotine_sweep",
+          "label": "guillotine_sweep"
+        },
+        {
+          "id": "kimura_sweep",
+          "label": "kimura_sweep"
+        },
+        {
+          "id": "old_school",
+          "label": "old_school"
+        },
+        {
+          "id": "plan_b",
+          "label": "plan_b"
+        },
+        {
+          "id": "waiter",
+          "label": "waiter"
+        },
+        {
+          "id": "dogfight_sweep",
+          "label": "dogfight_sweep"
+        },
+        {
+          "id": "butterfly",
+          "label": "butterfly"
+        },
+        {
+          "id": "x_guard_sweep",
+          "label": "x_guard_sweep"
+        },
+        {
+          "id": "tripod",
+          "label": "tripod"
+        },
+        {
+          "id": "sickle",
+          "label": "sickle"
+        },
+        {
+          "id": "lumberjack",
+          "label": "lumberjack"
+        },
+        {
+          "id": "elevator",
+          "label": "elevator"
+        },
+        {
+          "id": "de_la_riva_sweep",
+          "label": "de_la_riva_sweep"
+        },
+        {
+          "id": "berimbolo",
+          "label": "berimbolo"
+        },
+        {
+          "id": "spider_sweep",
+          "label": "spider_sweep",
+          "gi_only": true
+        },
+        {
+          "id": "lasso_sweep",
+          "label": "lasso_sweep",
+          "gi_only": true
+        },
+        {
+          "id": "collar_sleeve_sweep",
+          "label": "collar_sleeve_sweep",
+          "gi_only": true
+        },
+        {
+          "id": "lapel_sweep",
+          "label": "lapel_sweep",
+          "gi_only": true
+        }
+      ]
+    },
+    {
+      "id": "back_take",
+      "name": "Back take",
+      "details": [
+        {
+          "id": "seatbelt_entry",
+          "label": "seatbelt_entry"
+        },
+        {
+          "id": "arm_drag_to_back",
+          "label": "arm_drag_to_back"
+        },
+        {
+          "id": "gator_roll",
+          "label": "gator_roll"
+        },
+        {
+          "id": "kiss_of_the_dragon",
+          "label": "kiss_of_the_dragon"
+        },
+        {
+          "id": "baby_bolo",
+          "label": "baby_bolo"
+        },
+        {
+          "id": "matrix",
+          "label": "matrix"
+        },
+        {
+          "id": "crab_ride",
+          "label": "crab_ride"
+        },
+        {
+          "id": "wedge",
+          "label": "wedge"
+        },
+        {
+          "id": "backstep_take",
+          "label": "backstep_take"
+        },
+        {
+          "id": "berimbolo",
+          "label": "berimbolo"
+        },
+        {
+          "id": "front_headlock_to_back",
+          "label": "front_headlock_to_back"
+        },
+        {
+          "id": "truck_entry",
+          "label": "truck_entry"
+        }
+      ]
+    },
+    {
+      "id": "submission",
+      "name": "Submission",
+      "details": [
+        {
+          "id": "rear_naked",
+          "label": "rear_naked",
+          "group": "choke"
+        },
+        {
+          "id": "arm_in_rear_naked",
+          "label": "arm_in_rear_naked",
+          "group": "choke"
+        },
+        {
+          "id": "triangle",
+          "label": "triangle",
+          "group": "choke"
+        },
+        {
+          "id": "guillotine",
+          "label": "guillotine",
+          "group": "choke"
+        },
+        {
+          "id": "darce",
+          "label": "darce",
+          "group": "choke"
+        },
+        {
+          "id": "anaconda",
+          "label": "anaconda",
+          "group": "choke"
+        },
+        {
+          "id": "arm_triangle",
+          "label": "arm_triangle",
+          "group": "choke"
+        },
+        {
+          "id": "north_south_choke",
+          "label": "north_south_choke",
+          "group": "choke"
+        },
+        {
+          "id": "gogoplata",
+          "label": "gogoplata",
+          "group": "choke"
+        },
+        {
+          "id": "peruvian_necktie",
+          "label": "peruvian_necktie",
+          "group": "choke"
+        },
+        {
+          "id": "japanese_necktie",
+          "label": "japanese_necktie",
+          "group": "choke"
+        },
+        {
+          "id": "von_flue",
+          "label": "von_flue",
+          "group": "choke"
+        },
+        {
+          "id": "cross_collar",
+          "label": "cross_collar",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "bow_and_arrow",
+          "label": "bow_and_arrow",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "ezekiel",
+          "label": "ezekiel",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "baseball_bat",
+          "label": "baseball_bat",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "loop",
+          "label": "loop",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "clock",
+          "label": "clock",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "paper_cutter",
+          "label": "paper_cutter",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "lapel_choke",
+          "label": "lapel_choke",
+          "gi_only": true,
+          "group": "choke"
+        },
+        {
+          "id": "armbar",
+          "label": "armbar",
+          "group": "arm"
+        },
+        {
+          "id": "kimura",
+          "label": "kimura",
+          "group": "arm"
+        },
+        {
+          "id": "americana",
+          "label": "americana",
+          "group": "arm"
+        },
+        {
+          "id": "omoplata",
+          "label": "omoplata",
+          "group": "arm"
+        },
+        {
+          "id": "baratoplata",
+          "label": "baratoplata",
+          "group": "arm"
+        },
+        {
+          "id": "monoplata",
+          "label": "monoplata",
+          "group": "arm"
+        },
+        {
+          "id": "tarikoplata",
+          "label": "tarikoplata",
+          "group": "arm"
+        },
+        {
+          "id": "wristlock",
+          "label": "wristlock",
+          "group": "arm"
+        },
+        {
+          "id": "bicep_slicer",
+          "label": "bicep_slicer",
+          "group": "arm"
+        },
+        {
+          "id": "straight_ankle_lock",
+          "label": "straight_ankle_lock",
+          "group": "leg"
+        },
+        {
+          "id": "heel_hook_inside",
+          "label": "heel_hook_inside",
+          "group": "leg"
+        },
+        {
+          "id": "heel_hook_outside",
+          "label": "heel_hook_outside",
+          "group": "leg"
+        },
+        {
+          "id": "kneebar",
+          "label": "kneebar",
+          "group": "leg"
+        },
+        {
+          "id": "toehold",
+          "label": "toehold",
+          "group": "leg"
+        },
+        {
+          "id": "estima_lock",
+          "label": "estima_lock",
+          "group": "leg"
+        },
+        {
+          "id": "calf_slicer",
+          "label": "calf_slicer",
+          "group": "leg"
+        },
+        {
+          "id": "banana_split",
+          "label": "banana_split",
+          "group": "leg"
+        },
+        {
+          "id": "neck_crank",
+          "label": "neck_crank",
+          "group": "crank"
+        },
+        {
+          "id": "can_opener",
+          "label": "can_opener",
+          "group": "crank"
+        },
+        {
+          "id": "twister",
+          "label": "twister",
+          "group": "crank"
+        }
+      ]
+    },
+    {
+      "id": "escape",
+      "name": "Escape",
+      "details": [
+        {
+          "id": "mount_escape",
+          "label": "mount_escape",
+          "variants": ["upa", "elbow_knee", "to_half"]
+        },
+        {
+          "id": "side_control_escape",
+          "label": "side_control_escape"
+        },
+        {
+          "id": "back_escape",
+          "label": "back_escape"
+        },
+        {
+          "id": "knee_on_belly_escape",
+          "label": "knee_on_belly_escape"
+        },
+        {
+          "id": "north_south_escape",
+          "label": "north_south_escape"
+        },
+        {
+          "id": "kesa_escape",
+          "label": "kesa_escape"
+        },
+        {
+          "id": "submission_defense",
+          "label": "submission_defense"
+        }
+      ]
+    },
+    {
+      "id": "transition",
+      "name": "Transition",
+      "details": [
+        {
+          "id": "technical_stand_up",
+          "label": "technical_stand_up"
+        },
+        {
+          "id": "sit_out",
+          "label": "sit_out"
+        },
+        {
+          "id": "granby_roll",
+          "label": "granby_roll"
+        },
+        {
+          "id": "wrestle_up",
+          "label": "wrestle_up"
+        },
+        {
+          "id": "peek_out",
+          "label": "peek_out"
+        },
+        {
+          "id": "inversion",
+          "label": "inversion"
+        },
+        {
+          "id": "imanari_roll",
+          "label": "imanari_roll"
+        },
+        {
+          "id": "guard_recovery",
+          "label": "guard_recovery"
+        },
+        {
+          "id": "mount_to_s_mount",
+          "label": "mount_to_s_mount"
+        },
+        {
+          "id": "side_to_mount",
+          "label": "side_to_mount"
+        }
+      ]
+    },
+    {
+      "id": "reset",
+      "name": "Reset / stand up",
+      "details": [],
+      "note": "referee or partner reset, both stand"
+    }
+  ]
+}
