@@ -45,6 +45,13 @@ export function App() {
   const deepLinkUrl = Linking.useURL();
   // One 10 s budget for all of startup, the gate's first status read included; a sign-in in the running app drops it (HEN-310).
   const startupBudget = useRef<StartupBudget | null>(null);
+  // The launch's or sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
+  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
+  const startLeftoverRevoke = (deadline?: AbortSignal) => {
+    const stop = new AbortController();
+    deadline?.addEventListener("abort", () => stop.abort());
+    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
+  };
   // The note came from the startup check, so it gets a Try again: "idle", or "running" while the retry runs (HEN-310).
   const [startupRetry, setStartupRetry] = useState<"idle" | "running" | null>(null);
   const retryingStartup = useRef(false);
@@ -74,7 +81,7 @@ export function App() {
     // All steps share one deadline, so a host that never answers cannot hold Loading (HEN-303, HEN-310); a timeout lands like a network failure.
     const budget = createStartupBudget();
     startupBudget.current = budget;
-    void checkStartup(budget)
+    void checkStartup(budget, startLeftoverRevoke)
       .then(setStartupScreen)
       .catch(() => {
         // Backend unreachable: show sign-in with a note and Try again instead of loading forever.
@@ -93,7 +100,7 @@ export function App() {
     setStartupRetry("running");
     const budget = createStartupBudget();
     startupBudget.current = budget;
-    void checkStartup(budget)
+    void checkStartup(budget, startLeftoverRevoke)
       .then((next) => {
         if (startupRetryShown.current) {
           setStartupRetrySuccesses((count) => count + 1);
@@ -152,9 +159,6 @@ export function App() {
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
-  // The sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
-  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
-
   // The gate's status read: the first one after startup uses what is left of its budget, any other gets its own (HEN-310).
   // A timeout shows the gate's offline note and its Try again.
   const readGateStatus = (): Promise<SignUpAttestationResult> => {
@@ -170,8 +174,7 @@ export function App() {
       startupBudget.current = null;
     }
     // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
-    const stop = new AbortController();
-    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
+    startLeftoverRevoke();
     setScreen({ name: "signedIn" });
   };
 
