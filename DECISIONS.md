@@ -153,3 +153,14 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Sara
 - **Consequences:** The encryption module (HEN-63) reads the keys through a keyring interface, so a KMS / KEK wrapping can replace the secrets later
   without a schema change. The KMS choice stays OPEN under HEN-191 (M4). ARCHITECTURE §6 email row points here.
+
+## A7: Local CPU tracker runs in 30 s chunks at 10 fps with a 15 s fallback over 3 GiB peak RSS
+
+- **Decision:** The tracker runner (HEN-318) samples frames at 10 fps and tracks in 30 s chunks (300 frames) that overlap by 1 s; each chunk is
+  re-prompted from the previous chunk's masks. Peak RSS is logged per chunk; once it is over 3 GiB (3221225472 bytes), the following chunks drop to 15 s.
+  The values live in `packages/workers/src/bjj_roll_workers/tracker_config.json` and are read from there, not hard-coded.
+- **Model:** SAM 2.1 small (Apache-2.0) as an ONNX export on onnxruntime's CPU provider, behind one `Tracker` interface so a Modal backend can replace it.
+  numpy and onnxruntime are not CI dependencies (onnxruntime has no Python 3.15 wheel); CI runs a fake model only.
+- **Date:** 2026-10-30
+- **Decided by:** Henry (HEN-318)
+- **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
