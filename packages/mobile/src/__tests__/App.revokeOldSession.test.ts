@@ -158,7 +158,7 @@ describe("App ends the old session by its own cookie after an unfinished sign-ou
   it("the unfinished sign-out keeps the old session cookie in SecureStore, not just a flag", async () => {
     await signOutLeftUnfinished();
 
-    expect(marker()).toMatch(/^better-auth\.session_token=session-token-1\./u);
+    expect(marker()).toMatch(/"marker":"better-auth\.session_token=session-token-1\./u);
   });
 
   it("online relaunch before any sign-in ends the old session with its stored cookie and clears the marker", async () => {

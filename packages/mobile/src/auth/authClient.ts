@@ -6,6 +6,9 @@ export const DEEP_LINK_SCHEME = "bjjroll";
 /** SecureStore key prefix: the session cookie lives under `bjjroll_cookie`. */
 export const SESSION_STORAGE_PREFIX = "bjjroll";
 
+/** Statuses meaning the server no longer has the session: a sign-out of it counts as done (HEN-315). Any other failure keeps it queued. */
+export const SESSION_GONE_STATUSES: ReadonlySet<number> = new Set([401, 404, 410]);
+
 type ExpoClientOptions = Parameters<typeof expoClient>[0];
 
 export interface MobileAuthClientOptions {
@@ -25,7 +28,10 @@ function sessionCookieSignOut(options: MobileAuthClientOptions) {
   return {
     id: "bjjroll-session-cookie-sign-out",
     getActions: () => ({
-      /** True on a 2xx: the server deleted that session or no longer had it. False on any other status; rejects when offline or aborted. */
+      /**
+       * True on a 2xx, or a status saying the session is gone: the server deleted that session or no longer had it.
+       * False on any other status; rejects when offline or aborted.
+       */
       signOutSessionCookie: async (sessionCookie: string, signal?: AbortSignal): Promise<boolean> => {
         const response = await fetchImplementation(signOutUrl, {
           method: "POST",
@@ -39,7 +45,7 @@ function sessionCookieSignOut(options: MobileAuthClientOptions) {
           },
           body: "{}",
         });
-        return response.ok;
+        return response.ok || SESSION_GONE_STATUSES.has(response.status);
       },
     }),
   } satisfies BetterAuthClientPlugin;

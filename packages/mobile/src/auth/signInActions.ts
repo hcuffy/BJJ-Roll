@@ -1,6 +1,6 @@
 import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, isSignUpAttestationAccepted, type EmailEntry } from "./ageConfirmation";
-import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
+import { DEEP_LINK_SCHEME, SESSION_GONE_STATUSES, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 import {
   addPendingSignOut,
   dropPendingSignOut,
@@ -238,7 +238,7 @@ async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, sig
       return await client.signOutSessionCookie(oldSessionCookie, signal);
     }
     const { error } = await client.signOut({ fetchOptions: { signal } });
-    return !error;
+    return !error || SESSION_GONE_STATUSES.has(error.status);
   } catch {
     // Offline or the backend cannot be reached.
     return false;
@@ -295,10 +295,11 @@ export async function signOut(client: MobileAuthClient, secureStore: SessionKeyS
 /**
  * Call when sign-in succeeds: the user signed in on purpose, so a sign-out left to finish must not end the new session.
  * Ends the old session by its own cookie (never the new one, any account). Without a confirmed end the marker stays and the
- * next launch retries it; the new session is not signed out for that. Never rejects and never blocks the sign-in.
+ * next launch retries it; the new session is not signed out for that. `signal` aborts it (a sign-out right after the sign-in
+ * stops it and retries the old session itself, HEN-315). Never rejects and never blocks the sign-in.
  */
-export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<void> {
-  await endLeftoverSessions(client, secureStore);
+export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
+  await endLeftoverSessions(client, secureStore, signal);
 }
 
 /** Ends each queued session unless it is the one now stored; `signal` aborts the server requests. Never rejects. */

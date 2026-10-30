@@ -1,5 +1,5 @@
 import * as Linking from "expo-linking";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -100,9 +100,13 @@ export function App() {
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
+  // The sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
+  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
+
   const handleSignedIn = () => {
     // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
-    void cancelPendingSignOut(appAuthClient, appSecureStore);
+    const stop = new AbortController();
+    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
     setScreen({ name: "signedIn" });
   };
 
@@ -112,7 +116,15 @@ export function App() {
     setScreen({ name: "signingOut" });
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    void withStartupTimeout((signal) => signOut(appAuthClient, appSecureStore, signal))
+    // A revoke still running from the sign-in is stopped (its sessions stay queued) and awaited, so the two never touch the
+    // queue or the same session at once; signOut retries those sessions itself within the deadline.
+    const leftover = leftoverRevoke.current;
+    leftoverRevoke.current = null;
+    leftover?.stop.abort();
+    void withStartupTimeout(async (signal) => {
+      await leftover?.done;
+      await signOut(appAuthClient, appSecureStore, signal);
+    })
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
   };
