@@ -151,3 +151,20 @@ def test_re_prompt_flow_second_video_starts_with_nothing_from_the_first() -> Non
 def test_re_prompt_flow_rejects_an_unknown_style() -> None:
     with pytest.raises(ValueError):
         VideoRun(FIRST_VIDEO_ID, "nogi", FIRST_TAP)  # type: ignore[arg-type]
+
+
+def test_re_prompt_flow_counts_per_style_sum_two_videos_of_the_same_style() -> None:
+    first_result = _run(
+        VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP),
+        FakeTracker([DriftEvent(frame_index=50, reason="mask_jump"), DriftEvent(frame_index=90, reason="mask_lost")]),
+        ScriptedPrompter([ReTap(x=0.2, y=0.8), KeepTrack()]),
+    )
+    second_result = _run(
+        VideoRun(SECOND_VIDEO_ID, "gi", SECOND_VIDEO_FIRST_TAP),
+        FakeTracker([DriftEvent(frame_index=40, reason="mask_jump")]),
+        ScriptedPrompter([ReTap(x=0.5, y=0.5)]),
+    )
+
+    counts_by_style = count_re_prompts_by_style([first_result, second_result])
+
+    assert {style: (counts.re_prompt_count, counts.correction_count) for style, counts in counts_by_style.items()} == {"gi": (3, 2)}
