@@ -54,6 +54,11 @@ export function useBiometricUnlockSetting({
   return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock, error, onErrorChanged: setError };
 }
 
+export interface BiometricUnlockSettingViewProps extends BiometricUnlockSettingState {
+  /** Called first when the toggle starts a change: the screen's clearMessages(), as for every signed-in action (Vera, HEN-311). */
+  readonly onChangeStarted: () => void;
+}
+
 /**
  * Account section toggle (HEN-288). The whole row is the switch (one screen-reader stop, named by the visible label).
  * Disabled, with a note that is also its hint, on a phone without a fingerprint or face enrolled.
@@ -64,12 +69,14 @@ export function BiometricUnlockSetting({
   onChangeBiometricUnlock,
   error,
   onErrorChanged: setError,
-}: BiometricUnlockSettingState) {
+  onChangeStarted,
+}: BiometricUnlockSettingViewProps) {
   const [saving, setSaving] = useState(false);
   const kind = setting?.kind ?? "biometrics";
   const copy = BIOMETRIC_COPY[kind];
 
   const change = async (on: boolean) => {
+    onChangeStarted();
     setSaving(true);
     setError(null);
     const check = await onChangeBiometricUnlock(on).catch((): BiometricCheck => ({ ok: false, failure: "failed" }));

@@ -16,6 +16,7 @@ const renderToggle = async (setting: BiometricSetting) => {
       onChangeBiometricUnlock,
       error: null,
       onErrorChanged: () => undefined,
+      onChangeStarted: () => undefined,
     }),
   );
   return { screen, onChangeBiometricUnlock };
