@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Text, TextInput, View, type TextInputProps } from "react-native";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
+import { AccessibilityInfo, Text, TextInput, View, type TextInputProps } from "react-native";
 import { colours, textStyles } from "../theme/tokens";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
@@ -9,10 +9,20 @@ export interface TextFieldProps extends Omit<TextInputProps, "style" | "accessib
   readonly label: string;
   /** Shown under the field in danger colour, announced, and read as the field's hint. */
   readonly error: string | null;
+  /** A new value moves screen-reader focus to the field, like the gate's moveScreenReaderFocus; the first value never does. */
+  readonly focusKey?: number;
 }
 
-export function TextField({ label, error, onFocus, onBlur, ...inputProps }: TextFieldProps) {
+export function TextField({ label, error, focusKey, onFocus, onBlur, ...inputProps }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const focusedKey = useRef(focusKey);
+  useEffect(() => {
+    if (input.current && focusKey !== focusedKey.current) {
+      AccessibilityInfo.sendAccessibilityEvent(input.current, "focus");
+    }
+    focusedKey.current = focusKey;
+  }, [focusKey]);
   return (
     <View style={authStyles.field}>
       {/* The input carries the same label, so screen readers skip this visual copy. */}
@@ -21,6 +31,7 @@ export function TextField({ label, error, onFocus, onBlur, ...inputProps }: Text
       </Text>
       <TextInput
         {...inputProps}
+        ref={input}
         accessibilityLabel={label}
         accessibilityHint={error ?? undefined}
         placeholderTextColor={colours.textSecondary}

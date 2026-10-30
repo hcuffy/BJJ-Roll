@@ -62,6 +62,12 @@ export function App() {
   // The note came from the startup check, so it gets a Try again: "idle", or "running" while the retry runs (HEN-310).
   const [startupRetry, setStartupRetry] = useState<"idle" | "running" | null>(null);
   const retryingStartup = useRef(false);
+  // Bumped by each failed retry (the note is announced again) and each one that reached the server (focus moves to Email).
+  const [startupRetryFailures, setStartupRetryFailures] = useState(0);
+  const [startupRetrySuccesses, setStartupRetrySuccesses] = useState(0);
+  // Read when a retry ends: if a send already removed Try again, focus stays where the user is.
+  const startupRetryShown = useRef(false);
+  startupRetryShown.current = startupRetry !== null;
 
   // Signing in proves the server is reachable, so a note set earlier must not reappear later.
   useEffect(() => {
@@ -103,11 +109,17 @@ export function App() {
     startupBudget.current = budget;
     void checkStartup(budget)
       .then((next) => {
+        if (startupRetryShown.current) {
+          setStartupRetrySuccesses((count) => count + 1);
+        }
         setServerUnreachable(false);
         // Moves only from sign-in: a code sent meanwhile keeps its screen.
         setScreen((current) => (current.name === "email" ? next : current));
       })
-      .catch(() => setStartupRetry((current) => (current === null ? null : "idle")))
+      .catch(() => {
+        setStartupRetry((current) => (current === null ? null : "idle"));
+        setStartupRetryFailures((count) => count + 1);
+      })
       .finally(() => {
         retryingStartup.current = false;
       });
@@ -261,7 +273,10 @@ export function App() {
             onClearAccountNotice={() => setAccountNotice(null)}
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
-            startupRetry={startupRetry ? { onRetry: handleRetryStartup, retrying: startupRetry === "running" } : undefined}
+            startupRetry={
+              startupRetry ? { onRetry: handleRetryStartup, retrying: startupRetry === "running", announceKey: startupRetryFailures } : undefined
+            }
+            focusEmailKey={startupRetrySuccesses}
             linkAttempt={linkAttempt}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
             socialProviders={appSocialProviders}

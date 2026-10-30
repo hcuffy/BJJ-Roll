@@ -57,11 +57,11 @@ export function EmailEntryScreen({
   onClearAccountNotice,
   serverUnreachable = false,
   onClearServerUnreachable,
-  startupRetry,
   linkAttempt = 0,
   socialProviders = [],
   socialSignIn,
   onSignedIn,
+  ...startup
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [age16Confirmed, setAge16Confirmed] = useState(false);
@@ -169,8 +169,7 @@ export function EmailEntryScreen({
     }
     setSending(provider);
     setSocialProgress("opening");
-    const dependencies = { ...socialSignIn, onReturned: () => setSocialProgress("signingIn") };
-    const result = await signInWithProvider(dependencies, provider, answers);
+    const result = await signInWithProvider({ ...socialSignIn, onReturned: () => setSocialProgress("signingIn") }, provider, answers);
     setSending(null);
     if (result.ok) {
       onSignedIn?.();
@@ -206,6 +205,7 @@ export function EmailEntryScreen({
       <SignInHeader linkError={linkError} linkErrorReason={linkErrorReason} accountNotice={accountNotice} />
       <TextField
         label="Email"
+        focusKey={startup.focusEmailKey}
         error={emailError}
         autoCapitalize="none"
         autoComplete="email"
@@ -229,7 +229,7 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <ServerUnreachableNote visible={serverUnreachable || offline} startupRetry={serverUnreachable ? startupRetry : undefined} />
+      <ServerUnreachableNote visible={serverUnreachable || offline} startupRetry={serverUnreachable ? startup.startupRetry : undefined} />
       <AgeConfirmationFields
         age16Confirmed={age16Confirmed}
         age18Confirmed={age18Confirmed}
