@@ -9,6 +9,8 @@ import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
@@ -56,6 +58,8 @@ export function SignedInScreen({
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
+  // One grey "can't reach the server" note for the export and the code request, like the gate's deleteOffline (HEN-305).
+  const [offline, setOffline] = useState(false);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
   const [adultError, setAdultError] = useState<string | null>(null);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
@@ -119,7 +123,10 @@ export function SignedInScreen({
   const exportData = () =>
     runOnce("export", async () => {
       setExportError(null);
-      setExportError(await shareAccountExport(onExportData));
+      setOffline(false);
+      const failure = await shareAccountExport(onExportData);
+      setOffline(failure?.offline ?? false);
+      setExportError(failure?.error ?? null);
     });
 
   const confirmAdultAge = () =>
@@ -134,21 +141,28 @@ export function SignedInScreen({
       }
     });
 
+  const showCodeFailure = (view: AccountFailureView) => {
+    setOffline(view.offline);
+    setCodeRequestError(view.error);
+  };
+
   const requestCode = () =>
     runOnce("code", async () => {
       setCodeRequestError(null);
+      setExportError(null);
+      setOffline(false);
       const result = await onRequestDeleteCode();
       if (result.ok) {
-        setExportError(null);
         setDeleteStep("code");
       } else {
-        setCodeRequestError(`We could not send the code. ${result.message}`);
+        showCodeFailure(accountFailureView(result, "We could not send the code."));
       }
     });
 
   const cancelDelete = () => {
     setCodeRequestError(null);
     setExportError(null);
+    setOffline(false);
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -191,6 +205,7 @@ export function SignedInScreen({
         headingRef={confirmHeading}
         exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} />}
         codeRequestError={codeRequestError}
+        offline={offline}
         sendingCode={runningTask === "code"}
         emailCodeDisabled={runningTask === "export"}
         cancelDisabled={isBusy}
@@ -205,7 +220,18 @@ export function SignedInScreen({
       <Text accessibilityRole="header" style={textStyles.display}>
         You are signed in
       </Text>
-      <AuthButton title="Sign out" variant="secondary" disabled={isBusy} onPress={onSignOut} />
+      <AuthButton
+        title="Sign out"
+        variant="secondary"
+        disabled={isBusy}
+        onPress={() => {
+          // Only when shown: an extra render after sign-out would flash this screen again (HEN-314).
+          if (offline) {
+            setOffline(false);
+          }
+          onSignOut();
+        }}
+      />
       <View style={styles.accountSection}>
         <Text accessibilityRole="header" style={styles.sectionLabel}>
           Account
@@ -218,6 +244,7 @@ export function SignedInScreen({
             accessibilityHint="Opens the share sheet with a copy of your account data."
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
+          <ServerUnreachableNote visible={offline} />
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
@@ -227,6 +254,7 @@ export function SignedInScreen({
             loading={runningTask === "adult"}
             onConfirmPress={() => {
               setAdultError(null);
+              setOffline(false);
               returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
@@ -240,6 +268,7 @@ export function SignedInScreen({
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
               setExportError(null);
+              setOffline(false);
               setDeleteStep("confirm");
             }}
           />
