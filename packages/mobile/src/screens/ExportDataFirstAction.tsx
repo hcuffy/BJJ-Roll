@@ -9,10 +9,12 @@ import { authStyles } from "./authStyles";
 import { whileFlagged } from "./whileFlagged";
 
 export const EXPORT_SHARED_NOTICE = "Your data export was shared.";
+export const EXPORT_CREATED_NOTICE = "Your data export was created. Check that you saved a copy.";
 
 /**
  * Runs the export and opens the share sheet; resolves to the error to show, or null. Both delete paths use it (HEN-308).
- * `onShared` gets the grey confirmation only when iOS reports the share completed: Android reports sharedAction even on cancel (HEN-311).
+ * `onShared` gets the grey line: "shared" only when iOS reports the share completed; Android reports sharedAction even on cancel,
+ * so after any closed sheet it gets the neutral "created" line (Vera, HEN-311). None when the export or the sheet fails.
  */
 export async function shareAccountExport(
   onExportData: () => Promise<AccountExportResult>,
@@ -26,6 +28,8 @@ export async function shareAccountExport(
     const shared = await Share.share({ title: "BJJ Roll data export", message: result.json });
     if (Platform.OS === "ios" && shared.action === Share.sharedAction) {
       onShared(EXPORT_SHARED_NOTICE);
+    } else if (Platform.OS === "android") {
+      onShared(EXPORT_CREATED_NOTICE);
     }
     return null;
   } catch {

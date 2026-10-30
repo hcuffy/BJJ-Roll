@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { SOCIAL_SIGN_IN_CALLBACK_URL } from "../auth/socialSignIn";
 import { CODE_SCREEN_INVALID_LINK, CodeEntryScreen } from "../screens/CodeEntryScreen";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { colours } from "../theme/tokens";
@@ -30,9 +31,12 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
 
   const newClient = () =>
     createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: createMemorySecureStore(), fetchImplementation: backend.fetchImplementation });
-  const renderEmailEntry = async () => {
+  const renderEmailEntry = async (withGoogle = false) => {
     const client = newClient();
-    const Host = () => createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, ...linkProps() });
+    const browser = { openAuthSessionAsync: () => Promise.resolve({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time` }) };
+    const socialSignIn = { client, backendUrl: TEST_BACKEND_URL, platform: "android" as const, browser };
+    const google = { socialProviders: ["google" as const], socialSignIn };
+    const Host = () => createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, ...linkProps(), ...(withGoogle ? google : {}) });
     const screen = await renderScreen(createElement(Host), (text) => frames.push(text));
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
@@ -87,6 +91,16 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
     const stale = await actRefused(screen, () => screen.press("Resend link"));
 
     expectNoFrameWith(await linkFails(screen, CARD), CARD, stale);
+  });
+
+  it("email form: a failed social sign-in's red error never shows next to the card, nor after it", async () => {
+    const screen = await renderEmailEntry(true);
+    const stale = await actRefused(screen, () => screen.press("Sign in with Google"));
+
+    expectNoFrameWith(await linkFails(screen, CARD), CARD, stale);
+    link = { ...link, linkError: null };
+    await screen.rerender();
+    expect(screen.text()).not.toContain(stale);
   });
 
   it("email form: a failed Continue's red error never shows next to the card", async () => {

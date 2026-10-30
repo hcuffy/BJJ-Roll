@@ -56,7 +56,7 @@ export function SignedInScreen({
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  // The grey line after a completed iOS share (HEN-311); cleared wherever the export error is.
+  // The grey line after an export's share sheet closes (HEN-311).
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
@@ -121,17 +121,25 @@ export function SignedInScreen({
     }
   };
 
+  // Every action clears every message slot and the note first: one message at a time (Vera, HEN-311 fix 2; as in #93).
+  const clearMessages = () => {
+    setExportError(null);
+    setExportNotice(null);
+    setCodeRequestError(null);
+    setAdultError(null);
+    setAdultOffline(false);
+  };
+  const showsMessage = adultOffline || [exportError, exportNotice, codeRequestError, adultError].some((message) => message !== null);
+
   const exportData = () =>
     runOnce("export", async () => {
-      setExportError(null);
-      setExportNotice(null);
-      setAdultOffline(false);
+      clearMessages();
       setExportError(await shareAccountExport(onExportData, setExportNotice));
     });
 
   const confirmAdultAge = () =>
     runOnce("adult", async () => {
-      setAdultError(null);
+      clearMessages();
       const result = await onConfirmAdult();
       if (result.ok) {
         setAge18Confirmed(result.status.age18Confirmed);
@@ -145,11 +153,9 @@ export function SignedInScreen({
 
   const requestCode = () =>
     runOnce("code", async () => {
-      setCodeRequestError(null);
+      clearMessages();
       const result = await onRequestDeleteCode();
       if (result.ok) {
-        setExportError(null);
-        setExportNotice(null);
         setDeleteStep("code");
       } else {
         setCodeRequestError(`We could not send the code. ${result.message}`);
@@ -157,9 +163,7 @@ export function SignedInScreen({
     });
 
   const cancelDelete = () => {
-    setCodeRequestError(null);
-    setExportError(null);
-    setExportNotice(null);
+    clearMessages();
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -222,8 +226,8 @@ export function SignedInScreen({
         disabled={isBusy}
         onPress={() => {
           // Only when shown: an extra render after sign-out would flash this screen again (as in HEN-305).
-          if (adultOffline) {
-            setAdultOffline(false);
+          if (showsMessage) {
+            clearMessages();
           }
           onSignOut();
         }}
@@ -249,8 +253,7 @@ export function SignedInScreen({
             disabled={isBusy && runningTask !== "adult"}
             loading={runningTask === "adult"}
             onConfirmPress={() => {
-              setAdultError(null);
-              setAdultOffline(false);
+              clearMessages();
               returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
@@ -264,9 +267,7 @@ export function SignedInScreen({
             disabled={isBusy}
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
-              setExportError(null);
-              setExportNotice(null);
-              setAdultOffline(false);
+              clearMessages();
               setDeleteStep("confirm");
             }}
           />

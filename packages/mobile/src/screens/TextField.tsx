@@ -13,6 +13,18 @@ export interface TextFieldProps extends Omit<TextInputProps, "style" | "accessib
   readonly focusKey?: number;
 }
 
+/** The keyboard and autofill settings for an email address field. */
+export const EMAIL_INPUT_PROPS: TextInputProps = {
+  autoCapitalize: "none",
+  autoComplete: "email",
+  autoCorrect: false,
+  inputMode: "email",
+  keyboardType: "email-address",
+  textContentType: "emailAddress",
+  placeholder: "you@example.com",
+  returnKeyType: "go",
+};
+
 export function TextField({ label, error, focusKey, onFocus, onBlur, ...inputProps }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);

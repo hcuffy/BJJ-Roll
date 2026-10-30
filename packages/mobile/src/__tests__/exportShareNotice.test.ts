@@ -9,6 +9,7 @@ import { flattenStyle, renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness, EXPORT_JSON } from "./signedInScreenHarness";
 
 const SHARED = "Your data export was shared.";
+const CREATED = "Your data export was created. Check that you saved a copy.";
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 interface ShareResult {
   readonly action: "sharedAction" | "dismissedAction";
@@ -66,13 +67,15 @@ describe("export share confirmation (HEN-311)", () => {
     vi.restoreAllMocks();
   });
 
-  it.each(places)("on %s: an iOS share that completed shows the grey polite confirmation", async (_place, open) => {
-    const screen = await exportWith(open, "ios", { action: "sharedAction" });
-
-    const line = screen.queryByText(SHARED);
+  const expectGreyPolite = (screen: Screen, text: string) => {
+    const line = screen.queryByText(text);
     expect(line?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
     expect(line?.props.accessibilityRole).toBeUndefined();
     expect(flattenStyle(line?.props.style).color).toBe(colours.textSecondary);
+  };
+
+  it.each(places)("on %s: an iOS share that completed shows the grey polite confirmation", async (_place, open) => {
+    expectGreyPolite(await exportWith(open, "ios", { action: "sharedAction" }), SHARED);
   });
 
   it.each(places)("on %s: a cancelled iOS share shows nothing, and clears an earlier confirmation", async (_place, open) => {
@@ -84,10 +87,32 @@ describe("export share confirmation (HEN-311)", () => {
     expect(screen.text()).not.toContain(SHARED);
   });
 
-  // Android always reports sharedAction, so it never claims shared. Its neutral line waits for Vera's wording (open question).
-  it.each(places)("on %s: Android never says the export was shared", async (_place, open) => {
-    const screen = await exportWith(open, "android", { action: "sharedAction" });
+  // Android reports sharedAction even on cancel, so after any closed sheet it says only what the app knows (Vera, HEN-311 review).
+  it.each(places)("on %s: Android shows the grey created line after the sheet closes, never 'shared'", async (_place, open) => {
+    const screen = await exportWith(open, "android", { action: "dismissedAction" });
 
+    expectGreyPolite(screen, CREATED);
     expect(screen.text()).not.toContain(SHARED);
+  });
+
+  it.each(places)("on %s: a share sheet that fails on Android shows the red error, not the created line", async (_place, open) => {
+    Platform.OS = "android";
+    const [screen, title] = await open();
+    vi.spyOn(Share, "share").mockRejectedValue(new Error("no share sheet"));
+    await screen.press(title);
+
+    expect(screen.text()).toContain("Export failed.");
+    expect(screen.text()).not.toContain(CREATED);
+  });
+
+  it("an Android export that fails shows no created line", async () => {
+    Platform.OS = "android";
+    const harness = createSignedInScreenHarness();
+    harness.state.exportResult = Promise.resolve({ ok: false, reason: "rateLimited", message: "Too many tries." });
+    const screen = await harness.render();
+    await screen.press("Export my data");
+
+    expect(screen.text()).toContain("Export failed.");
+    expect(screen.text()).not.toContain(CREATED);
   });
 });
