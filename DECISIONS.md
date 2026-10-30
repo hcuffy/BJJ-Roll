@@ -38,6 +38,43 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Decided by:** Sara (2026-10-22)
 - **Consequences:** HEN-58 builds the schema, RLS and the `bjj_auth_lookup` function as SQL migrations, plus the email-hash adapter wrapper. See `docs/spikes/HEN-47-better-auth.md`.
 
+## A6: One coarse position set for gi and no-gi; ViCoS classes are eval-only
+
+- **Decision:** Label set v1 (HEN-44) is one coarse set shared by gi and no-gi. Level 1 (18 positions, 9 events) is the scoring set for both styles; only level 2 details marked [Gi] are hidden for no-gi videos. ViCoS classes are used for evaluation only, never as our labels (D7).
+- **Date:** 2026-10-29
+- **Decided by:** Sara (2026-10-29)
+- **Consequences:** The file is `packages/workers/src/bjj_roll_workers/label_set_v1.json` with its loader and ground-truth validator in `label_set.py` (HEN-316). v0 (HEN-66) and v1 (HEN-79) score against it. Every id is snake_case and stable; each level 2 detail keeps its source name as a free-text `label`. `mount_escape` is one detail with an optional ground-truth `variant` (upa, elbow_knee, to_half) (Sara, 2026-10-30). The level 1 definitions below are a draft and need Sara's OK.
+
+| Lane | id                 | Definition (draft)                                                                                |
+| ---- | ------------------ | ------------------------------------------------------------------------------------------------- |
+| A    | `standing`         | Both athletes on their feet and not tied up.                                                      |
+| A    | `clinch`           | Both on their feet and tied up at the upper body (collar tie, underhooks, bodylock).              |
+| A    | `closed_guard`     | The bottom athlete's legs are locked around the top athlete's waist.                              |
+| A    | `half_guard`       | The bottom athlete traps one of the top athlete's legs between their legs.                        |
+| A    | `open_guard`       | The bottom athlete controls the top athlete with legs and hooks, without a lock or a trapped leg. |
+| A    | `headquarters`     | The top athlete has one knee between the bottom athlete's legs, pinning a leg, before a pass.     |
+| A    | `side_control`     | The top athlete is past the legs and pins the bottom athlete chest to chest from the side.        |
+| A    | `north_south`      | The top athlete pins the bottom athlete chest to chest, head to the bottom athlete's legs.        |
+| A    | `knee_on_belly`    | The top athlete has a knee on the bottom athlete's torso, with the other leg posted.              |
+| A    | `mount`            | The top athlete sits astride the bottom athlete's torso.                                          |
+| A    | `back_control`     | One athlete is behind the other and controls the back with hooks or chest to back.                |
+| A    | `turtle`           | One athlete is face down on knees and elbows, curled up.                                          |
+| A    | `front_headlock`   | One athlete controls the head and an arm of a facing opponent who is down on knees or hands.      |
+| A    | `crucifix`         | One athlete is beside or behind the opponent and traps both of their arms.                        |
+| A    | `truck`            | One athlete is behind a turtled opponent and locks a leg around one of their legs.                |
+| A    | `leg_entanglement` | Both athletes' legs are tangled, each controlling a leg for leg-lock attacks.                     |
+| A    | `scramble`         | A fast exchange with no stable position (fallback).                                               |
+| A    | `unknown`          | The model is unsure, or the athletes are off camera (fallback).                                   |
+| B    | `takedown`         | An athlete brings a standing opponent to the ground and ends on top.                              |
+| B    | `guard_pull`       | An athlete sits or jumps from standing into guard.                                                |
+| B    | `guard_pass`       | The top athlete gets past the bottom athlete's legs to a pin.                                     |
+| B    | `sweep`            | The bottom athlete reverses the position from guard and ends on top.                              |
+| B    | `back_take`        | An athlete reaches back control.                                                                  |
+| B    | `submission`       | A choke, joint lock or crank is applied; outcome is `attempt`, `defended` or `finish`.            |
+| B    | `escape`           | An athlete gets out of a pin, back control or a submission.                                       |
+| B    | `transition`       | A move between positions that is not a pass, sweep, back take or escape.                          |
+| B    | `reset`            | The roll restarts from standing (referee or partner reset, both stand).                           |
+
 ## D17: Sign-in is email OTP plus Apple and Google, with no passwords (revised)
 
 Revised from planning D17 (email OTP + magic link) on 2026-10-27 for HEN-238.

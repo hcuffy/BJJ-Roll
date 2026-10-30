@@ -15,15 +15,8 @@ import {
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import {
-  cancelPendingSignOut,
-  completeMagicLink,
-  FAILURE_MESSAGES,
-  type FailureReason,
-  finishPendingSignOut,
-  readSignedInUserId,
-  signOut,
-} from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, FAILURE_MESSAGES, type FailureReason, signOut } from "./auth/signInActions";
+import { checkStartup } from "./auth/startupCheck";
 import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
@@ -38,13 +31,6 @@ type AuthScreen =
   | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
   | { readonly name: "signedIn" }
   | { readonly name: "signingOut" };
-
-/** Runs the startup check in one budget: an unfinished sign-out first, then the session read (HEN-303, HEN-310). */
-async function checkStartup(budget: StartupBudget): Promise<AuthScreen> {
-  const signOutPending = await budget.run((signal) => finishPendingSignOut(appAuthClient, appSecureStore, signal));
-  const userId = signOutPending ? null : await budget.run((signal) => readSignedInUserId(appAuthClient, signal));
-  return userId ? { name: "signedIn" } : { name: "email" };
-}
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
@@ -166,6 +152,9 @@ export function App() {
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
+  // The sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
+  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
+
   // The gate's status read: the first one after startup uses what is left of its budget, any other gets its own (HEN-310).
   // A timeout shows the gate's offline note and its Try again.
   const readGateStatus = (): Promise<SignUpAttestationResult> => {
@@ -181,7 +170,8 @@ export function App() {
       startupBudget.current = null;
     }
     // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
-    void cancelPendingSignOut(appAuthClient, appSecureStore);
+    const stop = new AbortController();
+    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
     setScreen({ name: "signedIn" });
   };
 
@@ -191,7 +181,15 @@ export function App() {
     setScreen({ name: "signingOut" });
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    void withStartupTimeout((signal) => signOut(appAuthClient, appSecureStore, signal))
+    // A revoke still running from the sign-in is stopped (its sessions stay queued) and awaited, so the two never touch the
+    // queue or the same session at once; signOut retries those sessions itself within the deadline.
+    const leftover = leftoverRevoke.current;
+    leftoverRevoke.current = null;
+    leftover?.stop.abort();
+    void withStartupTimeout(async (signal) => {
+      await leftover?.done;
+      await signOut(appAuthClient, appSecureStore, signal);
+    })
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
   };
