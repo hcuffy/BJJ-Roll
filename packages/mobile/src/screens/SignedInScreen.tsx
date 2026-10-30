@@ -122,7 +122,9 @@ export function SignedInScreen({
 
   const exportData = () =>
     runOnce("export", async () => {
+      // Every slot clears, so the note never shows next to an earlier red code error (Bill, gate Q1).
       setExportError(null);
+      setCodeRequestError(null);
       setOffline(false);
       const failure = await shareAccountExport(onExportData);
       setOffline(failure?.offline ?? false);
