@@ -11,7 +11,7 @@ vi.mock("react-native", async () => ({
   Platform: { OS: "android" },
   AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },
   AppState: { addEventListener: () => ({ remove: () => undefined }) },
-  Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })) },
+  Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })), sharedAction: "sharedAction", dismissedAction: "dismissedAction" },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
   Image: "Image",

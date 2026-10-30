@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Share, StyleSheet, View } from "react-native";
+import { Platform, Share, StyleSheet, View } from "react-native";
 import type { AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { spacing } from "../theme/tokens";
@@ -8,14 +8,25 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 import { whileFlagged } from "./whileFlagged";
 
-/** Runs the export and opens the share sheet; resolves to the error to show, or null. Both delete paths use it (HEN-308). */
-export async function shareAccountExport(onExportData: () => Promise<AccountExportResult>): Promise<string | null> {
+export const EXPORT_SHARED_NOTICE = "Your data export was shared.";
+
+/**
+ * Runs the export and opens the share sheet; resolves to the error to show, or null. Both delete paths use it (HEN-308).
+ * `onShared` gets the grey confirmation only when iOS reports the share completed: Android reports sharedAction even on cancel (HEN-311).
+ */
+export async function shareAccountExport(
+  onExportData: () => Promise<AccountExportResult>,
+  onShared: (notice: string) => void = () => undefined,
+): Promise<string | null> {
   const result = await onExportData();
   if (!result.ok) {
     return `Export failed. ${result.message}`;
   }
   try {
-    await Share.share({ title: "BJJ Roll data export", message: result.json });
+    const shared = await Share.share({ title: "BJJ Roll data export", message: result.json });
+    if (Platform.OS === "ios" && shared.action === Share.sharedAction) {
+      onShared(EXPORT_SHARED_NOTICE);
+    }
     return null;
   } catch {
     return `Export failed. ${FAILURE_MESSAGES.unknown}`;
@@ -27,6 +38,7 @@ const styles = StyleSheet.create({ exportFirst: { gap: spacing.medium, marginBot
 
 export interface ExportDataFirstActionProps {
   readonly error: string | null;
+  readonly notice?: string | null;
   readonly loading: boolean;
   readonly disabled: boolean;
   readonly onPress: () => void;
@@ -46,6 +58,7 @@ export function ExportDataFirstAction(props: ExportDataFirstActionProps) {
         onPress={props.onPress}
       />
       <StatusText message={props.error} style={authStyles.fieldError} />
+      <StatusText message={props.notice ?? null} style={authStyles.fieldNote} announce="polite" />
     </View>
   );
 }
@@ -67,6 +80,7 @@ export function useExportDataFirst(
 ) {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Never accepts the attestation: it only reads GET /account/export.
   const run = async (exportData: () => Promise<AccountExportResult>) => {
@@ -83,7 +97,9 @@ export function useExportDataFirst(
       offline = !result.ok && result.reason === "network";
       return result;
     };
-    const exportError = await whileFlagged(inFlight, shareAccountExport)(watched).catch(() => `Export failed. ${FAILURE_MESSAGES.unknown}`);
+    const exportError = await whileFlagged(inFlight, shareAccountExport)(watched, setNotice).catch(
+      () => `Export failed. ${FAILURE_MESSAGES.unknown}`,
+    );
     setExporting(false);
     if (offline) {
       hooks.setOffline(true);
@@ -93,7 +109,16 @@ export function useExportDataFirst(
   };
 
   const renderAction = (disabled: boolean) =>
-    onExportData && <ExportDataFirstAction error={error} loading={exporting} disabled={disabled} onPress={() => void run(onExportData)} />;
+    onExportData && (
+      <ExportDataFirstAction error={error} notice={notice} loading={exporting} disabled={disabled} onPress={() => void run(onExportData)} />
+    );
 
-  return { exporting, clearError: () => setError(null), renderAction };
+  return {
+    exporting,
+    clearError: () => {
+      setError(null);
+      setNotice(null);
+    },
+    renderAction,
+  };
 }

@@ -56,6 +56,8 @@ export function SignedInScreen({
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  // The grey line after a completed iOS share (HEN-311); cleared wherever the export error is.
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
   const [adultError, setAdultError] = useState<string | null>(null);
@@ -122,8 +124,9 @@ export function SignedInScreen({
   const exportData = () =>
     runOnce("export", async () => {
       setExportError(null);
+      setExportNotice(null);
       setAdultOffline(false);
-      setExportError(await shareAccountExport(onExportData));
+      setExportError(await shareAccountExport(onExportData, setExportNotice));
     });
 
   const confirmAdultAge = () =>
@@ -146,6 +149,7 @@ export function SignedInScreen({
       const result = await onRequestDeleteCode();
       if (result.ok) {
         setExportError(null);
+        setExportNotice(null);
         setDeleteStep("code");
       } else {
         setCodeRequestError(`We could not send the code. ${result.message}`);
@@ -155,6 +159,7 @@ export function SignedInScreen({
   const cancelDelete = () => {
     setCodeRequestError(null);
     setExportError(null);
+    setExportNotice(null);
     returnFocusToDeleteEntry.current = true;
     setDeleteStep("none");
   };
@@ -195,7 +200,7 @@ export function SignedInScreen({
     return (
       <DeleteAccountConfirmStep
         headingRef={confirmHeading}
-        exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} />}
+        exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} notice={exportNotice} />}
         codeRequestError={codeRequestError}
         sendingCode={runningTask === "code"}
         emailCodeDisabled={runningTask === "export"}
@@ -235,6 +240,7 @@ export function SignedInScreen({
             accessibilityHint="Opens the share sheet with a copy of your account data."
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
+          <StatusText message={exportNotice} style={authStyles.fieldNote} announce="polite" />
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
@@ -259,6 +265,7 @@ export function SignedInScreen({
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
               setExportError(null);
+              setExportNotice(null);
               setAdultOffline(false);
               setDeleteStep("confirm");
             }}
