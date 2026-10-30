@@ -183,19 +183,21 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(true);
     });
 
-    it("ending an older session left by a sign-in (HEN-299) times out: the marker stays even if the server answers late", async () => {
+    it("ending an older session left by a sign-in (HEN-299) times out: the user starts signed in, the marker stays after a late answer", async () => {
       await signIn(await launchApp());
       const olderSessionMarker = "better-auth.session_token=older-session.signature";
       await secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, olderSessionMarker);
       hangingPaths.add("/sign-out");
       hangMode = "answersLate";
 
+      // The newer session is valid, so start does not wait for the old one's end (HEN-310).
       const screen = await launchApp();
-      await expectLoadingEndsAtTimeout(screen);
+      expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+      await advance(STARTUP_REQUEST_TIMEOUT_MS);
       lateAnswers.forEach((answer) => answer());
       await settle();
 
-      expectCalmOfflineNote(screen);
+      expect(screen.text()).toContain(SIGNED_IN_SCREEN);
       expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toBe(olderSessionMarker);
       // The stored session was never touched: a reachable launch ends the older one and keeps the user signed in.
       hangingPaths.clear();

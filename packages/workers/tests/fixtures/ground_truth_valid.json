@@ -1,0 +1,15 @@
+{
+  "video_id": "3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f",
+  "style": "gi",
+  "positions": [
+    { "start": 0, "end": 12.5, "class": "standing", "role": "neutral" },
+    { "start": 12.5, "end": 40, "class": "closed_guard", "role": "bottom" },
+    { "start": 41, "end": 75.25, "class": "side_control", "role": "top" }
+  ],
+  "events": [
+    { "time": 12.5, "class": "guard_pull", "detail": "pull_to_open_guard" },
+    { "start": 38, "end": 41, "class": "sweep", "detail": "spider_sweep" },
+    { "time": 60, "class": "submission", "detail": "cross_collar", "outcome": "attempt" },
+    { "start": 70, "end": 75.25, "class": "submission", "outcome": "finish" }
+  ]
+}

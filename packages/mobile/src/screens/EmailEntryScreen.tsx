@@ -10,7 +10,7 @@ import { EmailSendButtons } from "./EmailSendButtons";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import type { LinkErrorCardProps } from "./LinkErrorCard";
 import { LinkSentScreen } from "./LinkSentScreen";
-import { ServerUnreachableNote } from "./ServerUnreachableNote";
+import { ServerUnreachableNote, type StartupRetryProps } from "./ServerUnreachableNote";
 import { SignInHeader } from "./SignInHeader";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { SocialSignInButtons } from "./SocialSignInButtons";
@@ -22,7 +22,7 @@ import { RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 export const TICK_AGE_BOX_MESSAGE = "Tick the box to confirm you are 16 or older.";
 export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 
-export interface EmailEntryScreenProps {
+export interface EmailEntryScreenProps extends StartupRetryProps {
   readonly client: MobileAuthClient;
   readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   /** Error from a failed sign-in link, shown as a card above the title until the next action. */
@@ -61,6 +61,7 @@ export function EmailEntryScreen({
   socialProviders = [],
   socialSignIn,
   onSignedIn,
+  ...startup
 }: EmailEntryScreenProps) {
   const [email, setEmail] = useState("");
   const [age16Confirmed, setAge16Confirmed] = useState(false);
@@ -131,8 +132,7 @@ export function EmailEntryScreen({
       return;
     }
     setSending(kind);
-    const action = kind === "code" ? sendEmailCode : sendMagicLink;
-    const result = await action(client, { email, ...answers });
+    const result = await (kind === "code" ? sendEmailCode : sendMagicLink)(client, { email, ...answers });
     setSending(null);
     if (!result.ok) {
       showFailure(result);
@@ -169,8 +169,7 @@ export function EmailEntryScreen({
     }
     setSending(provider);
     setSocialProgress("opening");
-    const dependencies = { ...socialSignIn, onReturned: () => setSocialProgress("signingIn") };
-    const result = await signInWithProvider(dependencies, provider, answers);
+    const result = await signInWithProvider({ ...socialSignIn, onReturned: () => setSocialProgress("signingIn") }, provider, answers);
     setSending(null);
     if (result.ok) {
       onSignedIn?.();
@@ -206,6 +205,7 @@ export function EmailEntryScreen({
       <SignInHeader linkError={linkError} linkErrorReason={linkErrorReason} accountNotice={accountNotice} />
       <TextField
         label="Email"
+        focusKey={startup.focusEmailKey}
         error={emailError}
         autoCapitalize="none"
         autoComplete="email"
@@ -229,7 +229,7 @@ export function EmailEntryScreen({
         }}
         onSubmitEditing={() => void send("code")}
       />
-      <ServerUnreachableNote visible={serverUnreachable || offline} />
+      <ServerUnreachableNote visible={serverUnreachable || offline} startupRetry={serverUnreachable ? startup.startupRetry : undefined} />
       <AgeConfirmationFields
         age16Confirmed={age16Confirmed}
         age18Confirmed={age18Confirmed}

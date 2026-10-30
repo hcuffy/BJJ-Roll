@@ -1,5 +1,5 @@
 import * as Linking from "expo-linking";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -11,20 +11,14 @@ import {
   readSignUpAttestation,
   requestAccountDeletionCode,
   type AccountSession,
+  type SignUpAttestationResult,
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import {
-  type BiometricKind,
-  changeBiometricUnlock,
-  clearBiometricUnlock,
-  isBiometricUnlockOn,
-  readBiometricKind,
-  readBiometricSetting,
-  takeBiometricOffer,
-} from "./auth/biometricUnlock";
-import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
-import { withStartupTimeout } from "./auth/startupTimeout";
+import { type BiometricKind, changeBiometricUnlock, clearBiometricUnlock, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
+import { cancelPendingSignOut, completeMagicLink, FAILURE_MESSAGES, type FailureReason, signOut } from "./auth/signInActions";
+import { checkStartup, readBiometricLock } from "./auth/startupCheck";
+import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
 import { BiometricOfferScreen } from "./screens/BiometricOfferScreen";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
@@ -33,6 +27,7 @@ import { LoadingScreen } from "./screens/LoadingScreen";
 import { SignUpAttestationGate } from "./screens/SignUpAttestationGate";
 import { SignedInScreen } from "./screens/SignedInScreen";
 import { colours } from "./theme/tokens";
+import { useStartupRetry } from "./useStartupRetry";
 
 type AuthScreen =
   | { readonly name: "loading" }
@@ -54,30 +49,43 @@ export function App() {
   // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
   const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
+  // One 10 s budget for all of startup, the gate's first status read included; a sign-in in the running app drops it (HEN-310).
+  const startupBudget = useRef<StartupBudget | null>(null);
+  // The launch's or sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
+  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
+  const startLeftoverRevoke = (deadline?: AbortSignal) => {
+    const stop = new AbortController();
+    deadline?.addEventListener("abort", () => stop.abort());
+    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
+  };
+  // Each startup check gets one 10 s budget for all its steps (HEN-303, HEN-310).
+  const runStartupCheck = () => {
+    const budget = createStartupBudget();
+    startupBudget.current = budget;
+    return checkStartup(budget, startLeftoverRevoke);
+  };
+  const retry = useStartupRetry({ serverUnreachable, setServerUnreachable, runCheck: runStartupCheck, setScreen });
 
   // Signing in proves the server is reachable, so a note set earlier must not reappear later.
   useEffect(() => {
     if (screen.name === "signedIn") {
       setServerUnreachable(false);
     }
+    // The lock and the biometric offer wait on the user, so the gate's status read after them gets its own 10 s (HEN-288, HEN-310).
+    if (screen.name === "locked" || screen.name === "biometricOffer") {
+      startupBudget.current = null;
+    }
   }, [screen.name]);
 
   useEffect(() => {
     // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
-    // Each step has a deadline, so a host that never answers cannot hold Loading (HEN-303); a timeout lands like a network failure.
-    void withStartupTimeout((signal) => finishPendingSignOut(appAuthClient, appSecureStore, signal))
-      .then(async (signOutPending) => (signOutPending ? null : await withStartupTimeout((signal) => readSignedInUserId(appAuthClient, signal))))
-      .then(async (userId) => {
-        if (!userId) {
-          setStartupScreen({ name: "email" });
-          return;
-        }
-        // Biometric unlock on (HEN-288): nothing signed-in shows until the check passes. Local read, after the timed steps.
-        setStartupScreen((await isBiometricUnlockOn(appSecureStore)) ? { name: "locked", kind: await readBiometricKind() } : { name: "signedIn" });
-      })
+    // All steps share one deadline, so a host that never answers cannot hold Loading (HEN-303, HEN-310); a timeout lands like a network failure.
+    void runStartupCheck()
+      .then(setStartupScreen)
       .catch(() => {
-        // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
+        // Backend unreachable: show sign-in with a note and Try again instead of loading forever.
         setServerUnreachable(true);
+        retry.offerRetry();
         setStartupScreen({ name: "email" });
       });
   }, []);
@@ -96,17 +104,22 @@ export function App() {
     // A link opened in the running app replaces the last result; at startup the startup note stays next to a link card.
     const openedInRunningApp = screen.name !== "loading";
     // A link that never answers times out into .catch like a network failure: the grey note only, never the card (HEN-303).
-    void withStartupTimeout((signal) => completeMagicLink(appAuthClient, deepLinkUrl, signal))
+    // At startup it shares the startup budget (HEN-310).
+    const exchange = (signal: AbortSignal) => completeMagicLink(appAuthClient, deepLinkUrl, signal);
+    const startupLink = !openedInRunningApp && startupBudget.current;
+    void (startupLink ? startupLink.run(exchange) : withStartupTimeout(exchange))
       .then(async (result) => {
         if (result.ok) {
           setLinkError(null);
           // Biometric unlock on (HEN-288, Henry 28 Oct): the link signs in, but the lock screen still shows first.
-          if (await isBiometricUnlockOn(appSecureStore)) {
-            void cancelPendingSignOut(appAuthClient, appSecureStore);
-            setScreen({ name: "locked", kind: await readBiometricKind() });
+          // Its revoke of old sessions is tracked like a sign-in's, so a sign-out from the lock stops it and waits (HEN-315).
+          const lock = await readBiometricLock();
+          if (lock) {
+            startLeftoverRevoke();
+            setScreen(lock);
             return;
           }
-          handleSignedIn();
+          handleSignedIn(!openedInRunningApp);
           return;
         }
         if (result.reason !== "ignored") {
@@ -126,9 +139,22 @@ export function App() {
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
-  const handleSignedIn = () => {
+  // The gate's status read: the first one after startup uses what is left of its budget, any other gets its own (HEN-310).
+  // A timeout shows the gate's offline note and its Try again.
+  const readGateStatus = (): Promise<SignUpAttestationResult> => {
+    const budget = startupBudget.current ?? createStartupBudget();
+    startupBudget.current = null;
+    return budget
+      .run((signal) => readSignUpAttestation(accountSession(), signal))
+      .catch(() => ({ ok: false, reason: "network", message: FAILURE_MESSAGES.network }));
+  };
+
+  const handleSignedIn = (atStartup = false) => {
+    if (!atStartup) {
+      startupBudget.current = null;
+    }
     // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
-    void cancelPendingSignOut(appAuthClient, appSecureStore);
+    startLeftoverRevoke();
     // The biometric offer shows once per install; if it cannot be decided the user simply goes in.
     void takeBiometricOffer(appSecureStore)
       .catch(() => null)
@@ -143,7 +169,15 @@ export function App() {
     setScreen({ name: "signingOut" });
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    void withStartupTimeout((signal) => signOut(appAuthClient, appSecureStore, signal))
+    // A revoke still running from the sign-in is stopped (its sessions stay queued) and awaited, so the two never touch the
+    // queue or the same session at once; signOut retries those sessions itself within the deadline.
+    const leftover = leftoverRevoke.current;
+    leftoverRevoke.current = null;
+    leftover?.stop.abort();
+    void withStartupTimeout(async (signal) => {
+      await leftover?.done;
+      await signOut(appAuthClient, appSecureStore, signal);
+    })
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
   };
@@ -175,7 +209,7 @@ export function App() {
         // HEN-183: an account without the current sign-up attestation stays on the prompt until it accepts.
         return (
           <SignUpAttestationGate
-            onReadStatus={() => readSignUpAttestation(accountSession())}
+            onReadStatus={readGateStatus}
             onAccept={() => acceptSignUpAttestation(accountSession())}
             onSignOut={handleSignOut}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
@@ -220,7 +254,7 @@ export function App() {
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
             linkAttempt={linkAttempt}
-            onSignedIn={handleSignedIn}
+            onSignedIn={() => handleSignedIn()}
             onBack={() => {
               // As on "Check your email": the card is about this view; App's note stays (HEN-287 item 1).
               setLinkError(null);
@@ -240,11 +274,13 @@ export function App() {
             onClearAccountNotice={() => setAccountNotice(null)}
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
+            startupRetry={retry.startupRetry}
+            focusEmailKey={retry.focusEmailKey}
             linkAttempt={linkAttempt}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
             socialProviders={appSocialProviders}
             socialSignIn={appSocialSignIn}
-            onSignedIn={handleSignedIn}
+            onSignedIn={() => handleSignedIn()}
           />
         );
       }
