@@ -9,7 +9,8 @@ Prerequisites (exact versions):
 - Node 24 (`.nvmrc` pins `24.13.1`; `nvm use` picks it up).
 - pnpm 11.21.0, installed directly (`npm i -g pnpm@11.21.0` or the standalone installer from pnpm.io). Do not use corepack.
 - Docker, for the backend database tests (Testcontainers starts `postgres:18.6`).
-- uv 0.13.1 for the Python workers. uv fetches Python 3.15.0 itself (`packages/workers/.python-version`).
+- uv 0.13.1 for the Python workers. The package accepts Python >= 3.13; uv fetches the default 3.15.0 itself (`packages/workers/.python-version`).
+  CI runs 3.13 and 3.15; the real ONNX run uses 3.13.
 
 No running Postgres is needed yet: tests start their own `postgres:18.6` container with Testcontainers (Docker required). A compose file comes with the first DB-backed dev route.
 
@@ -65,7 +66,7 @@ pnpm --filter @bjj-roll/mobile exec expo export --platform ios --output-dir dist
 
 ## Workers
 
-Python workers in `packages/workers` (Python 3.15.0, uv 0.13.1, Ruff, pytest).
+Python workers in `packages/workers` (Python >= 3.13, tested on 3.13 and 3.15; uv 0.13.1, Ruff, pytest).
 
 ```sh
 cd packages/workers

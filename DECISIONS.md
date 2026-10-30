@@ -22,7 +22,8 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 ## A3: Python lint and test for `packages/workers` is Ruff + pytest
 
 - **Decision:** Use Ruff for lint and pytest for tests in `packages/workers`.
-- **Python:** Pinned exactly to `3.15.0` (`.python-version`). Dependencies are managed with uv, with a committed `uv.lock`.
+- **Python:** The package accepts Python >= 3.13 (`requires-python`); `.python-version` (3.15.0) is the default uv picks. CI runs 3.13 and 3.15, and
+  the real ONNX run uses 3.13 (onnxruntime has no 3.15 wheel; HEN-318, HEN-319). Dependencies are managed with uv, with a committed `uv.lock`.
 - **Style:** Python uses 4-space indent (PEP 8, Ruff default). The 2-space rule applies to JS/TS only.
 - **Test files:** Named `test_<module>_<scenario>.py`.
 - **Date:** 2026-10-17
