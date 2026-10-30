@@ -2,7 +2,7 @@
 name = "bjj-roll-workers"
 version = "0.0.0"
 description = "BJJ-Roll Python workers"
-requires-python = "==3.15.*"
+requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
@@ -16,7 +16,7 @@ package = false
 
 [tool.ruff]
 line-length = 150
-target-version = "py315"
+target-version = "py313"
 src = ["src", "tests"]
 
 [tool.ruff.format]
