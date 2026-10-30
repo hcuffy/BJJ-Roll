@@ -186,7 +186,7 @@ export function EmailEntryScreen({
         linkError={linkError}
         linkErrorReason={linkErrorReason}
         offline={serverUnreachable || (offline && !linkError)}
-        formError={formError}
+        formError={linkError ? null : formError}
         cooldownSecondsLeft={linkCooldown.secondsLeft}
         sending={sending === "link"}
         canUseDifferentEmail={sending === null}
@@ -260,7 +260,7 @@ export function EmailEntryScreen({
           setAttestationError(null);
         }}
       />
-      <StatusText message={formError} style={authStyles.fieldError} />
+      <StatusText message={linkError ? null : formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <EmailSendButtons ready={ready} hint={sendHint} sending={sending} onSend={(kind) => void send(kind)} />
         {socialSignIn ? (
