@@ -28,8 +28,10 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
   let frames: string[];
   const linkProps = () => ({ ...link, linkErrorReason: "invalidLink" as const, onClearLinkError: () => (link = { ...link, linkError: null }) });
 
+  const newClient = () =>
+    createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: createMemorySecureStore(), fetchImplementation: backend.fetchImplementation });
   const renderEmailEntry = async () => {
-    const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: createMemorySecureStore(), fetchImplementation: backend.fetchImplementation });
+    const client = newClient();
     const Host = () => createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, ...linkProps() });
     const screen = await renderScreen(createElement(Host), (text) => frames.push(text));
     await screen.pressRole("checkbox");
@@ -38,7 +40,7 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
     return screen;
   };
   const renderCodeEntry = () => {
-    const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: createMemorySecureStore(), fetchImplementation: backend.fetchImplementation });
+    const client = newClient();
     const Host = () => createElement(CodeEntryScreen, { client, email: EMAIL, onSignedIn: () => undefined, onBack: () => undefined, ...linkProps() });
     return renderScreen(createElement(Host), (text) => frames.push(text));
   };
