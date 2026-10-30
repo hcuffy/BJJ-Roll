@@ -54,8 +54,8 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
     await vi.advanceTimersByTimeAsync(30_000).then(() => screen.rerender());
     backend.fetchImplementation.mockResolvedValueOnce(Response.json({ code, message: "Refused" }, { status: code ? 400 : 429 }));
     await act();
-    const [stale] = redTexts(screen);
-    expect(stale).toBeTruthy();
+    const [stale = ""] = redTexts(screen);
+    expect(stale).not.toBe("");
     return stale;
   };
   /** A failed link arrives as App sends it: the card and a new attempt in the same render. */
