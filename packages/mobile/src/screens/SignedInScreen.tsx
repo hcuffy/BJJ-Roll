@@ -9,6 +9,7 @@ import { AuthScreenLayout } from "./AuthScreenLayout";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
+import { ServerUnreachableNote } from "./ServerUnreachableNote";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
@@ -58,6 +59,8 @@ export function SignedInScreen({
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
   const [adultError, setAdultError] = useState<string | null>(null);
+  // A network failure of the 18+ save: the grey note alone in that slot, not red (Vera, HEN-311).
+  const [adultOffline, setAdultOffline] = useState(false);
   // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
@@ -119,6 +122,7 @@ export function SignedInScreen({
   const exportData = () =>
     runOnce("export", async () => {
       setExportError(null);
+      setAdultOffline(false);
       setExportError(await shareAccountExport(onExportData));
     });
 
@@ -129,6 +133,8 @@ export function SignedInScreen({
       if (result.ok) {
         setAge18Confirmed(result.status.age18Confirmed);
         setAdultJustConfirmed(result.status.age18Confirmed);
+      } else if (result.reason === "network") {
+        setAdultOffline(true);
       } else {
         setAdultError(`We could not save that. ${result.message}`);
       }
@@ -205,7 +211,18 @@ export function SignedInScreen({
       <Text accessibilityRole="header" style={textStyles.display}>
         You are signed in
       </Text>
-      <AuthButton title="Sign out" variant="secondary" disabled={isBusy} onPress={onSignOut} />
+      <AuthButton
+        title="Sign out"
+        variant="secondary"
+        disabled={isBusy}
+        onPress={() => {
+          // Only when shown: an extra render after sign-out would flash this screen again (as in HEN-305).
+          if (adultOffline) {
+            setAdultOffline(false);
+          }
+          onSignOut();
+        }}
+      />
       <View style={styles.accountSection}>
         <Text accessibilityRole="header" style={styles.sectionLabel}>
           Account
@@ -227,11 +244,13 @@ export function SignedInScreen({
             loading={runningTask === "adult"}
             onConfirmPress={() => {
               setAdultError(null);
+              setAdultOffline(false);
               returnFocusToAdultEntry.current = true;
               setAdultDialogOpen(true);
             }}
           />
           <StatusText message={adultError} style={authStyles.fieldError} />
+          <ServerUnreachableNote visible={adultOffline} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"
@@ -240,6 +259,7 @@ export function SignedInScreen({
             accessibilityHint="Asks you to confirm before anything is deleted."
             onPress={() => {
               setExportError(null);
+              setAdultOffline(false);
               setDeleteStep("confirm");
             }}
           />
