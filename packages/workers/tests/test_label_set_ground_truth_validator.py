@@ -149,3 +149,22 @@ def test_ground_truth_rejects_unknown_variant(fields: dict) -> None:
     assert raised.value.rule == "unknown_variant"
     assert raised.value.path == "$.events[4].variant"
     assert str(raised.value) == "unknown_variant at $.events[4].variant"
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan")], ids=["infinity", "minus-infinity", "nan"])
+@pytest.mark.parametrize(
+    ("location", "path"),
+    [
+        pytest.param(("positions", 2, "end"), "$.positions[2].end", id="segment-end"),
+        pytest.param(("positions", 0, "start"), "$.positions[0].start", id="segment-start"),
+        pytest.param(("events", 0, "time"), "$.events[0].time", id="event-time"),
+    ],
+)
+def test_ground_truth_rejects_non_finite_times(value: float, location: tuple, path: str) -> None:
+    data = _valid()
+    _set(location, value)(data)
+    with pytest.raises(GroundTruthError) as raised:
+        validate_ground_truth(data)
+    assert raised.value.rule == "time"
+    assert raised.value.path == path
+    assert str(raised.value) == f"time at {path}"

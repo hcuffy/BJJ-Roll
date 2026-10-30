@@ -22,11 +22,12 @@ Ground-truth file format (JSON object, no free-text fields, unknown fields are r
 
 `outcome` is required on `submission` events and not allowed on any other event. A non-null `variant` must be one of the
 chosen detail's listed variants. Times are seconds from the start of the
-video (numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
+video (finite numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
 the file.
 """
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from functools import cache
@@ -199,7 +200,7 @@ def _require_object(value: object, fields: set[str], required: set[str], path: s
 
 
 def _seconds(value: object, path: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value) or value < 0:
         raise GroundTruthError("time", path)
     return float(value)
 
