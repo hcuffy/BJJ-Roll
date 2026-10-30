@@ -1,6 +1,7 @@
 """HEN-316: label set v1 (HEN-44) loads as one file; level 1 is the scoring set for gi and no-gi alike."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,7 @@ EVENT_IDS = ("takedown", "guard_pull", "guard_pass", "sweep", "back_take", "subm
 
 # Every [Gi] detail in label set v1, per level 1 class.
 GI_ONLY_DETAILS = {
-    "standing": {"sleeve control"},
+    "standing": {"sleeve_control"},
     "open_guard": {"spider", "lasso", "collar_sleeve", "worm", "squid", "lapel_guard_other"},
     "sweep": {"spider_sweep", "lasso_sweep", "collar_sleeve_sweep", "lapel_sweep"},
     "submission": {"cross_collar", "bow_and_arrow", "ezekiel", "baseball_bat", "loop", "clock", "paper_cutter", "lapel_choke"},
@@ -87,15 +88,15 @@ def test_label_set_pick_lists_keep_source_details() -> None:
     label_set = load_label_set()
     assert label_set.pick_list("closed_guard", "gi") == ()
     assert label_set.pick_list("half_guard", "no-gi") == (
-        "knee shield",
+        "knee_shield",
         "z_guard",
         "lockdown",
-        "deep half",
-        "quarter guard",
-        "underhook half",
+        "deep_half",
+        "quarter_guard",
+        "underhook_half",
         "dogfight",
     )
-    assert label_set.pick_list("back_control", "gi") == ("two hooks", "body triangle", "one hook", "chest_to_back")
+    assert label_set.pick_list("back_control", "gi") == ("two_hooks", "body_triangle", "one_hook", "chest_to_back")
     assert "mount_escape" in label_set.pick_list("escape", "no-gi")
     assert label_set.pick_list("submission", "no-gi")[:2] == ("rear_naked", "arm_in_rear_naked")
     assert label_set.pick_list("submission", "gi")[-1] == "twister"
@@ -107,3 +108,64 @@ def test_label_set_pick_lists_keep_source_details() -> None:
 def test_label_set_pick_list_rejects_unknown_class() -> None:
     with pytest.raises(ValueError):
         load_label_set().pick_list("arm_drag", "gi")
+
+
+SNAKE_CASE = re.compile("[a-z0-9_]+")
+
+
+def _raw_label_set() -> dict:
+    return json.loads(LABEL_SET_FILE.read_text(encoding="utf-8"))
+
+
+def test_label_set_ids_are_snake_case() -> None:
+    raw = _raw_label_set()
+    for label in raw["positions"] + raw["events"]:
+        assert SNAKE_CASE.fullmatch(label["id"]), label["id"]
+        for detail in label["details"]:
+            assert SNAKE_CASE.fullmatch(detail["id"]), detail["id"]
+            for variant in detail.get("variants", []):
+                assert SNAKE_CASE.fullmatch(variant), variant
+
+
+def test_label_set_details_keep_the_source_name_as_label() -> None:
+    label_set = load_label_set()
+    labels = {(label.id, detail.id): detail.label for label in label_set.positions + label_set.events for detail in label.details}
+    assert all(isinstance(text, str) and text for text in labels.values())
+    assert labels[("standing", "neutral_stance")] == "neutral stance"
+    assert labels[("standing", "sleeve_control")] == "sleeve control"
+    assert labels[("clinch", "over_under")] == "over-under"
+    assert labels[("back_control", "two_hooks")] == "two hooks"
+    assert labels[("half_guard", "z_guard")] == "z_guard"
+    assert labels[("guard_pass", "over_under")] == "over_under"
+
+
+def test_label_set_mount_escape_is_one_item_with_variants() -> None:
+    label_set = load_label_set()
+    assert label_set.pick_list("escape", "no-gi").count("mount_escape") == 1
+    assert label_set.variants("escape", "mount_escape") == ("upa", "elbow_knee", "to_half")
+    assert label_set.variants("escape", "back_escape") == ()
+
+
+def _first_detail(raw: dict) -> dict:
+    return raw["positions"][0]["details"][0]
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(lambda raw: _first_detail(raw).update(id="neutral stance"), id="detail-id-with-space"),
+        pytest.param(lambda raw: _first_detail(raw).update(id="over-under"), id="detail-id-with-hyphen"),
+        pytest.param(lambda raw: _first_detail(raw).update(id="Neutral_Stance"), id="detail-id-upper-case"),
+        pytest.param(lambda raw: _first_detail(raw).update(id=""), id="detail-id-empty"),
+        pytest.param(lambda raw: raw["positions"][0].update(id="Standing"), id="class-id-upper-case"),
+        pytest.param(lambda raw: raw["events"][6]["details"][0].update(variants=["elbow-knee"]), id="variant-id-with-hyphen"),
+        pytest.param(lambda raw: _first_detail(raw).pop("label"), id="detail-label-missing"),
+        pytest.param(lambda raw: _first_detail(raw).update(label=3), id="detail-label-not-a-string"),
+    ],
+)
+def test_label_set_rejects_bad_ids_and_labels(mutate) -> None:
+    raw = _raw_label_set()
+    parse_label_set(raw)
+    mutate(raw)
+    with pytest.raises(ValueError):
+        parse_label_set(raw)

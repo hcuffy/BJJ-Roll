@@ -2,7 +2,9 @@
 
 The label set lives in `label_set_v1.json` next to this module. Level 1 (18 positions in Lane A, 9 events in Lane B) is the
 scoring set and is the same for gi and no-gi (DECISIONS.md A6). Level 2 is a per-class pick list; details flagged `gi_only`
-are hidden for `no-gi` videos (H9).
+are hidden for `no-gi` videos (H9). Every id (class, detail, variant) is snake_case (`^[a-z0-9_]+$`) and stable; each detail
+also carries `label`, the source name as free display text. A detail may list `variants` (only `mount_escape` does: upa,
+elbow_knee, to_half).
 
 Ground-truth file format (JSON object, no free-text fields, unknown fields are rejected):
 
@@ -13,11 +15,13 @@ Ground-truth file format (JSON object, no free-text fields, unknown fields are r
         {"start": <seconds>, "end": <seconds>, "class": "<position id>", "role": "top" | "bottom" | "neutral"}
       ],
       "events": [                           # Lane B, a moment ("time") or a span ("start" + "end")
-        {"time": <seconds>, "class": "<event id>", "detail": "<level 2 id, optional>", "outcome": "attempt" | "defended" | "finish"}
+        {"time": <seconds>, "class": "<event id>", "detail": "<level 2 id, optional>",
+         "variant": "<variant id of that detail, optional, may be null>", "outcome": "attempt" | "defended" | "finish"}
       ]
     }
 
-`outcome` is required on `submission` events and not allowed on any other event. Times are seconds from the start of the
+`outcome` is required on `submission` events and not allowed on any other event. A non-null `variant` must be one of the
+chosen detail's listed variants. Times are seconds from the start of the
 video (numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
 the file.
 """
@@ -30,13 +34,16 @@ from itertools import pairwise
 from pathlib import Path
 
 _LABEL_SET_PATH = Path(__file__).with_name("label_set_v1.json")
+_ID_PATTERN = re.compile("^[a-z0-9_]+$")
 _UUID_PATTERN = re.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class Detail:
     id: str
+    label: str
     gi_only: bool
+    variants: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -76,23 +83,49 @@ class LabelSet:
                 return tuple(detail.id for detail in label.details if style == "gi" or not detail.gi_only)
         raise ValueError("unknown label class")
 
+    def variants(self, class_id: str, detail_id: str) -> tuple[str, ...]:
+        """Variant ids listed for one level 2 detail; empty when the detail has none."""
+        for label in self.positions + self.events:
+            if label.id == class_id:
+                for detail in label.details:
+                    if detail.id == detail_id:
+                        return detail.variants
+        raise ValueError("unknown label detail")
+
     def _require_style(self, style: str) -> None:
         if style not in self.styles:
             raise ValueError("unknown style")
 
 
 _CLASS_FIELDS = {"id", "name", "details", "note"}
-_DETAIL_FIELDS = {"id", "gi_only", "group", "variants"}
+_DETAIL_FIELDS = {"id", "label", "gi_only", "group", "variants"}
 
 
 def _parse_class(raw: dict) -> LabelClass:
     # A level 1 class has no style flag, so it can't be gi-only or no-gi-only; only level 2 details carry `gi_only`.
     if set(raw) - _CLASS_FIELDS or any(set(detail) - _DETAIL_FIELDS for detail in raw["details"]):
         raise ValueError("unknown field in label set")
-    details = tuple(Detail(id=detail["id"], gi_only=detail.get("gi_only", False)) for detail in raw["details"])
+    details = tuple(_parse_detail(detail) for detail in raw["details"])
     if len({detail.id for detail in details}) != len(details):
         raise ValueError("duplicate detail id in label set")
-    return LabelClass(id=raw["id"], name=raw["name"], details=details)
+    return LabelClass(id=_label_id(raw["id"]), name=raw["name"], details=details)
+
+
+def _label_id(value: object) -> str:
+    if not isinstance(value, str) or _ID_PATTERN.fullmatch(value) is None:
+        raise ValueError("label set id is not snake_case")
+    return value
+
+
+def _parse_detail(raw: dict) -> Detail:
+    if not isinstance(raw.get("label"), str) or not raw["label"]:
+        raise ValueError("label set detail needs a label")
+    return Detail(
+        id=_label_id(raw["id"]),
+        label=raw["label"],
+        gi_only=raw.get("gi_only", False),
+        variants=tuple(_label_id(variant) for variant in raw.get("variants", ())),
+    )
 
 
 def parse_label_set(raw: dict) -> LabelSet:
@@ -138,6 +171,7 @@ class Event:
     end: float | None
     class_id: str
     detail: str | None
+    variant: str | None
     outcome: str | None
 
 
@@ -151,7 +185,7 @@ class GroundTruth:
 
 _TOP_LEVEL_FIELDS = {"video_id", "style", "positions", "events"}
 _POSITION_FIELDS = {"start", "end", "class", "role"}
-_EVENT_FIELDS = {"time", "start", "end", "class", "detail", "outcome"}
+_EVENT_FIELDS = {"time", "start", "end", "class", "detail", "variant", "outcome"}
 
 
 def _require_object(value: object, fields: set[str], required: set[str], path: str) -> dict:
@@ -186,6 +220,14 @@ def _detail(label_set: LabelSet, class_id: str, detail: object, style: str, path
     return detail
 
 
+def _variant(label_set: LabelSet, class_id: str, detail: str | None, variant: object, path: str) -> str | None:
+    if variant is None:
+        return None
+    if detail is None or not isinstance(variant, str) or variant not in label_set.variants(class_id, detail):
+        raise GroundTruthError("unknown_variant", path)
+    return variant
+
+
 def _position(label_set: LabelSet, raw: object, path: str) -> PositionSegment:
     raw = _require_object(raw, _POSITION_FIELDS, _POSITION_FIELDS, path)
     if raw["class"] not in label_set.position_ids:
@@ -210,6 +252,7 @@ def _event(label_set: LabelSet, raw: object, style: str, path: str) -> Event:
     else:
         raise GroundTruthError("time", path)
     detail = _detail(label_set, class_id, raw["detail"], style, f"{path}.detail") if "detail" in raw else None
+    variant = _variant(label_set, class_id, detail, raw.get("variant"), f"{path}.variant")
     outcome = raw.get("outcome")
     if class_id == "submission":
         if outcome is None:
@@ -218,7 +261,7 @@ def _event(label_set: LabelSet, raw: object, style: str, path: str) -> Event:
             raise GroundTruthError("outcome", f"{path}.outcome")
     elif "outcome" in raw:
         raise GroundTruthError("outcome", f"{path}.outcome")
-    return Event(start=start, end=end, class_id=class_id, detail=detail, outcome=outcome)
+    return Event(start=start, end=end, class_id=class_id, detail=detail, variant=variant, outcome=outcome)
 
 
 def validate_ground_truth(data: object, label_set: LabelSet | None = None) -> GroundTruth:

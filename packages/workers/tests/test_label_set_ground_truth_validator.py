@@ -110,3 +110,42 @@ def test_ground_truth_error_never_echoes_file_values() -> None:
         validate_ground_truth(data)
     assert "IMG_4412" not in str(raised.value)
     assert "filename" not in str(raised.value)
+
+
+def _escape_event(**fields: object) -> dict:
+    data = _valid()
+    data["events"].append({"time": 80, "class": "escape", **fields})
+    return data
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        pytest.param({"detail": "mount_escape"}, id="no-variant"),
+        pytest.param({"detail": "mount_escape", "variant": None}, id="null-variant"),
+        pytest.param({"detail": "mount_escape", "variant": "elbow_knee"}, id="listed-variant"),
+        pytest.param({"detail": "back_escape", "variant": None}, id="null-variant-on-detail-without-variants"),
+    ],
+)
+def test_ground_truth_accepts_null_or_listed_variant(fields: dict) -> None:
+    event = validate_ground_truth(_escape_event(**fields)).events[-1]
+    assert event.detail == fields["detail"]
+    assert event.variant == fields.get("variant")
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        pytest.param({"detail": "mount_escape", "variant": "bridge_roll"}, id="unknown-variant"),
+        pytest.param({"detail": "mount_escape", "variant": "Upa"}, id="variant-wrong-case"),
+        pytest.param({"detail": "mount_escape", "variant": 1}, id="variant-not-a-string"),
+        pytest.param({"detail": "back_escape", "variant": "upa"}, id="variant-on-detail-without-variants"),
+        pytest.param({"variant": "upa"}, id="variant-without-detail"),
+    ],
+)
+def test_ground_truth_rejects_unknown_variant(fields: dict) -> None:
+    with pytest.raises(GroundTruthError) as raised:
+        validate_ground_truth(_escape_event(**fields))
+    assert raised.value.rule == "unknown_variant"
+    assert raised.value.path == "$.events[4].variant"
+    assert str(raised.value) == "unknown_variant at $.events[4].variant"

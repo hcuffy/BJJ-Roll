@@ -10,16 +10,20 @@
       "name": "Standing",
       "details": [
         {
-          "id": "neutral stance"
+          "id": "neutral_stance",
+          "label": "neutral stance"
         },
         {
-          "id": "inside position"
+          "id": "inside_position",
+          "label": "inside position"
         },
         {
-          "id": "wrist control"
+          "id": "wrist_control",
+          "label": "wrist control"
         },
         {
-          "id": "sleeve control",
+          "id": "sleeve_control",
+          "label": "sleeve control",
           "gi_only": true
         }
       ]
@@ -29,16 +33,20 @@
       "name": "Clinch",
       "details": [
         {
-          "id": "collar tie"
+          "id": "collar_tie",
+          "label": "collar tie"
         },
         {
-          "id": "double underhooks"
+          "id": "double_underhooks",
+          "label": "double underhooks"
         },
         {
-          "id": "over-under"
+          "id": "over_under",
+          "label": "over-under"
         },
         {
-          "id": "bodylock"
+          "id": "bodylock",
+          "label": "bodylock"
         }
       ]
     },
@@ -52,25 +60,32 @@
       "name": "Half guard",
       "details": [
         {
-          "id": "knee shield"
+          "id": "knee_shield",
+          "label": "knee shield"
         },
         {
-          "id": "z_guard"
+          "id": "z_guard",
+          "label": "z_guard"
         },
         {
-          "id": "lockdown"
+          "id": "lockdown",
+          "label": "lockdown"
         },
         {
-          "id": "deep half"
+          "id": "deep_half",
+          "label": "deep half"
         },
         {
-          "id": "quarter guard"
+          "id": "quarter_guard",
+          "label": "quarter guard"
         },
         {
-          "id": "underhook half"
+          "id": "underhook_half",
+          "label": "underhook half"
         },
         {
-          "id": "dogfight"
+          "id": "dogfight",
+          "label": "dogfight"
         }
       ]
     },
@@ -79,63 +94,81 @@
       "name": "Open guard",
       "details": [
         {
-          "id": "seated"
+          "id": "seated",
+          "label": "seated"
         },
         {
-          "id": "butterfly"
+          "id": "butterfly",
+          "label": "butterfly"
         },
         {
-          "id": "x_guard"
+          "id": "x_guard",
+          "label": "x_guard"
         },
         {
-          "id": "single_leg_x"
+          "id": "single_leg_x",
+          "label": "single_leg_x"
         },
         {
-          "id": "de_la_riva"
+          "id": "de_la_riva",
+          "label": "de_la_riva"
         },
         {
-          "id": "reverse_de_la_riva"
+          "id": "reverse_de_la_riva",
+          "label": "reverse_de_la_riva"
         },
         {
-          "id": "shin_to_shin"
+          "id": "shin_to_shin",
+          "label": "shin_to_shin"
         },
         {
-          "id": "k_guard"
+          "id": "k_guard",
+          "label": "k_guard"
         },
         {
-          "id": "rubber_guard"
+          "id": "rubber_guard",
+          "label": "rubber_guard"
         },
         {
-          "id": "mission_control"
+          "id": "mission_control",
+          "label": "mission_control"
         },
         {
-          "id": "octopus"
+          "id": "octopus",
+          "label": "octopus"
         },
         {
-          "id": "inverted"
+          "id": "inverted",
+          "label": "inverted"
         },
         {
           "id": "spider",
+          "label": "spider",
           "gi_only": true
         },
         {
           "id": "lasso",
+          "label": "lasso",
           "gi_only": true
         },
         {
           "id": "collar_sleeve",
+          "label": "collar_sleeve",
           "gi_only": true
         },
         {
           "id": "worm",
+          "label": "worm",
           "gi_only": true
         },
         {
           "id": "squid",
+          "label": "squid",
           "gi_only": true
         },
         {
           "id": "lapel_guard_other",
+          "label": "lapel_guard_other",
           "gi_only": true
         }
       ]
@@ -150,22 +183,28 @@
       "name": "Side control",
       "details": [
         {
-          "id": "standard"
+          "id": "standard",
+          "label": "standard"
         },
         {
-          "id": "chest_to_chest"
+          "id": "chest_to_chest",
+          "label": "chest_to_chest"
         },
         {
-          "id": "hundred_kilos"
+          "id": "hundred_kilos",
+          "label": "hundred_kilos"
         },
         {
-          "id": "kesa_gatame"
+          "id": "kesa_gatame",
+          "label": "kesa_gatame"
         },
         {
-          "id": "reverse_kesa_gatame"
+          "id": "reverse_kesa_gatame",
+          "label": "reverse_kesa_gatame"
         },
         {
-          "id": "kata_gatame"
+          "id": "kata_gatame",
+          "label": "kata_gatame"
         }
       ]
     },
@@ -184,19 +223,24 @@
       "name": "Mount",
       "details": [
         {
-          "id": "low"
+          "id": "low",
+          "label": "low"
         },
         {
-          "id": "high"
+          "id": "high",
+          "label": "high"
         },
         {
-          "id": "s_mount"
+          "id": "s_mount",
+          "label": "s_mount"
         },
         {
-          "id": "technical"
+          "id": "technical",
+          "label": "technical"
         },
         {
-          "id": "gift_wrap"
+          "id": "gift_wrap",
+          "label": "gift_wrap"
         }
       ]
     },
@@ -205,16 +249,20 @@
       "name": "Back control",
       "details": [
         {
-          "id": "two hooks"
+          "id": "two_hooks",
+          "label": "two hooks"
         },
         {
-          "id": "body triangle"
+          "id": "body_triangle",
+          "label": "body triangle"
         },
         {
-          "id": "one hook"
+          "id": "one_hook",
+          "label": "one hook"
         },
         {
-          "id": "chest_to_back"
+          "id": "chest_to_back",
+          "label": "chest_to_back"
         }
       ]
     },
@@ -243,22 +291,28 @@
       "name": "Leg entanglement",
       "details": [
         {
-          "id": "outside_ashi"
+          "id": "outside_ashi",
+          "label": "outside_ashi"
         },
         {
-          "id": "inside_ashi"
+          "id": "inside_ashi",
+          "label": "inside_ashi"
         },
         {
-          "id": "cross_ashi"
+          "id": "cross_ashi",
+          "label": "cross_ashi"
         },
         {
-          "id": "fifty_fifty"
+          "id": "fifty_fifty",
+          "label": "fifty_fifty"
         },
         {
-          "id": "backside_fifty_fifty"
+          "id": "backside_fifty_fifty",
+          "label": "backside_fifty_fifty"
         },
         {
-          "id": "saddle"
+          "id": "saddle",
+          "label": "saddle"
         }
       ]
     },
@@ -281,100 +335,127 @@
       "name": "Takedown / throw",
       "details": [
         {
-          "id": "double_leg"
+          "id": "double_leg",
+          "label": "double_leg"
         },
         {
-          "id": "single_leg"
+          "id": "single_leg",
+          "label": "single_leg"
         },
         {
-          "id": "high_crotch"
+          "id": "high_crotch",
+          "label": "high_crotch"
         },
         {
-          "id": "blast_double"
+          "id": "blast_double",
+          "label": "blast_double"
         },
         {
-          "id": "ankle_pick"
+          "id": "ankle_pick",
+          "label": "ankle_pick"
         },
         {
-          "id": "fireman_carry"
+          "id": "fireman_carry",
+          "label": "fireman_carry"
         },
         {
-          "id": "body_lock"
+          "id": "body_lock",
+          "label": "body_lock"
         },
         {
-          "id": "duck_under"
+          "id": "duck_under",
+          "label": "duck_under"
         },
         {
-          "id": "arm_drag"
+          "id": "arm_drag",
+          "label": "arm_drag"
         },
         {
-          "id": "snap_down"
+          "id": "snap_down",
+          "label": "snap_down"
         },
         {
-          "id": "knee_tap"
+          "id": "knee_tap",
+          "label": "knee_tap"
         },
         {
           "id": "osoto_gari",
+          "label": "osoto_gari",
           "group": "judo_throw"
         },
         {
           "id": "ouchi_gari",
+          "label": "ouchi_gari",
           "group": "judo_throw"
         },
         {
           "id": "kouchi_gari",
+          "label": "kouchi_gari",
           "group": "judo_throw"
         },
         {
           "id": "kosoto_gari",
+          "label": "kosoto_gari",
           "group": "judo_throw"
         },
         {
           "id": "kosoto_gake",
+          "label": "kosoto_gake",
           "group": "judo_throw"
         },
         {
           "id": "de_ashi_barai",
+          "label": "de_ashi_barai",
           "group": "judo_throw"
         },
         {
           "id": "uchi_mata",
+          "label": "uchi_mata",
           "group": "judo_throw"
         },
         {
           "id": "harai_goshi",
+          "label": "harai_goshi",
           "group": "judo_throw"
         },
         {
           "id": "hane_goshi",
+          "label": "hane_goshi",
           "group": "judo_throw"
         },
         {
           "id": "tai_otoshi",
+          "label": "tai_otoshi",
           "group": "judo_throw"
         },
         {
           "id": "seoi_nage",
+          "label": "seoi_nage",
           "group": "judo_throw"
         },
         {
           "id": "o_goshi",
+          "label": "o_goshi",
           "group": "judo_throw"
         },
         {
           "id": "koshi_guruma",
+          "label": "koshi_guruma",
           "group": "judo_throw"
         },
         {
           "id": "tani_otoshi",
+          "label": "tani_otoshi",
           "group": "judo_throw"
         },
         {
           "id": "tomoe_nage",
+          "label": "tomoe_nage",
           "group": "judo_throw"
         },
         {
           "id": "sumi_gaeshi",
+          "label": "sumi_gaeshi",
           "group": "judo_throw"
         }
       ]
@@ -384,13 +465,16 @@
       "name": "Guard pull",
       "details": [
         {
-          "id": "sit_to_guard"
+          "id": "sit_to_guard",
+          "label": "sit_to_guard"
         },
         {
-          "id": "jump_to_closed_guard"
+          "id": "jump_to_closed_guard",
+          "label": "jump_to_closed_guard"
         },
         {
-          "id": "pull_to_open_guard"
+          "id": "pull_to_open_guard",
+          "label": "pull_to_open_guard"
         }
       ]
     },
@@ -399,43 +483,56 @@
       "name": "Guard pass",
       "details": [
         {
-          "id": "toreando"
+          "id": "toreando",
+          "label": "toreando"
         },
         {
-          "id": "knee_slice"
+          "id": "knee_slice",
+          "label": "knee_slice"
         },
         {
-          "id": "leg_drag"
+          "id": "leg_drag",
+          "label": "leg_drag"
         },
         {
-          "id": "long_step"
+          "id": "long_step",
+          "label": "long_step"
         },
         {
-          "id": "x_pass"
+          "id": "x_pass",
+          "label": "x_pass"
         },
         {
-          "id": "backstep"
+          "id": "backstep",
+          "label": "backstep"
         },
         {
-          "id": "over_under"
+          "id": "over_under",
+          "label": "over_under"
         },
         {
-          "id": "double_under"
+          "id": "double_under",
+          "label": "double_under"
         },
         {
-          "id": "smash"
+          "id": "smash",
+          "label": "smash"
         },
         {
-          "id": "body_lock_pass"
+          "id": "body_lock_pass",
+          "label": "body_lock_pass"
         },
         {
-          "id": "folding"
+          "id": "folding",
+          "label": "folding"
         },
         {
-          "id": "leg_weave"
+          "id": "leg_weave",
+          "label": "leg_weave"
         },
         {
-          "id": "cartwheel"
+          "id": "cartwheel",
+          "label": "cartwheel"
         }
       ]
     },
@@ -444,73 +541,95 @@
       "name": "Sweep",
       "details": [
         {
-          "id": "scissor"
+          "id": "scissor",
+          "label": "scissor"
         },
         {
-          "id": "hip_bump"
+          "id": "hip_bump",
+          "label": "hip_bump"
         },
         {
-          "id": "flower"
+          "id": "flower",
+          "label": "flower"
         },
         {
-          "id": "balloon"
+          "id": "balloon",
+          "label": "balloon"
         },
         {
-          "id": "guillotine_sweep"
+          "id": "guillotine_sweep",
+          "label": "guillotine_sweep"
         },
         {
-          "id": "kimura_sweep"
+          "id": "kimura_sweep",
+          "label": "kimura_sweep"
         },
         {
-          "id": "old_school"
+          "id": "old_school",
+          "label": "old_school"
         },
         {
-          "id": "plan_b"
+          "id": "plan_b",
+          "label": "plan_b"
         },
         {
-          "id": "waiter"
+          "id": "waiter",
+          "label": "waiter"
         },
         {
-          "id": "dogfight_sweep"
+          "id": "dogfight_sweep",
+          "label": "dogfight_sweep"
         },
         {
-          "id": "butterfly"
+          "id": "butterfly",
+          "label": "butterfly"
         },
         {
-          "id": "x_guard_sweep"
+          "id": "x_guard_sweep",
+          "label": "x_guard_sweep"
         },
         {
-          "id": "tripod"
+          "id": "tripod",
+          "label": "tripod"
         },
         {
-          "id": "sickle"
+          "id": "sickle",
+          "label": "sickle"
         },
         {
-          "id": "lumberjack"
+          "id": "lumberjack",
+          "label": "lumberjack"
         },
         {
-          "id": "elevator"
+          "id": "elevator",
+          "label": "elevator"
         },
         {
-          "id": "de_la_riva_sweep"
+          "id": "de_la_riva_sweep",
+          "label": "de_la_riva_sweep"
         },
         {
-          "id": "berimbolo"
+          "id": "berimbolo",
+          "label": "berimbolo"
         },
         {
           "id": "spider_sweep",
+          "label": "spider_sweep",
           "gi_only": true
         },
         {
           "id": "lasso_sweep",
+          "label": "lasso_sweep",
           "gi_only": true
         },
         {
           "id": "collar_sleeve_sweep",
+          "label": "collar_sleeve_sweep",
           "gi_only": true
         },
         {
           "id": "lapel_sweep",
+          "label": "lapel_sweep",
           "gi_only": true
         }
       ]
@@ -520,40 +639,52 @@
       "name": "Back take",
       "details": [
         {
-          "id": "seatbelt_entry"
+          "id": "seatbelt_entry",
+          "label": "seatbelt_entry"
         },
         {
-          "id": "arm_drag_to_back"
+          "id": "arm_drag_to_back",
+          "label": "arm_drag_to_back"
         },
         {
-          "id": "gator_roll"
+          "id": "gator_roll",
+          "label": "gator_roll"
         },
         {
-          "id": "kiss_of_the_dragon"
+          "id": "kiss_of_the_dragon",
+          "label": "kiss_of_the_dragon"
         },
         {
-          "id": "baby_bolo"
+          "id": "baby_bolo",
+          "label": "baby_bolo"
         },
         {
-          "id": "matrix"
+          "id": "matrix",
+          "label": "matrix"
         },
         {
-          "id": "crab_ride"
+          "id": "crab_ride",
+          "label": "crab_ride"
         },
         {
-          "id": "wedge"
+          "id": "wedge",
+          "label": "wedge"
         },
         {
-          "id": "backstep_take"
+          "id": "backstep_take",
+          "label": "backstep_take"
         },
         {
-          "id": "berimbolo"
+          "id": "berimbolo",
+          "label": "berimbolo"
         },
         {
-          "id": "front_headlock_to_back"
+          "id": "front_headlock_to_back",
+          "label": "front_headlock_to_back"
         },
         {
-          "id": "truck_entry"
+          "id": "truck_entry",
+          "label": "truck_entry"
         }
       ]
     },
@@ -563,170 +694,210 @@
       "details": [
         {
           "id": "rear_naked",
+          "label": "rear_naked",
           "group": "choke"
         },
         {
           "id": "arm_in_rear_naked",
+          "label": "arm_in_rear_naked",
           "group": "choke"
         },
         {
           "id": "triangle",
+          "label": "triangle",
           "group": "choke"
         },
         {
           "id": "guillotine",
+          "label": "guillotine",
           "group": "choke"
         },
         {
           "id": "darce",
+          "label": "darce",
           "group": "choke"
         },
         {
           "id": "anaconda",
+          "label": "anaconda",
           "group": "choke"
         },
         {
           "id": "arm_triangle",
+          "label": "arm_triangle",
           "group": "choke"
         },
         {
           "id": "north_south_choke",
+          "label": "north_south_choke",
           "group": "choke"
         },
         {
           "id": "gogoplata",
+          "label": "gogoplata",
           "group": "choke"
         },
         {
           "id": "peruvian_necktie",
+          "label": "peruvian_necktie",
           "group": "choke"
         },
         {
           "id": "japanese_necktie",
+          "label": "japanese_necktie",
           "group": "choke"
         },
         {
           "id": "von_flue",
+          "label": "von_flue",
           "group": "choke"
         },
         {
           "id": "cross_collar",
+          "label": "cross_collar",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "bow_and_arrow",
+          "label": "bow_and_arrow",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "ezekiel",
+          "label": "ezekiel",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "baseball_bat",
+          "label": "baseball_bat",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "loop",
+          "label": "loop",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "clock",
+          "label": "clock",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "paper_cutter",
+          "label": "paper_cutter",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "lapel_choke",
+          "label": "lapel_choke",
           "gi_only": true,
           "group": "choke"
         },
         {
           "id": "armbar",
+          "label": "armbar",
           "group": "arm"
         },
         {
           "id": "kimura",
+          "label": "kimura",
           "group": "arm"
         },
         {
           "id": "americana",
+          "label": "americana",
           "group": "arm"
         },
         {
           "id": "omoplata",
+          "label": "omoplata",
           "group": "arm"
         },
         {
           "id": "baratoplata",
+          "label": "baratoplata",
           "group": "arm"
         },
         {
           "id": "monoplata",
+          "label": "monoplata",
           "group": "arm"
         },
         {
           "id": "tarikoplata",
+          "label": "tarikoplata",
           "group": "arm"
         },
         {
           "id": "wristlock",
+          "label": "wristlock",
           "group": "arm"
         },
         {
           "id": "bicep_slicer",
+          "label": "bicep_slicer",
           "group": "arm"
         },
         {
           "id": "straight_ankle_lock",
+          "label": "straight_ankle_lock",
           "group": "leg"
         },
         {
           "id": "heel_hook_inside",
+          "label": "heel_hook_inside",
           "group": "leg"
         },
         {
           "id": "heel_hook_outside",
+          "label": "heel_hook_outside",
           "group": "leg"
         },
         {
           "id": "kneebar",
+          "label": "kneebar",
           "group": "leg"
         },
         {
           "id": "toehold",
+          "label": "toehold",
           "group": "leg"
         },
         {
           "id": "estima_lock",
+          "label": "estima_lock",
           "group": "leg"
         },
         {
           "id": "calf_slicer",
+          "label": "calf_slicer",
           "group": "leg"
         },
         {
           "id": "banana_split",
+          "label": "banana_split",
           "group": "leg"
         },
         {
           "id": "neck_crank",
+          "label": "neck_crank",
           "group": "crank"
         },
         {
           "id": "can_opener",
+          "label": "can_opener",
           "group": "crank"
         },
         {
           "id": "twister",
+          "label": "twister",
           "group": "crank"
         }
       ]
@@ -737,25 +908,32 @@
       "details": [
         {
           "id": "mount_escape",
+          "label": "mount_escape",
           "variants": ["upa", "elbow_knee", "to_half"]
         },
         {
-          "id": "side_control_escape"
+          "id": "side_control_escape",
+          "label": "side_control_escape"
         },
         {
-          "id": "back_escape"
+          "id": "back_escape",
+          "label": "back_escape"
         },
         {
-          "id": "knee_on_belly_escape"
+          "id": "knee_on_belly_escape",
+          "label": "knee_on_belly_escape"
         },
         {
-          "id": "north_south_escape"
+          "id": "north_south_escape",
+          "label": "north_south_escape"
         },
         {
-          "id": "kesa_escape"
+          "id": "kesa_escape",
+          "label": "kesa_escape"
         },
         {
-          "id": "submission_defense"
+          "id": "submission_defense",
+          "label": "submission_defense"
         }
       ]
     },
@@ -764,34 +942,44 @@
       "name": "Transition",
       "details": [
         {
-          "id": "technical_stand_up"
+          "id": "technical_stand_up",
+          "label": "technical_stand_up"
         },
         {
-          "id": "sit_out"
+          "id": "sit_out",
+          "label": "sit_out"
         },
         {
-          "id": "granby_roll"
+          "id": "granby_roll",
+          "label": "granby_roll"
         },
         {
-          "id": "wrestle_up"
+          "id": "wrestle_up",
+          "label": "wrestle_up"
         },
         {
-          "id": "peek_out"
+          "id": "peek_out",
+          "label": "peek_out"
         },
         {
-          "id": "inversion"
+          "id": "inversion",
+          "label": "inversion"
         },
         {
-          "id": "imanari_roll"
+          "id": "imanari_roll",
+          "label": "imanari_roll"
         },
         {
-          "id": "guard_recovery"
+          "id": "guard_recovery",
+          "label": "guard_recovery"
         },
         {
-          "id": "mount_to_s_mount"
+          "id": "mount_to_s_mount",
+          "label": "mount_to_s_mount"
         },
         {
-          "id": "side_to_mount"
+          "id": "side_to_mount",
+          "label": "side_to_mount"
         }
       ]
     },

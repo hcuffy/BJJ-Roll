@@ -43,7 +43,7 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Decision:** Label set v1 (HEN-44) is one coarse set shared by gi and no-gi. Level 1 (18 positions, 9 events) is the scoring set for both styles; only level 2 details marked [Gi] are hidden for no-gi videos. ViCoS classes are used for evaluation only, never as our labels (D7).
 - **Date:** 2026-10-29
 - **Decided by:** Sara (2026-10-29)
-- **Consequences:** The file is `packages/workers/src/bjj_roll_workers/label_set_v1.json` with its loader and ground-truth validator in `label_set.py` (HEN-316). v0 (HEN-66) and v1 (HEN-79) score against it. The level 1 definitions below are a draft and need Sara's OK.
+- **Consequences:** The file is `packages/workers/src/bjj_roll_workers/label_set_v1.json` with its loader and ground-truth validator in `label_set.py` (HEN-316). v0 (HEN-66) and v1 (HEN-79) score against it. Every id is snake_case and stable; each level 2 detail keeps its source name as a free-text `label`. `mount_escape` is one detail with an optional ground-truth `variant` (upa, elbow_knee, to_half) (Sara, 2026-10-30). The level 1 definitions below are a draft and need Sara's OK.
 
 | Lane | id                 | Definition (draft)                                                                                |
 | ---- | ------------------ | ------------------------------------------------------------------------------------------------- |
