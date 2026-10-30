@@ -16,7 +16,7 @@ Ground-truth file format (JSON object, no free-text fields, unknown fields are r
       ],
       "events": [                           # Lane B, a moment ("time") or a span ("start" + "end")
         {"time": <seconds>, "class": "<event id>", "detail": "<level 2 id, optional>",
-         "variant": "<variant id of that detail, optional, may be null>", "outcome": "attempt" | "defended" | "finish"}
+         "variant": "<mount_escape only: a listed variant id or null>", "outcome": "attempt" | "defended" | "finish"}
       ]
     }
 
