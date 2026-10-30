@@ -164,3 +164,13 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-30
 - **Decided by:** Henry (HEN-318)
 - **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
+
+## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads
+
+- **Decision:** The pose runner (HEN-319) runs RTMPose-m (body7, 256x192, COCO-17 keypoints in COCO order) as ONNX on onnxruntime's CPU provider,
+  behind one `Pose` interface (`estimate(frame, box)`) so a Modal backend can replace it. Frames come at the tracker's fps (10, A7); one session
+  uses 2 intra-op threads. Both values live in `packages/workers/src/bjj_roll_workers/pose_config.json` and are stored with every run.
+- **Bench:** each run records the tangled-frame miss rate (definitions and named thresholds in `pose_bench.py`). The thresholds are UNTUNED (HEN-67).
+- **Date:** 2026-10-30
+- **Decided by:** Henry and Sara (HEN-319)
+- **Consequences:** Only the user's own keypoints are stored (D6). numpy and onnxruntime are not CI dependencies; a real run uses the HEN-318 private venv.
