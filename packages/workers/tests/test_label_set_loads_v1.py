@@ -1,0 +1,109 @@
+"""HEN-316: label set v1 (HEN-44) loads as one file; level 1 is the scoring set for gi and no-gi alike."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from bjj_roll_workers.label_set import load_label_set, parse_label_set
+
+LABEL_SET_FILE = Path(__file__).parents[1] / "src" / "bjj_roll_workers" / "label_set_v1.json"
+
+# Level 1 ids exactly as in label set v1 (HEN-44, Henry 2026-10-17) and docs/ARCHITECTURE.md §2.1.
+POSITION_IDS = (
+    "standing",
+    "clinch",
+    "closed_guard",
+    "half_guard",
+    "open_guard",
+    "headquarters",
+    "side_control",
+    "north_south",
+    "knee_on_belly",
+    "mount",
+    "back_control",
+    "turtle",
+    "front_headlock",
+    "crucifix",
+    "truck",
+    "leg_entanglement",
+    "scramble",
+    "unknown",
+)
+EVENT_IDS = ("takedown", "guard_pull", "guard_pass", "sweep", "back_take", "submission", "escape", "transition", "reset")
+
+# Every [Gi] detail in label set v1, per level 1 class.
+GI_ONLY_DETAILS = {
+    "standing": {"sleeve control"},
+    "open_guard": {"spider", "lasso", "collar_sleeve", "worm", "squid", "lapel_guard_other"},
+    "sweep": {"spider_sweep", "lasso_sweep", "collar_sleeve_sweep", "lapel_sweep"},
+    "submission": {"cross_collar", "bow_and_arrow", "ezekiel", "baseball_bat", "loop", "clock", "paper_cutter", "lapel_choke"},
+}
+
+
+def test_label_set_loads_with_18_positions_and_9_events() -> None:
+    label_set = load_label_set()
+    assert label_set.version == 1
+    assert label_set.position_ids == POSITION_IDS
+    assert label_set.event_ids == EVENT_IDS
+    assert len(label_set.position_ids) == 18
+    assert len(label_set.event_ids) == 9
+    assert label_set.roles == ("top", "bottom", "neutral")
+    assert label_set.submission_outcomes == ("attempt", "defended", "finish")
+    assert label_set.styles == ("gi", "no-gi")
+
+
+@pytest.mark.parametrize("style", ["gi", "no-gi"])
+def test_label_set_level1_is_the_same_for_gi_and_no_gi(style: str) -> None:
+    assert load_label_set().level1_classes(style) == (POSITION_IDS, EVENT_IDS)
+
+
+def test_label_set_level1_rejects_unknown_style() -> None:
+    with pytest.raises(ValueError):
+        load_label_set().level1_classes("nogi")
+
+
+@pytest.mark.parametrize("flag", ["gi_only", "no_gi_only", "style"])
+def test_label_set_rejects_a_style_flag_on_a_level1_class(flag: str) -> None:
+    raw = json.loads(LABEL_SET_FILE.read_text(encoding="utf-8"))
+    parse_label_set(raw)
+    raw["positions"][0][flag] = True
+    with pytest.raises(ValueError):
+        parse_label_set(raw)
+
+
+def test_label_set_no_gi_pick_lists_hide_every_gi_detail() -> None:
+    label_set = load_label_set()
+    for class_id in POSITION_IDS + EVENT_IDS:
+        gi_list = set(label_set.pick_list(class_id, "gi"))
+        no_gi_list = set(label_set.pick_list(class_id, "no-gi"))
+        gi_only = GI_ONLY_DETAILS.get(class_id, set())
+        assert gi_only <= gi_list, class_id
+        assert not (gi_only & no_gi_list), class_id
+        assert gi_list - no_gi_list == gi_only, class_id
+
+
+def test_label_set_pick_lists_keep_source_details() -> None:
+    label_set = load_label_set()
+    assert label_set.pick_list("closed_guard", "gi") == ()
+    assert label_set.pick_list("half_guard", "no-gi") == (
+        "knee shield",
+        "z_guard",
+        "lockdown",
+        "deep half",
+        "quarter guard",
+        "underhook half",
+        "dogfight",
+    )
+    assert label_set.pick_list("back_control", "gi") == ("two hooks", "body triangle", "one hook", "chest_to_back")
+    assert "mount_escape" in label_set.pick_list("escape", "no-gi")
+    assert label_set.pick_list("submission", "no-gi")[:2] == ("rear_naked", "arm_in_rear_naked")
+    assert label_set.pick_list("submission", "gi")[-1] == "twister"
+    assert len(label_set.pick_list("submission", "gi")) == 40
+    assert len(label_set.pick_list("submission", "no-gi")) == 32
+    assert len(label_set.pick_list("takedown", "gi")) == 27
+
+
+def test_label_set_pick_list_rejects_unknown_class() -> None:
+    with pytest.raises(ValueError):
+        load_label_set().pick_list("arm_drag", "gi")
