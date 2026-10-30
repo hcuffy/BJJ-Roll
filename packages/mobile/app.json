@@ -13,7 +13,10 @@
     "ios": {
       "bundleIdentifier": "com.bjj.roll",
       "usesAppleSignIn": true,
-      "config": { "usesNonExemptEncryption": false }
+      "config": { "usesNonExemptEncryption": false },
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "BJJ Roll uses Face ID to unlock the app when you turn on biometric unlock."
+      }
     },
     "android": {
       "package": "com.bjj.roll"

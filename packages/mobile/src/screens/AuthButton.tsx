@@ -18,6 +18,8 @@ export interface AuthButtonProps {
   readonly loading?: boolean;
   readonly loadingTitle?: string;
   readonly accessibilityHint?: string;
+  /** 56 tall like the primary pill: for a choice that must weigh the same as the primary one (an opt-in's decline). */
+  readonly large?: boolean;
   /** For moving screen-reader focus to the button. */
   readonly ref?: Ref<View>;
 }
@@ -33,6 +35,7 @@ const styles = StyleSheet.create({
     gap: spacing.small,
   },
   primary: { minHeight: sizes.buttonHeight, backgroundColor: colours.primary },
+  large: { minHeight: sizes.buttonHeight },
   secondary: { backgroundColor: colours.surfaceRaised },
   tertiary: {},
   danger: { minHeight: sizes.buttonHeight, backgroundColor: colours.danger },
@@ -56,6 +59,7 @@ export function AuthButton({
   loading = false,
   loadingTitle,
   accessibilityHint,
+  large = false,
   ref,
 }: AuthButtonProps) {
   const blocked = disabled || loading;
@@ -74,6 +78,7 @@ export function AuthButton({
       style={({ pressed }) => [
         styles.base,
         styles[variant],
+        large && styles.large,
         dimmed && variant !== "tertiary" && variant !== "dangerText" && styles.dimmed,
         disabled && !loading && variant === "secondary" && styles.blockedSecondary,
         pressed && styles.pressed,
