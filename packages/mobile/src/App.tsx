@@ -40,7 +40,8 @@ type AuthScreen =
   | { readonly name: "code"; readonly email: string; readonly age18Confirmed: boolean }
   | { readonly name: "biometricOffer"; readonly kind: BiometricKind }
   | { readonly name: "locked"; readonly kind: BiometricKind }
-  | { readonly name: "signedIn" };
+  | { readonly name: "signedIn" }
+  | { readonly name: "signingOut" };
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
@@ -137,10 +138,12 @@ export function App() {
   const handleSignOut = () => {
     // Biometric unlock goes at the tap, best effort, never waiting on the server or a timeout (HEN-288, Stamp HEN-314 fix 2).
     void clearBiometricUnlock(appSecureStore).catch(() => undefined);
+    // Loading at once, so the signed-in screen is never shown after the tap (HEN-314). signOut clears the phone first and
+    // tells the server within the deadline; a sign-out the server did not confirm is finished on the next launch.
+    setScreen({ name: "signingOut" });
     // A note from a link that failed while signed in is stale on the sign-in screen.
     setServerUnreachable(false);
-    // signOut clears the local session when the server is down and finishes a failed one on the next launch.
-    void signOut(appAuthClient, appSecureStore)
+    void withStartupTimeout((signal) => signOut(appAuthClient, appSecureStore, signal))
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
   };
@@ -164,7 +167,8 @@ export function App() {
 
   function renderScreen(): ReactNode {
     switch (screen.name) {
-      case "loading": {
+      case "loading":
+      case "signingOut": {
         return <LoadingScreen />;
       }
       case "signedIn": {
