@@ -124,7 +124,6 @@ def _escape_event(**fields: object) -> dict:
         pytest.param({"detail": "mount_escape"}, id="no-variant"),
         pytest.param({"detail": "mount_escape", "variant": None}, id="null-variant"),
         pytest.param({"detail": "mount_escape", "variant": "elbow_knee"}, id="listed-variant"),
-        pytest.param({"detail": "back_escape", "variant": None}, id="null-variant-on-detail-without-variants"),
     ],
 )
 def test_ground_truth_accepts_null_or_listed_variant(fields: dict) -> None:
@@ -141,6 +140,8 @@ def test_ground_truth_accepts_null_or_listed_variant(fields: dict) -> None:
         pytest.param({"detail": "mount_escape", "variant": 1}, id="variant-not-a-string"),
         pytest.param({"detail": "back_escape", "variant": "upa"}, id="variant-on-detail-without-variants"),
         pytest.param({"variant": "upa"}, id="variant-without-detail"),
+        pytest.param({"detail": "back_escape", "variant": None}, id="null-variant-on-detail-without-variants"),
+        pytest.param({"variant": None}, id="null-variant-without-detail"),
     ],
 )
 def test_ground_truth_rejects_unknown_variant(fields: dict) -> None:

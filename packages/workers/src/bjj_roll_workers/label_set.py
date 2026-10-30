@@ -20,9 +20,9 @@ Ground-truth file format (JSON object, no free-text fields, unknown fields are r
       ]
     }
 
-`outcome` is required on `submission` events and not allowed on any other event. A non-null `variant` must be one of the
-chosen detail's listed variants. Times are seconds from the start of the
-video (finite numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
+`outcome` is required on `submission` events and not allowed on any other event. The `variant` key (a value or null) is allowed
+only on an event whose detail lists variants (only `mount_escape`); a non-null `variant` must be one of those. Times are seconds
+from the start of the video (finite numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
 the file.
 """
 
@@ -221,10 +221,17 @@ def _detail(label_set: LabelSet, class_id: str, detail: object, style: str, path
     return detail
 
 
-def _variant(label_set: LabelSet, class_id: str, detail: str | None, variant: object, path: str) -> str | None:
+def _variant(label_set: LabelSet, class_id: str, detail: str | None, raw: dict, path: str) -> str | None:
+    if "variant" not in raw:
+        return None
+    allowed = label_set.variants(class_id, detail) if detail is not None else ()
+    if not allowed:
+        # The key itself, null included, is only allowed on a detail that lists variants (mount_escape).
+        raise GroundTruthError("unknown_variant", path)
+    variant = raw["variant"]
     if variant is None:
         return None
-    if detail is None or not isinstance(variant, str) or variant not in label_set.variants(class_id, detail):
+    if not isinstance(variant, str) or variant not in allowed:
         raise GroundTruthError("unknown_variant", path)
     return variant
 
@@ -253,7 +260,7 @@ def _event(label_set: LabelSet, raw: object, style: str, path: str) -> Event:
     else:
         raise GroundTruthError("time", path)
     detail = _detail(label_set, class_id, raw["detail"], style, f"{path}.detail") if "detail" in raw else None
-    variant = _variant(label_set, class_id, detail, raw.get("variant"), f"{path}.variant")
+    variant = _variant(label_set, class_id, detail, raw, f"{path}.variant")
     outcome = raw.get("outcome")
     if class_id == "submission":
         if outcome is None:
