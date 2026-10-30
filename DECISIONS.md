@@ -175,7 +175,15 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decision:** The pose runner (HEN-319) runs RTMPose-m (body7, 256x192, COCO-17 keypoints in COCO order) as ONNX on onnxruntime's CPU provider,
   behind one `Pose` interface (`estimate(frame, box)`) so a Modal backend can replace it. Frames come at the tracker's fps (10, A7); one session
   uses 2 intra-op threads. Both values live in `packages/workers/src/bjj_roll_workers/pose_config.json` and are stored with every run.
-- **Bench:** each run records the tangled-frame miss rate (definitions and named thresholds in `pose_bench.py`). The thresholds are UNTUNED (HEN-67).
+- **Bench:** each run records the tangled-frame miss rate (definitions and named thresholds in `pose_bench.py`).
+- **Tangled-frame thresholds (UNTUNED):** `TANGLED_BOX_IOU_THRESHOLD` 0.3, `MIN_KEYPOINT_SCORE` 0.3, `MIN_POSE_MEAN_SCORE` 0.3 and
+  `MIN_OWN_MASK_KEYPOINT_FRACTION` 0.5 in `pose_bench.py` are first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage.
+- **Threads:** 2 ONNX Runtime intra-op threads stays. The HEN-67 smoke run measures it.
+- **Licence (UNCONFIRMED):** the RTMPose-m weights licence is not confirmed, and the body7 training data (AI Challenger, PoseTrack18) has
+  research-only terms. This is OK for the M3 local test (no users, nothing shipped). It BLOCKS any store build until it is cleared. Shipping is a
+  legal call: it goes to the lawyer list (HEN-208) through Drago.
+- **Wiring:** the tracker-to-pose wiring lives in HEN-67 (pipeline). HEN-73 only consumes the pose output.
 - **Date:** 2026-10-30
-- **Decided by:** Henry and Sara (HEN-319)
+- **Decided by:** Henry and Sara (HEN-319); licence, threads, thresholds and wiring: Sara, 30 Oct 13:57 CET
 - **Consequences:** Only the user's own keypoints are stored (D6). numpy and onnxruntime are not CI dependencies; a real run uses the HEN-318 private venv.
+  No store build ships the pose runner until the licence is cleared.

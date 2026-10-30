@@ -7,7 +7,7 @@
   mask, i.e. the pose landed on the partner (mislabel). No confident keypoints at all is a miss.
 - Miss rate = missed tangled frames / tangled frames; None when a run has no tangled frames.
 
-The report holds counts only, never keypoints, boxes or anything about the partner (D6). Thresholds are untuned (HEN-67).
+The report holds counts only, never keypoints, boxes or anything about the partner (D6). Thresholds are UNTUNED (HEN-67, HEN-73).
 """
 
 from collections.abc import Mapping
@@ -17,6 +17,7 @@ from bjj_roll_workers.geometry import box_iou
 from bjj_roll_workers.pose import PoseKeypoints
 from bjj_roll_workers.tracker import TrackedObject
 
+# UNTUNED: first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage (DECISIONS A8).
 TANGLED_BOX_IOU_THRESHOLD = 0.3
 MIN_KEYPOINT_SCORE = 0.3
 MIN_POSE_MEAN_SCORE = 0.3
