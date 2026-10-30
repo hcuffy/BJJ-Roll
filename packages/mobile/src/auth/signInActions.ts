@@ -319,16 +319,20 @@ async function endLeftoverSessions(client: MobileAuthClient, secureStore: Sessio
  * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
  * so the user stays signed out on this launch even if the retry fails again.
  * A marker left by an earlier sign-in (a newer session is stored) only ends the old session; false, the user stays signed in.
+ * Those old sessions end in the background within `signal`, so a server that never answers cannot hold up start (HEN-310).
  */
 export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
   const storedSessionCookie = await readSessionCookie(client);
   let signOutPending = false;
+  // One at a time, in queue order, so no two writes to the queue overlap.
+  let olderSessionsEnded = Promise.resolve();
   for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
     const oldSessionCookie = oldSessionCookieOf(marker);
     if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
-      await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
+      olderSessionsEnded = olderSessionsEnded.then(async () => await revokeOldSession(client, secureStore, { oldSessionCookie, signal }));
     } else {
       signOutPending = true;
+      await olderSessionsEnded;
       await finishSignOut(client, secureStore, { oldSessionCookie, signal });
     }
   }

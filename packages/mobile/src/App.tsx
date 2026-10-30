@@ -1,5 +1,5 @@
 import * as Linking from "expo-linking";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -11,11 +11,20 @@ import {
   readSignUpAttestation,
   requestAccountDeletionCode,
   type AccountSession,
+  type SignUpAttestationResult,
 } from "./auth/accountActions";
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
-import { cancelPendingSignOut, completeMagicLink, type FailureReason, finishPendingSignOut, readSignedInUserId, signOut } from "./auth/signInActions";
-import { withStartupTimeout } from "./auth/startupTimeout";
+import {
+  cancelPendingSignOut,
+  completeMagicLink,
+  FAILURE_MESSAGES,
+  type FailureReason,
+  finishPendingSignOut,
+  readSignedInUserId,
+  signOut,
+} from "./auth/signInActions";
+import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { CodeEntryScreen } from "./screens/CodeEntryScreen";
 import { EmailEntryScreen } from "./screens/EmailEntryScreen";
 import { LoadingScreen } from "./screens/LoadingScreen";
@@ -30,6 +39,13 @@ type AuthScreen =
   | { readonly name: "signedIn" }
   | { readonly name: "signingOut" };
 
+/** Runs the startup check in one budget: an unfinished sign-out first, then the session read (HEN-303, HEN-310). */
+async function checkStartup(budget: StartupBudget): Promise<AuthScreen> {
+  const signOutPending = await budget.run((signal) => finishPendingSignOut(appAuthClient, appSecureStore, signal));
+  const userId = signOutPending ? null : await budget.run((signal) => readSignedInUserId(appAuthClient, signal));
+  return userId ? { name: "signedIn" } : { name: "email" };
+}
+
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
   // The reason travels with the message so the card can key extra guidance on it, not on the copy (Vera round 4 item 4).
@@ -41,6 +57,11 @@ export function App() {
   // Where startup lands (null while it runs); a link that started the app keeps Loading until its exchange settles.
   const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
+  // One 10 s budget for all of startup, the gate's first status read included; a sign-in in the running app drops it (HEN-310).
+  const startupBudget = useRef<StartupBudget | null>(null);
+  // The note came from the startup check, so it gets a Try again: "idle", or "running" while the retry runs (HEN-310).
+  const [startupRetry, setStartupRetry] = useState<"idle" | "running" | null>(null);
+  const retryingStartup = useRef(false);
 
   // Signing in proves the server is reachable, so a note set earlier must not reappear later.
   useEffect(() => {
@@ -49,18 +70,48 @@ export function App() {
     }
   }, [screen.name]);
 
+  // Try again belongs to the startup note only; once the note goes, so does the button.
+  useEffect(() => {
+    if (!serverUnreachable) {
+      setStartupRetry(null);
+    }
+  }, [serverUnreachable]);
+
   useEffect(() => {
     // A sign-out that failed last time is finished first; the user stays signed out on this launch either way.
-    // Each step has a deadline, so a host that never answers cannot hold Loading (HEN-303); a timeout lands like a network failure.
-    void withStartupTimeout((signal) => finishPendingSignOut(appAuthClient, appSecureStore, signal))
-      .then(async (signOutPending) => (signOutPending ? null : await withStartupTimeout((signal) => readSignedInUserId(appAuthClient, signal))))
-      .then((userId) => setStartupScreen(userId ? { name: "signedIn" } : { name: "email" }))
+    // All steps share one deadline, so a host that never answers cannot hold Loading (HEN-303, HEN-310); a timeout lands like a network failure.
+    const budget = createStartupBudget();
+    startupBudget.current = budget;
+    void checkStartup(budget)
+      .then(setStartupScreen)
       .catch(() => {
-        // Backend unreachable: show sign-in with a note instead of loading forever; the next submit is the retry.
+        // Backend unreachable: show sign-in with a note and Try again instead of loading forever.
         setServerUnreachable(true);
+        setStartupRetry("idle");
         setStartupScreen({ name: "email" });
       });
   }, []);
+
+  const handleRetryStartup = () => {
+    // A second tap while the check runs does nothing.
+    if (retryingStartup.current) {
+      return;
+    }
+    retryingStartup.current = true;
+    setStartupRetry("running");
+    const budget = createStartupBudget();
+    startupBudget.current = budget;
+    void checkStartup(budget)
+      .then((next) => {
+        setServerUnreachable(false);
+        // Moves only from sign-in: a code sent meanwhile keeps its screen.
+        setScreen((current) => (current.name === "email" ? next : current));
+      })
+      .catch(() => setStartupRetry((current) => (current === null ? null : "idle")))
+      .finally(() => {
+        retryingStartup.current = false;
+      });
+  };
 
   // A link that started the app waits for the startup step, so a pending sign-out cannot end the session the link creates.
   useEffect(() => {
@@ -76,11 +127,14 @@ export function App() {
     // A link opened in the running app replaces the last result; at startup the startup note stays next to a link card.
     const openedInRunningApp = screen.name !== "loading";
     // A link that never answers times out into .catch like a network failure: the grey note only, never the card (HEN-303).
-    void withStartupTimeout((signal) => completeMagicLink(appAuthClient, deepLinkUrl, signal))
+    // At startup it shares the startup budget (HEN-310).
+    const exchange = (signal: AbortSignal) => completeMagicLink(appAuthClient, deepLinkUrl, signal);
+    const startupLink = !openedInRunningApp && startupBudget.current;
+    void (startupLink ? startupLink.run(exchange) : withStartupTimeout(exchange))
       .then((result) => {
         if (result.ok) {
           setLinkError(null);
-          handleSignedIn();
+          handleSignedIn(!openedInRunningApp);
           return;
         }
         if (result.reason !== "ignored") {
@@ -100,7 +154,20 @@ export function App() {
 
   const accountSession = (): AccountSession => ({ client: appAuthClient, secureStore: appSecureStore, backendUrl: appBackendUrl });
 
-  const handleSignedIn = () => {
+  // The gate's status read: the first one after startup uses what is left of its budget, any other gets its own (HEN-310).
+  // A timeout shows the gate's offline note and its Try again.
+  const readGateStatus = (): Promise<SignUpAttestationResult> => {
+    const budget = startupBudget.current ?? createStartupBudget();
+    startupBudget.current = null;
+    return budget
+      .run((signal) => readSignUpAttestation(accountSession(), signal))
+      .catch(() => ({ ok: false, reason: "network", message: FAILURE_MESSAGES.network }));
+  };
+
+  const handleSignedIn = (atStartup = false) => {
+    if (!atStartup) {
+      startupBudget.current = null;
+    }
     // A new sign-in cancels a sign-out left to finish and revokes its old session; if either fails the user still gets in.
     void cancelPendingSignOut(appAuthClient, appSecureStore);
     setScreen({ name: "signedIn" });
@@ -143,7 +210,7 @@ export function App() {
         // HEN-183: an account without the current sign-up attestation stays on the prompt until it accepts.
         return (
           <SignUpAttestationGate
-            onReadStatus={() => readSignUpAttestation(accountSession())}
+            onReadStatus={readGateStatus}
             onAccept={() => acceptSignUpAttestation(accountSession())}
             onSignOut={handleSignOut}
             onRequestDeleteCode={() => requestAccountDeletionCode(accountSession())}
@@ -174,7 +241,7 @@ export function App() {
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
             linkAttempt={linkAttempt}
-            onSignedIn={handleSignedIn}
+            onSignedIn={() => handleSignedIn()}
             onBack={() => {
               // As on "Check your email": the card is about this view; App's note stays (HEN-287 item 1).
               setLinkError(null);
@@ -194,11 +261,12 @@ export function App() {
             onClearAccountNotice={() => setAccountNotice(null)}
             serverUnreachable={serverUnreachable}
             onClearServerUnreachable={() => setServerUnreachable(false)}
+            startupRetry={startupRetry ? { onRetry: handleRetryStartup, retrying: startupRetry === "running" } : undefined}
             linkAttempt={linkAttempt}
             onCodeSent={(email, age18Confirmed) => setScreen({ name: "code", email, age18Confirmed })}
             socialProviders={appSocialProviders}
             socialSignIn={appSocialSignIn}
-            onSignedIn={handleSignedIn}
+            onSignedIn={() => handleSignedIn()}
           />
         );
       }
