@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 
+from bjj_roll_workers.geometry import TapPoint
 from bjj_roll_workers.job_logging import log_job_event
 
 type Style = Literal["gi", "no-gi"]
@@ -26,13 +27,6 @@ class DriftEvent:
 
     frame_index: int
     reason: str
-
-
-@dataclass(frozen=True)
-class TapPoint:
-    frame_index: int
-    x: float
-    y: float
 
 
 @dataclass(frozen=True)

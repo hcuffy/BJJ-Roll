@@ -3,6 +3,7 @@ import { Platform, Share, StyleSheet, View } from "react-native";
 import type { AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
 import { spacing } from "../theme/tokens";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { AuthButton } from "./AuthButton";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
@@ -11,18 +12,22 @@ import { whileFlagged } from "./whileFlagged";
 export const EXPORT_SHARED_NOTICE = "Your data export was shared.";
 export const EXPORT_CREATED_NOTICE = "Your data export was created. Check that you saved a copy.";
 
+const EXPORT_FAILED = "Export failed.";
+const exportFailedUnknown: AccountFailureView = { offline: false, error: `${EXPORT_FAILED} ${FAILURE_MESSAGES.unknown}` };
+
 /**
- * Runs the export and opens the share sheet; resolves to the error to show, or null. Both delete paths use it (HEN-308).
+ * Runs the export and opens the share sheet; resolves to what to show, or null. Both delete paths use it (HEN-308).
+ * A network failure resolves to the grey offline note alone (HEN-305) and never opens the sheet, so no grey line follows it.
  * `onShared` gets the grey line: "shared" only when iOS reports the share completed; Android reports sharedAction even on cancel,
  * so after any closed sheet it gets the neutral "created" line (Vera, HEN-311). None when the export or the sheet fails.
  */
 export async function shareAccountExport(
   onExportData: () => Promise<AccountExportResult>,
   onShared: (notice: string) => void = () => undefined,
-): Promise<string | null> {
+): Promise<AccountFailureView | null> {
   const result = await onExportData();
   if (!result.ok) {
-    return `Export failed. ${result.message}`;
+    return accountFailureView(result, EXPORT_FAILED);
   }
   try {
     const shared = await Share.share({ title: "BJJ Roll data export", message: result.json });
@@ -33,7 +38,7 @@ export async function shareAccountExport(
     }
     return null;
   } catch {
-    return `Export failed. ${FAILURE_MESSAGES.unknown}`;
+    return exportFailedUnknown;
   }
 }
 
@@ -95,20 +100,12 @@ export function useExportDataFirst(
     hooks.onStart();
     setExporting(true);
     // A network failure gets the calm grey note, not red "Export failed" (Vera, HEN-308).
-    let offline = false;
-    const watched = async () => {
-      const result = await exportData();
-      offline = !result.ok && result.reason === "network";
-      return result;
-    };
-    const exportError = await whileFlagged(inFlight, shareAccountExport)(watched, setNotice).catch(
-      () => `Export failed. ${FAILURE_MESSAGES.unknown}`,
-    );
+    const failure = await whileFlagged(inFlight, shareAccountExport)(exportData, setNotice).catch(() => exportFailedUnknown);
     setExporting(false);
-    if (offline) {
+    if (failure?.offline) {
       hooks.setOffline(true);
     } else {
-      setError(exportError);
+      setError(failure?.error ?? null);
     }
   };
 

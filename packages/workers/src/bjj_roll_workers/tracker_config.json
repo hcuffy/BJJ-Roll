@@ -1,0 +1,7 @@
+{
+  "frames_per_second": 10,
+  "chunk_seconds": 30,
+  "chunk_overlap_seconds": 1,
+  "fallback_chunk_seconds": 15,
+  "peak_rss_limit_bytes": 3221225472
+}

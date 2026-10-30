@@ -3,6 +3,8 @@ import { createElement, type ReactElement } from "react";
 import { Platform } from "react-native";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
+import { BiometricLockScreen } from "../screens/BiometricLockScreen";
+import { BiometricOfferScreen } from "../screens/BiometricOfferScreen";
 import { CodeEntryScreen } from "../screens/CodeEntryScreen";
 import { DeleteAccountCodeStep } from "../screens/DeleteAccountCodeStep";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
@@ -30,6 +32,8 @@ const signedIn = () =>
     onAccountDeleted: () => undefined,
     onReadAgeConfirmation: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: false, canPurchase: false } } as const),
     onConfirmAdult: () => Promise.resolve({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } } as const),
+    onReadBiometricSetting: () => Promise.resolve({ available: true, on: false, kind: "biometrics" } as const),
+    onChangeBiometricUnlock: () => Promise.resolve({ ok: true } as const),
   });
 const deleteCodeStep = () =>
   createElement(DeleteAccountCodeStep, {
@@ -38,11 +42,16 @@ const deleteCodeStep = () =>
     onAccountDeleted: () => undefined,
     onCancel: () => undefined,
   });
+const biometricOffer = () =>
+  createElement(BiometricOfferScreen, { kind: "biometrics", onTurnOn: () => Promise.resolve({ ok: true } as const), onDone: () => undefined });
+const biometricLock = () => createElement(BiometricLockScreen, { kind: "biometrics", onUnlocked: () => undefined, onSignOut: () => undefined });
 const screens: [string, () => ReactElement][] = [
   ["email entry", emailEntry],
   ["code entry", codeEntry],
   ["signed in", signedIn],
   ["delete code step", deleteCodeStep],
+  ["biometric offer", biometricOffer],
+  ["biometric lock", biometricLock],
 ];
 
 const renderReadyEmailEntry = async () => {

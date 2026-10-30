@@ -96,14 +96,14 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
     expect(state.deletedCalls).toBe(1);
   });
 
-  it("other failures say the account was not deleted and stay on the code step", async () => {
-    state.deleteResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+  it("other failures (not the network) say the account was not deleted and stay on the code step", async () => {
+    state.deleteResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     const screen = await harness.renderAtCodeStep();
     await screen.changeText("6-digit code", "654321");
     await screen.press("Delete my account");
 
     expect(state.deletedCalls).toBe(0);
-    expect(screen.queryByText(`Your account was not deleted. ${FAILURE_MESSAGES.network}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`Your account was not deleted. ${FAILURE_MESSAGES.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
     expect(screen.text()).toContain("Enter the code we emailed you");
   });
 

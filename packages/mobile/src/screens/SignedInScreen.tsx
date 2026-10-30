@@ -1,19 +1,23 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { colours, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AdultConfirmStep } from "./AdultConfirmStep";
 import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
+import { BiometricUnlockSetting, type BiometricUnlockSettingProps, useBiometricUnlockSetting } from "./BiometricUnlockSetting";
 import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
+import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
+import { moveScreenReaderFocus } from "./moveScreenReaderFocus";
 
-export interface SignedInScreenProps {
+/** The biometric unlock toggle's callbacks come from BiometricUnlockSettingProps (HEN-288). */
+export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onSignOut: () => void;
   readonly onExportData: () => Promise<AccountExportResult>;
   /** Emails a fresh code; DELETE /account only succeeds with it (Henry's decision, HEN-65). */
@@ -37,12 +41,6 @@ const styles = StyleSheet.create({
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
 });
 
-function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
-  if (target) {
-    AccessibilityInfo.sendAccessibilityEvent(target, "focus");
-  }
-}
-
 /** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
 export function SignedInScreen({
   onSignOut,
@@ -52,13 +50,17 @@ export function SignedInScreen({
   onAccountDeleted,
   onReadAgeConfirmation,
   onConfirmAdult,
+  ...biometricCallbacks
 }: SignedInScreenProps) {
+  const biometricSetting = useBiometricUnlockSetting(biometricCallbacks);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   // The grey line after an export's share sheet closes (HEN-311).
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [codeRequestError, setCodeRequestError] = useState<string | null>(null);
+  // One grey "can't reach the server" note for the export and the code request, like the gate's deleteOffline (HEN-305).
+  const [offline, setOffline] = useState(false);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
   const [adultError, setAdultError] = useState<string | null>(null);
   // A network failure of the 18+ save: the grey note alone in that slot, not red (Vera, HEN-311).
@@ -121,20 +123,24 @@ export function SignedInScreen({
     }
   };
 
-  // Every action clears every message slot and the note first: one message at a time (Vera, HEN-311 fix 2; as in #93).
+  // Every action clears every message slot and both grey notes first: one message at a time (Sara; Bill Q1, Vera fix 1; HEN-311 fix 2).
   const clearMessages = () => {
     setExportError(null);
     setExportNotice(null);
     setCodeRequestError(null);
     setAdultError(null);
+    setOffline(false);
     setAdultOffline(false);
   };
-  const showsMessage = adultOffline || [exportError, exportNotice, codeRequestError, adultError].some((message) => message !== null);
+  const showsMessage =
+    offline || adultOffline || [exportError, exportNotice, codeRequestError, adultError].some((message) => message !== null);
 
   const exportData = () =>
     runOnce("export", async () => {
       clearMessages();
-      setExportError(await shareAccountExport(onExportData, setExportNotice));
+      const failure = await shareAccountExport(onExportData, setExportNotice);
+      setOffline(failure?.offline ?? false);
+      setExportError(failure?.error ?? null);
     });
 
   const confirmAdultAge = () =>
@@ -151,6 +157,11 @@ export function SignedInScreen({
       }
     });
 
+  const showCodeFailure = (view: AccountFailureView) => {
+    setOffline(view.offline);
+    setCodeRequestError(view.error);
+  };
+
   const requestCode = () =>
     runOnce("code", async () => {
       clearMessages();
@@ -158,7 +169,7 @@ export function SignedInScreen({
       if (result.ok) {
         setDeleteStep("code");
       } else {
-        setCodeRequestError(`We could not send the code. ${result.message}`);
+        showCodeFailure(accountFailureView(result, "We could not send the code."));
       }
     });
 
@@ -206,6 +217,7 @@ export function SignedInScreen({
         headingRef={confirmHeading}
         exportAction={<ExportDataFirstAction {...exportButtonProps} error={exportError} notice={exportNotice} />}
         codeRequestError={codeRequestError}
+        offline={offline}
         sendingCode={runningTask === "code"}
         emailCodeDisabled={runningTask === "export"}
         cancelDisabled={isBusy}
@@ -225,7 +237,7 @@ export function SignedInScreen({
         variant="secondary"
         disabled={isBusy}
         onPress={() => {
-          // Only when shown: an extra render after sign-out would flash this screen again (as in HEN-305).
+          // Only when shown: an extra render after sign-out would flash this screen again (HEN-314, HEN-311).
           if (showsMessage) {
             clearMessages();
           }
@@ -245,6 +257,7 @@ export function SignedInScreen({
           />
           <StatusText message={exportError} style={authStyles.fieldError} />
           <StatusText message={exportNotice} style={authStyles.fieldNote} announce="polite" />
+          <ServerUnreachableNote visible={offline} />
           <AdultStatusItem
             status={age18Confirmed}
             buttonRef={adultEntry}
@@ -260,6 +273,7 @@ export function SignedInScreen({
           />
           <StatusText message={adultError} style={authStyles.fieldError} />
           <ServerUnreachableNote visible={adultOffline} />
+          <BiometricUnlockSetting {...biometricSetting} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"
