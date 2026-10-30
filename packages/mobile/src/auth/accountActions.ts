@@ -51,9 +51,11 @@ interface AccountRequest {
   readonly method: "GET" | "POST" | "DELETE";
   readonly path: string;
   readonly body?: Record<string, string | boolean>;
+  /** Aborts the request, e.g. when the startup deadline runs out (HEN-310). */
+  readonly signal?: AbortSignal;
 }
 
-async function requestAccount(session: AccountSession, { method, path, body }: AccountRequest): Promise<AccountResponse> {
+async function requestAccount(session: AccountSession, { method, path, body, signal }: AccountRequest): Promise<AccountResponse> {
   let response: { readonly data: unknown; readonly error: { readonly status?: number } | null };
   try {
     // The Expo auth client attaches the session cookie from SecureStore to every $fetch.
@@ -61,6 +63,7 @@ async function requestAccount(session: AccountSession, { method, path, body }: A
     response = await session.client.$fetch(`${session.backendUrl}${path}`, {
       method,
       ...(body ? { body } : {}),
+      signal,
       jsonParser: (text: string): unknown => JSON.parse(text),
     });
   } catch {
@@ -108,8 +111,8 @@ function parseAttestationStatus(response: AccountResponse): SignUpAttestationRes
 }
 
 /** GET /account/signup-attestation: `required` until the account accepted the current text version (HEN-183). */
-export async function readSignUpAttestation(session: AccountSession): Promise<SignUpAttestationResult> {
-  return parseAttestationStatus(await requestAccount(session, { method: "GET", path: "/account/signup-attestation" }));
+export async function readSignUpAttestation(session: AccountSession, signal?: AbortSignal): Promise<SignUpAttestationResult> {
+  return parseAttestationStatus(await requestAccount(session, { method: "GET", path: "/account/signup-attestation", signal }));
 }
 
 /** POST /account/signup-attestation: accepts the text version the app shows; the server takes the current one only. */

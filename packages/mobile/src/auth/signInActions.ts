@@ -320,16 +320,22 @@ async function endLeftoverSessions(client: MobileAuthClient, secureStore: Sessio
  * Run at launch before any session read. Retries an unfinished sign-out; true means one was pending,
  * so the user stays signed out on this launch even if the retry fails again.
  * A marker left by an earlier sign-in (a newer session is stored) only ends the old session; false, the user stays signed in.
+ * Those old sessions end in the background within `signal`, so a server that never answers cannot hold up start (HEN-310).
+ * When only old sessions are queued it returns false at once and leaves them to the caller's cancelPendingSignOut (HEN-315).
  */
 export async function finishPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<boolean> {
   const storedSessionCookie = await readSessionCookie(client);
-  let signOutPending = false;
-  for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
-    const oldSessionCookie = oldSessionCookieOf(marker);
-    if (oldSessionCookie !== null && storedSessionCookie !== null && storedSessionCookie !== oldSessionCookie) {
-      await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
+  const oldSessionCookies = ((await readPendingSignOuts(secureStore)) ?? []).map((marker) => oldSessionCookieOf(marker));
+  const isOldSession = (cookie: string | null): cookie is string => cookie !== null && storedSessionCookie !== null && storedSessionCookie !== cookie;
+  // Only old sessions queued: nothing runs here; the caller ends them with cancelPendingSignOut, which a sign-out stops and awaits (HEN-315).
+  const signOutPending = !oldSessionCookies.every(isOldSession);
+  // One at a time, in queue order, so no two writes to the queue overlap.
+  let olderSessionsEnded = Promise.resolve();
+  for (const oldSessionCookie of signOutPending ? oldSessionCookies : []) {
+    if (isOldSession(oldSessionCookie)) {
+      olderSessionsEnded = olderSessionsEnded.then(async () => await revokeOldSession(client, secureStore, { oldSessionCookie, signal }));
     } else {
-      signOutPending = true;
+      await olderSessionsEnded;
       await finishSignOut(client, secureStore, { oldSessionCookie, signal });
     }
   }
