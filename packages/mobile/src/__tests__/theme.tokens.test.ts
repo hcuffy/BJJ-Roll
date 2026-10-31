@@ -63,4 +63,14 @@ describe("theme tokens (Vera's style guide v0)", () => {
     expect(appConfig.expo.userInterfaceStyle).toBe("dark");
     expect(appConfig.expo.backgroundColor).toBe(colours.background);
   });
+
+  it("starts on the background token: the splash screen plugin sets only the background colour, and no androidStatusBar is left", () => {
+    const appConfig = JSON.parse(readFileSync(new URL("../../app.json", import.meta.url), "utf8")) as {
+      expo: { plugins?: (string | [string, Record<string, unknown>])[]; androidStatusBar?: unknown };
+    };
+    const splashPlugin = appConfig.expo.plugins?.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-splash-screen");
+    expect(splashPlugin?.[1]).toEqual({ backgroundColor: colours.background });
+    expect(colours.background).toBe("#111313");
+    expect(appConfig.expo.androidStatusBar).toBeUndefined();
+  });
 });
