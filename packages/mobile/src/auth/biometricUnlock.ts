@@ -67,7 +67,11 @@ export async function checkBiometric(promptMessage: string): Promise<BiometricCh
 
 /** Whether launch must ask for the check first. A store that cannot be read counts as on: sign-out is always offered. */
 export async function isBiometricUnlockOn(secureStore: SessionKeyStore): Promise<boolean> {
-  return (await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY).catch(() => "on")) === "on";
+  try {
+    return (await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)) === "on";
+  } catch {
+    return true;
+  }
 }
 
 export async function readBiometricSetting(secureStore: SessionKeyStore): Promise<BiometricSetting> {
@@ -108,6 +112,9 @@ export async function changeBiometricUnlock(secureStore: SessionKeyStore, on: bo
 }
 
 /** On sign-out and account delete. Never rejects. */
-export async function clearBiometricUnlock(secureStore: SessionKeyStore): Promise<void> {
+export async function clearBiometricUnlock(secureStore: SessionKeyStore, { resetOffer = false } = {}): Promise<void> {
   await secureStore.deleteItemAsync(BIOMETRIC_UNLOCK_KEY).catch(() => undefined);
+  if (resetOffer) {
+    await secureStore.deleteItemAsync(BIOMETRIC_OFFERED_KEY).catch(() => undefined);
+  }
 }

@@ -14,11 +14,21 @@ concurrency:
   cancel-in-progress: true
 
 # Steps run in CONVENTIONS order: leakcheck -> install -> typecheck -> frontend build -> lint -> test.
-# Python (packages/workers) follows the same order: uv sync at install, Ruff at lint, pytest at test.
+# Python (packages/workers) runs in the `workers` matrix job in the same order: uv sync at install, Ruff at lint, pytest at test.
 jobs:
+  # `ci` is the required check. It waits for `workers` and fails unless every workers leg passed (HEN-319).
+  # `if: always()` keeps `ci` from being skipped when `workers` fails: a skipped required check can count as passing.
   ci:
+    needs: [workers]
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Workers passed on every Python version
+        env:
+          WORKERS_RESULT: ${{ needs.workers.result }}
+        run: |
+          echo "workers result: $WORKERS_RESULT"
+          test "$WORKERS_RESULT" = "success"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -34,11 +44,6 @@ jobs:
         run: pnpm test:hooks
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Install Python workers
-        working-directory: packages/workers
-        run: |
-          uv sync --locked
-          uv run python --version
       - name: Typecheck
         run: pnpm typecheck
       - name: Typecheck mobile
@@ -70,21 +75,13 @@ jobs:
         run: pnpm --filter @bjj-roll/mobile run payment-guard
       - name: Format check
         run: pnpm format:check
-      - name: Lint Python workers (Ruff)
-        working-directory: packages/workers
-        run: |
-          uv run ruff check
-          uv run ruff format --check
       - name: Test
         run: pnpm test
       - name: Check no leftover Postgres test containers
         run: test -z "$(docker ps -aq --filter ancestor=postgres:18.6)" && echo "No leftover postgres:18.6 containers"
-      - name: Test Python workers (pytest)
-        working-directory: packages/workers
-        run: uv run pytest -v
 
   # Workers on every supported Python (HEN-318): the real ONNX runs use a 3.13 venv, the repo pins 3.15.
-  # `ci` keeps its own 3.15 worker steps because it is the required check.
+  # The required `ci` job depends on this job, so a failing leg fails `ci`.
   workers:
     runs-on: ubuntu-latest
     strategy:

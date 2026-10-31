@@ -161,7 +161,7 @@ export function SignedInScreen({
     setDeleteStep("none");
   };
 
-  const isBusy = runningTask !== null;
+  const isBusy = runningTask !== null || biometricSetting.saving;
   const exportButtonProps = {
     disabled: isBusy && runningTask !== "export",
     loading: runningTask === "export",
@@ -255,7 +255,7 @@ export function SignedInScreen({
           />
           <StatusText message={messages.adultError} style={authStyles.fieldError} />
           <ServerUnreachableNote visible={messages.adultOffline} />
-          <BiometricUnlockSetting {...biometricSetting} onChangeStarted={messages.clearMessages} />
+          <BiometricUnlockSetting {...biometricSetting} onChangeStarted={messages.clearMessages} otherActionRunning={isBusy} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"
