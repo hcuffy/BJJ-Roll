@@ -1,8 +1,3 @@
-"""HEN-227: static proof that every user-data Modal function runs and routes in the EU without memory snapshots.
-
-Reads `modal_app.py` as a syntax tree and never imports `modal`, so nothing here reaches Modal's servers.
-"""
-
 import ast
 from pathlib import Path
 
@@ -55,7 +50,6 @@ def test_modal_app_eu_residency_has_no_snapshot_or_spawn() -> None:
 
 
 def test_modal_app_eu_residency_keeps_user_data_out_of_modal_storage() -> None:
-    # Volumes, Dicts, Queues and bucket mounts are stored outside the eu routing path; the video comes through a presigned URL instead.
     forbidden_storage = {"CloudBucketMount", "Volume", "Dict", "Queue", "NetworkFileSystem"}
     for node in ast.walk(_modal_app_tree()):
         if isinstance(node, ast.Attribute):

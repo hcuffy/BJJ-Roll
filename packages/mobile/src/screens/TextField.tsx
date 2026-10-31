@@ -5,16 +5,12 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 export interface TextFieldProps extends Omit<TextInputProps, "style" | "accessibilityLabel" | "accessibilityHint"> {
-  /** Shown above the field and used as its accessibility label. */
   readonly label: string;
-  /** Shown under the field in danger colour, announced, and read as the field's hint. */
   readonly error: string | null;
-  /** A new value moves screen-reader focus to the field, like the gate's moveScreenReaderFocus; the first value never does. */
   readonly focusKey?: number;
 }
 
-/** The keyboard and autofill settings for an email address field. */
-export const EMAIL_INPUT_PROPS: TextInputProps = {
+export const emailInputProps: TextInputProps = {
   autoCapitalize: "none",
   autoComplete: "email",
   autoCorrect: false,
@@ -37,7 +33,6 @@ export function TextField({ label, error, focusKey, onFocus, onBlur, ...inputPro
   }, [focusKey]);
   return (
     <View style={authStyles.field}>
-      {/* The input carries the same label, so screen readers skip this visual copy. */}
       <Text style={textStyles.label} accessibilityElementsHidden importantForAccessibility="no">
         {label}
       </Text>

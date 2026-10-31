@@ -1,5 +1,3 @@
-// Sign-out when SecureStore writes fail (HEN-314): the 3 writes are the pending-sign-out marker and the two session keys.
-// Sara's rule: the server is told within a deadline, the phone always ends up signed out, and nothing sensitive is logged.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -23,14 +21,13 @@ const { App } = await import("../App");
 const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 
 const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
-const SIGN_OUT_WRITES = [PENDING_SIGN_OUT_KEY, "bjjroll_cookie", "bjjroll_session_data"] as const;
+const signOutWrites = [PENDING_SIGN_OUT_KEY, "bjjroll_cookie", "bjjroll_session_data"] as const;
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const SESSION = "session-token-1";
 
-/** A server that keeps sessions, as Better Auth does: `/sign-out` ends the session whose cookie the request presents. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
@@ -42,7 +39,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -51,7 +48,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out")) {
       if (state.signOutHangs) {
-        // React Native's fetch only ends a request to a host that never answers when the app aborts it.
         return await new Promise((_resolve, reject) =>
           init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
         );
@@ -103,7 +99,6 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     await settle();
   };
-  /** Signed in, then taps Sign out with the given SecureStore keys broken. Returns the screens shown from the tap on. */
   const signOutWithBrokenKeys = async (keys: readonly string[]) => {
     const screen = await launchApp();
     await signIn(screen);
@@ -141,10 +136,9 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
   });
 
   it("all 3 writes fail: signed out at once, the server session is ended, and the next launch stays signed out", async () => {
-    const shown = await signOutWithBrokenKeys(SIGN_OUT_WRITES);
+    const shown = await signOutWithBrokenKeys(signOutWrites);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
-    // The session cookie is still on the phone, but the server no longer accepts it.
     expect(secureStore.items.get("bjjroll_cookie")).toContain(SESSION);
     expect(server.liveSessions.has(SESSION)).toBe(false);
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
@@ -152,12 +146,12 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
 
   it("all 3 writes fail and the server cannot be reached: the app still shows signed out", async () => {
     server.state.signOutDown = true;
-    const shown = await signOutWithBrokenKeys(SIGN_OUT_WRITES);
+    const shown = await signOutWithBrokenKeys(signOutWrites);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
   });
 
-  it.each(SIGN_OUT_WRITES)("1 of 3 writes fails (%s): the server session is ended and the next launch stays signed out", async (key) => {
+  it.each(signOutWrites)("1 of 3 writes fails (%s): the server session is ended and the next launch stays signed out", async (key) => {
     const shown = await signOutWithBrokenKeys([key]);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
@@ -191,7 +185,6 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(renderedScreens.slice(shownBefore).filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
     expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain(SESSION);
-    // The server was not told: the marker stays, so the next launch retries.
     expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toContain(SESSION);
   });
 });

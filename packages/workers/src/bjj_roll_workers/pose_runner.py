@@ -1,11 +1,3 @@
-"""Pose estimation for one video (HEN-319): runs any `pose.Pose` backend on the tracker's boxes, frame by frame.
-
-Input is the tracker's in-memory output per frame index (`{athlete_id: TrackedObject}`, sampled at the configured fps).
-Every tracked athlete with a box gets a pose, so the bench can tell when the user's pose landed on the partner; only the
-user's own pose ("self") is kept in the result. Partner and bystander poses never leave this function (D6). Logs carry the
-job ID, timings, fps and thread count only (`job_logging`); the fps and thread count are also stored with the result.
-"""
-
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -27,8 +19,6 @@ class PoseRunInfo:
 
 @dataclass(frozen=True)
 class FramePose:
-    """The user's own keypoints on one frame; None when the tracker had no box for the user there."""
-
     frame_index: int
     keypoints: PoseKeypoints | None
 
@@ -44,7 +34,6 @@ class VideoPoseResult:
 def estimate_video_poses(
     job_id: str, video_id: str, frames: Sequence[Frame], tracks: Mapping[int, FrameTracks], pose: Pose, config: PoseConfig
 ) -> VideoPoseResult:
-    """Estimate the user's pose on every tracked frame (frame index = position in `frames`)."""
     if any(OWN_ATHLETE_ID not in frame_tracks for frame_tracks in tracks.values()):
         raise ValueError("every tracked frame needs the user's own track")
     run = PoseRunInfo(frames_per_second=config.frames_per_second, intra_op_threads=config.intra_op_threads)

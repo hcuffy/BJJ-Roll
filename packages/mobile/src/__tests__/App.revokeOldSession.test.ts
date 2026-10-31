@@ -23,16 +23,11 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
+const sessionCookiePattern = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
 const NEW_SESSION = "session-token-2";
 
-/**
- * A server that keeps sessions, as Better Auth `/sign-out` does: every sign-in starts a new one with its own signed cookie
- * (`<token>.<signature>`); `/sign-out` deletes the session whose cookie the request presents and answers success even when
- * it presents none. Requests from a live session reach the shared fake backend as signed in; others reach it signed out.
- */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Map<string, string>();
@@ -41,7 +36,7 @@ function createSessionServer() {
   let signIns = 0;
 
   const sessionOf = (request: Request): string | null => {
-    const signedValue = SESSION_COOKIE_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1];
+    const signedValue = sessionCookiePattern.exec(request.headers.get("cookie") ?? "")?.[1];
     if (!signedValue) {
       return null;
     }
@@ -113,7 +108,6 @@ describe("App ends the old session by its own cookie after an unfinished sign-ou
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     await settle();
   };
-  /** Signed in as session 1, then sign-out cannot reach the server: the phone forgets the session, the server still has it. */
   const signOutLeftUnfinished = async (email = MEMBER_EMAIL) => {
     const screen = await launchApp();
     await signIn(screen, email);
@@ -126,7 +120,6 @@ describe("App ends the old session by its own cookie after an unfinished sign-ou
     return screen;
   };
   const marker = () => secureStore.items.get(PENDING_SIGN_OUT_KEY) ?? null;
-  /** Every sign-out request since `from` presented the old session's cookie and never the new one. */
   const expectOnlyOldCookiePresented = (from: number) => {
     const requests = server.signOutRequests.slice(from);
     expect(requests.length).toBeGreaterThan(0);
@@ -234,7 +227,6 @@ describe("App ends the old session by its own cookie after an unfinished sign-ou
     const signOutsBefore = server.signOutRequests.length;
     const nextLaunch = await launchApp();
 
-    // The leftover marker does not sign the new session out.
     expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
     expectOnlyOldCookiePresented(signOutsBefore);
     expect([...server.liveSessions.keys()]).toEqual([NEW_SESSION]);

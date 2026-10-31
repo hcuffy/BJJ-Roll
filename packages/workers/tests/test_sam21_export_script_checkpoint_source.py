@@ -1,6 +1,3 @@
-"""HEN-351: the export script fetches only Meta's recorded Apache-2.0 SAM 2.1 small checkpoint into the mode-700 folder and refuses
-any other source, such as the onnx-community export. The fetch is always mocked; nothing is downloaded here."""
-
 import importlib.util
 import stat
 import urllib.request

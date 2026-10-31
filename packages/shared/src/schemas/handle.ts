@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { handleMaximumLength, handleMinimumLength } from "./limits.js";
+import { handleMaximumLengthPlaceholder, handleMinimumLengthPlaceholder } from "./limits.js";
 
 export const reservedHandles = [
   "admin",
@@ -38,8 +38,8 @@ export function isReservedHandle(candidate: string): boolean {
 export const handleSchema = z
   .string()
   .trim()
-  .min(handleMinimumLength)
-  .max(handleMaximumLength)
+  .min(handleMinimumLengthPlaceholder)
+  .max(handleMaximumLengthPlaceholder)
   .regex(asciiHandleCharactersPattern, "Handle may only contain ASCII letters, digits, and underscores")
   .toLowerCase()
   .regex(handlePattern, "Handle may only contain lowercase ASCII letters, digits, and underscores")

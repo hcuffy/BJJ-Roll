@@ -1,30 +1,27 @@
-// HEN-305 (Vera): when the server can't be reached, the five account actions show only the grey offline note, never a red
-// "No connection" message. Other failures keep their red messages. One message at a time; the next action clears the note.
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Text } from "react-native";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { SignUpAttestationGate } from "../screens/SignUpAttestationGate";
 import { colours } from "../theme/tokens";
 import { flattenStyle, renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness, deferred, EXPORT_JSON } from "./signedInScreenHarness";
 
-const offline = { ok: false, reason: "network", message: FAILURE_MESSAGES.network } as const;
-const unknown = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown } as const;
-const rateLimited = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited } as const;
+const offline = { ok: false, reason: "network", message: failureMessages.network } as const;
+const unknown = { ok: false, reason: "unknown", message: failureMessages.unknown } as const;
+const rateLimited = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited } as const;
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
-/** The note alone: grey, polite (no alert role), and no red message or "No connection" anywhere. */
 function expectNoteAlone(screen: Screen) {
   const note = screen.queryByText(SERVER_UNREACHABLE_NOTE);
   expect(note).not.toBeNull();
   expect(flattenStyle(note?.props.style).color).toBe(colours.textSecondary);
   expect(note?.props.accessibilityRole).toBeUndefined();
-  expect(screen.text()).not.toContain(FAILURE_MESSAGES.network);
+  expect(screen.text()).not.toContain(failureMessages.network);
   for (const node of screen.findAllByType("Text")) {
     expect(node.props.accessibilityRole).not.toBe("alert");
   }
@@ -71,7 +68,7 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
     state.exportResult = Promise.resolve<AccountExportResult>(unknown);
     const screen = await harness.render();
     await screen.press("Export my data");
-    expectRedAlone(screen, `Export failed. ${FAILURE_MESSAGES.unknown}`);
+    expectRedAlone(screen, `Export failed. ${failureMessages.unknown}`);
 
     state.exportResult = Promise.resolve<AccountExportResult>(offline);
     await screen.press("Export my data");
@@ -79,12 +76,12 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
 
     state.exportResult = Promise.resolve<AccountExportResult>(rateLimited);
     await screen.press("Export my data");
-    expectRedAlone(screen, `Export failed. ${FAILURE_MESSAGES.rateLimited}`);
+    expectRedAlone(screen, `Export failed. ${failureMessages.rateLimited}`);
 
     state.exportResult = Promise.resolve<AccountExportResult>({ ok: true, json: EXPORT_JSON });
     state.shareSpy.mockRejectedValueOnce(new Error("share sheet failed"));
     await screen.press("Export my data");
-    expectRedAlone(screen, `Export failed. ${FAILURE_MESSAGES.unknown}`);
+    expectRedAlone(screen, `Export failed. ${failureMessages.unknown}`);
   });
 
   it("on the main screen, Delete account, the 18+ confirm and Sign out each clear the note", async () => {
@@ -123,7 +120,7 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
 
     state.exportResult = Promise.resolve<AccountExportResult>(unknown);
     await screen.press("Export my data first");
-    expectRedAlone(screen, `Export failed. ${FAILURE_MESSAGES.unknown}`);
+    expectRedAlone(screen, `Export failed. ${failureMessages.unknown}`);
 
     state.exportResult = Promise.resolve<AccountExportResult>(offline);
     await screen.press("Export my data first");
@@ -144,7 +141,7 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
 
     state.codeResult = Promise.resolve<AccountCodeResult>(rateLimited);
     await screen.press("Email me a code");
-    expectRedAlone(screen, `We could not send the code. ${FAILURE_MESSAGES.rateLimited}`);
+    expectRedAlone(screen, `We could not send the code. ${failureMessages.rateLimited}`);
 
     state.codeResult = Promise.resolve<AccountCodeResult>(offline);
     await screen.press("Email me a code");
@@ -172,11 +169,11 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
 
     state.deleteResult = Promise.resolve<AccountDeletionResult>(unknown);
     await screen.press("Delete my account");
-    expectRedAlone(screen, `Your account was not deleted. ${FAILURE_MESSAGES.unknown}`);
+    expectRedAlone(screen, `Your account was not deleted. ${failureMessages.unknown}`);
 
-    state.deleteResult = Promise.resolve<AccountDeletionResult>({ ok: false, reason: "invalidCode", message: FAILURE_MESSAGES.invalidCode });
+    state.deleteResult = Promise.resolve<AccountDeletionResult>({ ok: false, reason: "invalidCode", message: failureMessages.invalidCode });
     await screen.press("Delete my account");
-    expect(screen.text()).toContain(FAILURE_MESSAGES.invalidCode);
+    expect(screen.text()).toContain(failureMessages.invalidCode);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
@@ -189,7 +186,7 @@ describe("SignedInScreen: the grey offline note on the account actions (HEN-305)
 
     state.codeResult = Promise.resolve<AccountCodeResult>(rateLimited);
     await screen.press("Send a new code");
-    expectRedAlone(screen, `We could not send the code. ${FAILURE_MESSAGES.rateLimited}`);
+    expectRedAlone(screen, `We could not send the code. ${failureMessages.rateLimited}`);
 
     state.codeResult = Promise.resolve<AccountCodeResult>(offline);
     await screen.press("Send a new code");
@@ -210,7 +207,7 @@ describe("SignUpAttestationGate code step: the same grey offline note (HEN-305, 
           onReadStatus: () =>
             Promise.resolve({
               ok: true,
-              status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+              status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
             } as const),
           onAccept: () => Promise.reject(new Error("not used")),
           onSignOut: () => undefined,
@@ -240,6 +237,6 @@ describe("SignUpAttestationGate code step: the same grey offline note (HEN-305, 
     await screen.press("Send a new code");
     expectNoteAlone(screen);
     await screen.press("Send a new code");
-    expectRedAlone(screen, `We could not send the code. ${FAILURE_MESSAGES.rateLimited}`);
+    expectRedAlone(screen, `We could not send the code. ${failureMessages.rateLimited}`);
   });
 });

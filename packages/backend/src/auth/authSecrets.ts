@@ -47,15 +47,14 @@ export interface AuthCryptoCodec {
   hashMagicLinkToken(token: string): string;
   hashExchangeCode(code: string): string;
   hashSessionToken(token: string): string;
-  /** Keyed id for an email queue job, so the same request maps to the same job without the job id revealing what it is for (HEN-284). */
   hashEmailQueueJobKey(jobKey: string): string;
 }
 
-const HEX_KEY_PATTERN = /^[0-9a-fA-F]{64}$/u;
+const hexKeyPattern = /^[0-9a-fA-F]{64}$/u;
 
 function parseThirtyTwoByteHexKey(rawHex: string, secretLabel: string): Buffer {
   const trimmed = rawHex.trim();
-  if (!HEX_KEY_PATTERN.test(trimmed)) {
+  if (!hexKeyPattern.test(trimmed)) {
     throw new Error(`${secretLabel} must be a 64-character hex string (${String(ENCRYPTION_KEY_BYTES)} bytes)`);
   }
   const buffer = Buffer.from(trimmed, "hex");

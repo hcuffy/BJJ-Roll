@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { correctionSchema, handleMaximumLength, timelineSegmentSchema, userSchema, videoProcessingStatusSchema, videoSchema } from "../index.js";
+import {
+  correctionSchema,
+  handleMaximumLengthPlaceholder,
+  timelineSegmentSchema,
+  userSchema,
+  videoProcessingStatusSchema,
+  videoSchema,
+} from "../index.js";
 import { invalidIdentifier, offsetLessTimestamp, otherId, timestamp, userId, videoId } from "./sampleValues.js";
 
 const user = { id: userId, handle: "test_handle", createdAt: timestamp };
@@ -25,7 +32,7 @@ const timelineSegment = {
 const correction = { id: otherId, videoId, userId, startMilliseconds: 0, endMilliseconds: 4000, label: "half_guard", createdAt: timestamp };
 
 const cases = [
-  { name: "userSchema", schema: userSchema, valid: user, invalid: { ...user, handle: "h".repeat(handleMaximumLength + 1) } },
+  { name: "userSchema", schema: userSchema, valid: user, invalid: { ...user, handle: "h".repeat(handleMaximumLengthPlaceholder + 1) } },
   { name: "videoProcessingStatusSchema", schema: videoProcessingStatusSchema, valid: "needs_user", invalid: "done" },
   { name: "videoSchema", schema: videoSchema, valid: video, invalid: { ...video, ownerId: invalidIdentifier } },
   { name: "timelineSegmentSchema", schema: timelineSegmentSchema, valid: timelineSegment, invalid: { ...timelineSegment, startMilliseconds: 10.5 } },

@@ -1,9 +1,4 @@
-import {
-  SIGN_UP_ATTESTATION_DUTIES,
-  SIGN_UP_ATTESTATION_LABEL,
-  SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
-} from "@bjj-roll/shared";
+import { signUpAttestationDuties, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
@@ -12,7 +7,7 @@ import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { renderScreen } from "./screenHarness";
 
-const VERSION_ID = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const VERSION_ID = signUpAttestationVersion.id;
 
 describe("EmailEntryScreen sign-up attestation (HEN-183)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
@@ -48,7 +43,7 @@ describe("EmailEntryScreen sign-up attestation (HEN-183)", () => {
   it("shows the three duties as the user's duties with the text version id, and an unticked accept box", async () => {
     const screen = await render();
 
-    for (const duty of SIGN_UP_ATTESTATION_DUTIES) {
+    for (const duty of signUpAttestationDuties) {
       expect(screen.text()).toContain(duty);
     }
     expect(screen.text()).toContain(VERSION_ID);

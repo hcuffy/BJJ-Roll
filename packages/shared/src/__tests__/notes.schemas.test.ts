@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { noteSchema, textNoteMaximumLength, voiceNoteMaximumDurationMilliseconds } from "../index.js";
+import { noteSchema, textNoteMaximumLengthPlaceholder, voiceNoteMaximumDurationMillisecondsPlaceholder } from "../index.js";
 import { otherId, timestamp, userId, videoId } from "./sampleValues.js";
 
 const noteBase = {
@@ -22,11 +22,11 @@ describe("note schema (ARCHITECTURE.md §2.5)", () => {
   });
 
   it("rejects a text note longer than the placeholder limit", () => {
-    expect(noteSchema.safeParse({ ...textNote, text: "a".repeat(textNoteMaximumLength + 1) }).success).toBe(false);
+    expect(noteSchema.safeParse({ ...textNote, text: "a".repeat(textNoteMaximumLengthPlaceholder + 1) }).success).toBe(false);
   });
 
   it("rejects a voice note longer than the placeholder limit", () => {
-    expect(noteSchema.safeParse({ ...voiceNote, durationMilliseconds: voiceNoteMaximumDurationMilliseconds + 1 }).success).toBe(false);
+    expect(noteSchema.safeParse({ ...voiceNote, durationMilliseconds: voiceNoteMaximumDurationMillisecondsPlaceholder + 1 }).success).toBe(false);
   });
 
   it("rejects negative and fractional video positions", () => {

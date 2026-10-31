@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
@@ -28,12 +28,10 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 const EMAIL = "member@example.test";
 const LINK_CODE = "one-time-exchange-code";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
-const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
+const EXPIRED_MESSAGE = failureMessages.invalidLink;
 
-/** HEN-304: a sign-in link that fails while the app is on "Check your email" or the code screen gives feedback on that view. */
 describe("App when a sign-in link fails after a send (HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // Request paths that fail on the network, as React Native's fetch does when the host is unreachable.
   let unreachablePaths: Set<string>;
   let linkNumber: number;
   const consoleCalls: unknown[][] = [];
@@ -68,7 +66,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
     expect(screen.text()).toContain("Enter your code");
     return screen;
   };
-  /** The user taps a sign-in link from the email while the app is running; each link is a new one. */
   const openLink = async (screen: Screen, url: string) => {
     linkNumber += 1;
     deepLinkState.url = url.includes("?") ? `${url}&n=${linkNumber}` : `${url}?n=${linkNumber}`;
@@ -80,12 +77,10 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
   };
   const redTexts = (screen: Screen) => screen.findAllByType("Text").filter((text) => flattenStyle(text.props.style).color === colours.danger);
   const expectLinkErrorCardBetween = (screen: Screen, above: string, below: string) => {
-    // The code screen has its own copy (CTO decision); "Check your email" keeps the shared one.
     const message = screen.text().includes("Enter your code") ? CODE_SCREEN_INVALID_LINK : EXPIRED_MESSAGE;
     const card = screen.queryByText(message);
     expect(card?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
     expect(flattenStyle(card?.props.style).color).toBe(colours.danger);
-    // The red error slot of the view: under its content, above its buttons.
     const text = screen.text();
     expect(text.indexOf(message)).toBeGreaterThan(text.indexOf(above));
     expect(text.indexOf(message)).toBeLessThan(text.indexOf(below));
@@ -100,7 +95,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
     expect(redTexts(screen)).toEqual([]);
     expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
   };
-  /** Past the resend cooldown, the next request is refused (429, or 400 with `code`), so `act` leaves a red error. */
   const actRefused = async (screen: Screen, act: () => Promise<unknown>, code?: string) => {
     await vi.advanceTimersByTimeAsync(30_000).then(() => screen.rerender());
     backend.fetchImplementation.mockResolvedValueOnce(Response.json({ code, message: "Refused" }, { status: code ? 400 : 429 }));
@@ -124,7 +118,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
     vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
   });
   afterEach(() => {
-    // No link token, code or email in logs.
     const logged = JSON.stringify(consoleCalls);
     expect(logged).not.toContain(LINK_CODE);
     expect(logged).not.toContain(EMAIL);
@@ -237,7 +230,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await openLink(screen, REJECTED_LINK);
       unreachablePaths.add("/sign-in/email-otp");
       await screen.changeText("6-digit code", "123456");
-      // The submit failed on the network: its note, and no card from the link before it.
       expectCalmNoteOnly(screen);
 
       await openLink(screen, REJECTED_LINK);
@@ -267,7 +259,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await screen.press("Use a different email");
 
       expect(screen.text()).toContain("Sign in to BJJ Roll");
-      // The email form would show the shared copy, so check both texts are gone.
       expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
       expect(screen.text()).not.toContain(CODE_SCREEN_INVALID_LINK);
     });
@@ -278,7 +269,6 @@ describe("App when a sign-in link fails after a send (HEN-304)", () => {
       await openLink(screen, REJECTED_LINK);
       expectOnlyTheCardIsRed(screen, CODE_SCREEN_INVALID_LINK);
 
-      // A wrong code: the field's own red error.
       await actRefused(screen, () => screen.changeText("6-digit code", "123456"), "INVALID_OTP");
       await openLink(screen, REJECTED_LINK);
       expectOnlyTheCardIsRed(screen, CODE_SCREEN_INVALID_LINK);

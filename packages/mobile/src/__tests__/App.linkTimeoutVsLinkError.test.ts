@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen, settle } from "./screenHarness";
@@ -22,14 +22,12 @@ const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
-/** How the cold-start link exchange answers: never (until the app aborts it), or refused just before the deadline. */
 type ExchangeMode = "neverAnswers" | "refusedInTime";
 
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGN_IN_LINK = "bjjroll://auth?code=one-time-exchange-code";
-const LINK_ERROR = FAILURE_MESSAGES.invalidLink;
+const LINK_ERROR = failureMessages.invalidLink;
 
-/** HEN-303 × HEN-304 merge: a link exchange that times out is a network failure (grey note), one that is refused is #84's card. */
 describe("App cold-start link: timeout vs refused link (HEN-303, HEN-304)", () => {
   let exchangeMode: ExchangeMode;
 
@@ -101,7 +99,6 @@ describe("App cold-start link: timeout vs refused link (HEN-303, HEN-304)", () =
     expect(flattenStyle(card?.props.style).color).toBe(colours.danger);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
 
-    // The deadline passing afterwards changes nothing.
     await advance(1);
     expect(screen.text().split(LINK_ERROR)).toHaveLength(2);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);

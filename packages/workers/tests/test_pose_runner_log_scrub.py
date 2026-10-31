@@ -1,6 +1,3 @@
-"""HEN-319: pose logs carry the job ID, timings, fps and thread count only: no video bytes, signed URLs, filenames,
-emails, credentials, video IDs or keypoints. Synthetic values only."""
-
 import json
 import stat
 from pathlib import Path

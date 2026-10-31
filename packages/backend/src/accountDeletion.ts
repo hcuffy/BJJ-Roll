@@ -5,7 +5,6 @@ import { cascadeDeleteUserAccount } from "./database/cascadeDelete.js";
 import { withUserContext } from "./database/connection.js";
 import { EmailSendError } from "./email/index.js";
 
-/** The signed-in user's decrypted address, read inside their RLS context. Null when the row is gone. */
 async function readOwnEmail(options: AccountRoutesOptions, userId: string): Promise<string | null> {
   const row = await withUserContext(options.db, userId, (transaction) =>
     transaction.selectFrom("users").select(["emailCiphertext", "keyVersion"]).where("id", "=", userId).executeTakeFirst(),
@@ -21,7 +20,6 @@ async function readJsonBody(context: Context): Promise<unknown> {
   }
 }
 
-/** POST /account/delete-code: email a fresh deletion code to the signed-in user's own address (never one from the request). */
 export async function handleSendAccountDeletionCode(context: Context, options: AccountRoutesOptions): Promise<Response> {
   const userId = await options.resolveAuthenticatedUserId(context);
   if (!userId) {
@@ -46,10 +44,6 @@ export async function handleSendAccountDeletionCode(context: Context, options: A
   return context.json(response, 200);
 }
 
-/**
- * HEN-239: before the purge, revoke the stored Apple refresh token (App Store rule 5.1.1(v)). A failed revoke never blocks the
- * delete: it is logged with the user id only, never the token or email.
- */
 async function revokeAppleSignIn(options: AccountRoutesOptions, userId: string): Promise<void> {
   const rows = await withUserContext(options.db, userId, (transaction) =>
     transaction.selectFrom("accounts").select(["refreshToken"]).where("userId", "=", userId).where("providerId", "=", "apple").execute(),
@@ -66,11 +60,6 @@ async function revokeAppleSignIn(options: AccountRoutesOptions, userId: string):
   }
 }
 
-/**
- * DELETE /account with body { code }: hard delete, now, only with a valid fresh code (Henry, 25 Oct).
- * The address is captured before the purge; the deleted notice goes out after the delete commits, so it is never sent
- * for a delete that did not happen. A failed send does not undo or fail the delete: it is logged with the user id and reason only.
- */
 export async function handleDeleteAccount(context: Context, options: AccountRoutesOptions): Promise<Response> {
   const userId = await options.resolveAuthenticatedUserId(context);
   if (!userId) {
@@ -91,14 +80,12 @@ export async function handleDeleteAccount(context: Context, options: AccountRout
     return context.json({ error: "Invalid or expired code" }, 403);
   }
   await revokeAppleSignIn(options, userId);
-  // The user row and every row in the ARCHITECTURE.md §5 map, sessions and this code included, in one transaction.
   const result = await cascadeDeleteUserAccount(options.db, userId);
   if (result.deletedUserCount === 0) {
     return context.json({ error: "User not found" }, 404);
   }
   options.logAccountEvent("account_deleted", userId);
   try {
-    // Queued (HEN-284): retried on its own, and the user id key stops a second notice for the same account.
     await options.emailQueue.enqueue(
       { kind: "account_deleted_notice", input: { to: capturedEmail } },
       { idempotencyKey: `account-deleted:${userId}` },

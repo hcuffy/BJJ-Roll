@@ -1,5 +1,3 @@
-"""HEN-318: 30 s chunks at 10 fps with 1 s overlap; each chunk is re-prompted from the previous chunk's masks. Fake model only."""
-
 from bjj_roll_workers.tracker_config import load_tracker_config
 from bjj_roll_workers.tracker_runner import track_video
 from tracker_fakes import SELF_LABEL, LabelFakeTracker, drifting_self_layout, label_mask, make_clip, masks_prompt_of, self_tap

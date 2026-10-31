@@ -9,7 +9,6 @@ import {
   type StartedAuthTestEnvironment,
 } from "./authTestHelper.js";
 
-/** The app sends this header on every auth request (Expo client); the server reads it as the request origin. */
 const appOriginHeaders = { "expo-origin": "bjjroll://" };
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())(
@@ -49,7 +48,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())(
     };
     const isLive = async (cookie: string, ipAddress: string) =>
       (await (await getAuthPath(current().app, "/get-session", { cookie, ipAddress })).json()) !== null;
-    /** What the app sends: no stored session, only the old session's cookie and the app origin. */
     const signOutWith = (cookie: string, ipAddress: string) =>
       postAuthJson(current().app, "/sign-out", { body: {}, cookie, ipAddress, headers: appOriginHeaders });
 

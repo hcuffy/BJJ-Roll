@@ -41,7 +41,7 @@ import {
   normalizeMagicLinkVerifyResponse,
   prepareMagicLinkRequest,
   resolveClientIpAddress,
-  TRUSTABLE_PROXY_IP_HEADERS,
+  trustableProxyIpHeaders,
   type TrustableProxyIpHeader,
 } from "./authRequestGuards.js";
 import { refuseUnsafeAppleIdToken, refuseUnverifiedProviderEmail } from "./socialSignInSafety.js";
@@ -56,51 +56,37 @@ import {
 
 export type { AuthEventLogger, AuthEventName } from "./socialSignInHooks.js";
 
-export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxyIpHeader } from "./authRequestGuards.js";
+export { resolveClientIpAddress, trustableProxyIpHeaders, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
 export interface CreateAuthOptions {
   readonly pool: Pool;
   readonly emailSender: EmailSender;
-  /** Sign-in emails go through this queue (HEN-284), so a send response never waits on the provider. */
   readonly emailQueue: EmailQueue;
   readonly baseURL: string;
   readonly keyring?: Keyring;
   readonly env?: AuthSecretEnvironment;
   readonly trustedOrigins?: readonly string[];
-  /** Proxy headers to trust for the client IP. Default: none (the socket address is used). */
   readonly trustedProxyIpHeaders?: readonly TrustableProxyIpHeader[];
-  /** Better Auth logger config. Default: disabled. */
   readonly logger?: BetterAuthOptions["logger"];
-  /** Apple and Google sign-in (HEN-239). A provider is offered only when it is configured here. Default: none. */
   readonly socialProviders?: SocialProviderConfig;
-  /** One line per social sign-in event: the event and the user id, never a token or email. Default: JSON on stdout. */
   readonly logAuthEvent?: AuthEventLogger;
 }
 
 export interface AuthConnectionInfo {
-  /** TCP peer address of the request (from the Node socket). */
   readonly remoteAddress?: string | undefined;
 }
 
 export interface AuthInstance {
   readonly handler: (request: Request, connection?: AuthConnectionInfo) => Promise<Response>;
-  /** User id of the valid session carried by these request headers, or null. */
   readonly resolveSessionUserId: (headers: Headers) => Promise<string | null>;
   readonly codec: AuthCryptoCodec;
   readonly keyring: Keyring;
-  /** Fresh email codes for DELETE /account (HEN-65). */
   readonly accountDeletionCodes: AccountDeletionCodes;
-  /** Atomic per-user and per-IP try budget for DELETE /account (HEN-65). */
   readonly accountDeletionAttempts: AccountDeletionAttempts;
-  /** Client IP for rate limiting, resolved the same way as for /api/auth/*. */
   readonly resolveClientIp: (headers: Headers, connection?: AuthConnectionInfo) => string;
   readonly emailSender: EmailSender;
   readonly emailQueue: EmailQueue;
   readonly telemetry: typeof betterAuthTelemetryDisabledConfig;
-  /**
-   * Revokes a stored, sealed Apple refresh token (HEN-239, App Store rule 5.1.1(v)). Throws when Apple is not configured, the value
-   * cannot be opened, or Apple refuses; the caller logs the failure and still deletes the account.
-   */
   readonly revokeAppleRefreshToken: (sealedRefreshToken: string) => Promise<void>;
 }
 
@@ -122,7 +108,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     database: createEncryptedRlsAuthAdapter({
       pool: options.pool,
       codec,
-      // HEN-263: the consent record is written in the user insert's own transaction, so neither row can exist without the other.
       onUserCreated: (transaction, user) => storeAgeConfirmationInUserTransaction(transaction, codec, user),
     }),
     user: {
@@ -142,13 +127,10 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     },
     account: {
       modelName: "accounts",
-      // Link an Apple or Google sign-in to an existing user only when the provider says the email is verified (no trusted-provider bypass).
-      // HEN-239: provider tokens are not kept (only Apple's refresh token, sealed, for revoke on delete), so sign-in never rewrites them.
       updateAccountOnSignIn: false,
       accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: false },
     },
     socialProviders: buildSocialProviders(socialProviderConfig, appleSignIn.appleTokenClient?.clientSecretFor),
-    // Provider tokens are not stored (see authCodecTransform), so the endpoints that hand them out or refresh them stay off.
     disabledPaths: ["/refresh-token", "/get-access-token", "/account-info"],
     verification: {
       modelName: "verifications",
@@ -171,8 +153,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     databaseHooks: {
       user: {
         create: {
-          // HEN-263: account creation (OTP code used, magic link opened) needs the 16+ tick from this email's latest send;
-          // HEN-239: an Apple or Google sign-up needs the same tick, sent with the sign-in request.
           before: async (user, hookContext) => {
             await assertSignUpAgeConfirmation(options.pool, codec, { email: user.email, social: await socialSignUpAgeAnswers(hookContext) });
           },
@@ -183,8 +163,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
         await refuseUnsafeAppleIdToken(middlewareContext, options.pool);
-        // Over HTTP, check-verification-otp may only test sign-in codes: a public check of a delete code would be a guessing oracle
-        // outside the DELETE /account try budget.
         if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
           if (body?.type !== "sign-in") {
@@ -193,14 +171,12 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         }
         if (middlewareContext.path === "/email-otp/send-verification-otp" || middlewareContext.path === "/sign-in/magic-link") {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
-          // Over HTTP only sign-in codes can be asked for; account-deletion codes come from POST /account/delete-code (server call, no request).
           if (middlewareContext.path === "/email-otp/send-verification-otp" && middlewareContext.request && body?.type !== "sign-in") {
             throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" });
           }
           if (typeof body?.email === "string" && body.email.includes("@")) {
             await enforcePerEmailSendRateLimit(options.pool, codec, body.email);
           }
-          // HEN-263: no refusal here. Every email gets the same answer; the 16+ check runs when the account is created.
           if (isAccountCreatingSend(middlewareContext.path, body) && middlewareContext.request) {
             await recordPendingAgeAnswers(options.pool, codec, body);
           }
@@ -219,7 +195,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         sendVerificationOTP: async ({ email, otp, type }) => {
           const input = { to: email, code: otp, expiresInMinutes: OTP_EXPIRY_MINUTES };
           if (type === "email-verification") {
-            // Account-deletion codes come from POST /account/delete-code, a signed-in server call: it still waits for the send.
             await options.emailSender.sendOneTimeCode({ ...input, purpose: "account_deletion" });
             return;
           }
@@ -250,7 +225,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
       const headers = new Headers(rawRequest.headers);
       const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);
-      for (const headerName of [...TRUSTABLE_PROXY_IP_HEADERS, CLIENT_IP_HEADER]) {
+      for (const headerName of [...trustableProxyIpHeaders, CLIENT_IP_HEADER]) {
         headers.delete(headerName);
       }
       headers.set(CLIENT_IP_HEADER, clientIp);

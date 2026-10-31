@@ -4,7 +4,6 @@ import { startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./aut
 import { createAccountTestFlow } from "./accountTestFlow.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-/** Records whether the user row still existed at the moment the notice went out, and can be told to fail. */
 class ProbingEmailSender extends FakeEmailSender {
   failNotice = false;
   usersWithAddressAtSendTime: number[] = [];
@@ -64,7 +63,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
       },
     ]);
     expect(notices()[0]?.text).toContain("you will get a new, empty account");
-    // The users row (and its encrypted address) was already gone when the notice was sent: the address came from the pre-purge capture.
     expect(emailSender.usersWithAddressAtSendTime).toEqual([0]);
   });
 
@@ -94,7 +92,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account deleted e
 
     expect(status).toBe(200);
     expect((await current().pool.query("SELECT id FROM public.users WHERE id = $1", [user.userId])).rows).toEqual([]);
-    // Queuing worked, so the route logs nothing; the queue tried 3 times and wrote the dead-letter line.
     expect(lines.filter((line) => line.includes("account_deletion_email_failed"))).toEqual([]);
     expect(current().emailQueueLogLines).toEqual([
       { event: "email_dead_lettered", jobId: expect.any(String) as unknown, template: "account_deleted_notice", errorClass: "network", attempts: 3 },

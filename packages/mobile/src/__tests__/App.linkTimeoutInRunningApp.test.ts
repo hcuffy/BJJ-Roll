@@ -2,7 +2,7 @@ import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
@@ -26,13 +26,8 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
 const EMAIL = "member@example.test";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
-const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
+const EXPIRED_MESSAGE = failureMessages.invalidLink;
 
-/**
- * HEN-303 x HEN-304 (Bill, gate @ 75a9014): a link opened in the running app whose exchange never answers times out into
- * App's link .catch. That catch was unreachable before #83 (completeMagicLink never rejects); now it is the timeout path.
- * It must show the grey note only: an older card or red form error on the view goes, as for a network failure.
- */
 describe("App: a link opened in the running app that times out replaces the last result (HEN-303, HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let exchangeHangs: boolean;

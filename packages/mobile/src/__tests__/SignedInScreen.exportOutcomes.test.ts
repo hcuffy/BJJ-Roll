@@ -1,8 +1,7 @@
-// HEN-311 after #93: an offline export shows only the grey note, and Delete account stays startable after any export outcome.
 import { Platform, Share } from "react-native";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AccountExportResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { EXPORT_CREATED_NOTICE, EXPORT_SHARED_NOTICE } from "../screens/ExportDataFirstAction";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
@@ -11,7 +10,7 @@ import { createSignedInScreenHarness } from "./signedInScreenHarness";
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 type Os = "ios" | "android";
 
-const offline: AccountExportResult = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
+const offline: AccountExportResult = { ok: false, reason: "network", message: failureMessages.network };
 const failed: AccountExportResult = { ok: false, reason: "rateLimited", message: "Too many tries." };
 const SEND_CODE = "Email me a code";
 

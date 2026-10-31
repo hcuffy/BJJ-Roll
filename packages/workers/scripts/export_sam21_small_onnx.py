@@ -1,17 +1,3 @@
-"""Export SAM 2.1 small to the two ONNX files `sam21_onnx_tracker.Sam21OnnxTracker` reads (HEN-318; run in HEN-67).
-
-The export starts from Meta's Apache-2.0 checkpoint (`CHECKPOINT_URL`). Without `--checkpoint` the script fetches it into the mode-700
-output folder, and it refuses any other URL or licence. We never use the onnx-community export, because it carries no licence. It needs
-torch and the `sam2` package from https://github.com/facebookresearch/sam2 in a separate Python 3.13 venv inside the mode-700 footage
-folder. Both are imported only inside `export`, so CI and Ruff never need them. See README.md next to this file.
-
-Graph names match the tracker:
-- vision_encoder.onnx: `pixel_values` (1, 3, 1024, 1024) -> `image_embeddings`, `high_res_features_0`, `high_res_features_1`.
-- prompt_encoder_mask_decoder.onnx: the three encoder outputs plus `input_points` (1, 1, N, 2) in 1024-pixel model space and
-  `input_labels` (1, 1, N) int64 -> `iou_scores` (1, 3) and `pred_masks` (1, 3, 256, 256) logits. It has no `input_boxes` input,
-  so the tracker prompts later frames with the centre of the previous box.
-"""
-
 import argparse
 import importlib
 import os
@@ -40,12 +26,10 @@ EXPORTED_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 type Fetch = Callable[[str], Iterable[bytes]]
 
 
-class ExportFolderError(RuntimeError):
-    """The output folder is missing, not mode 700, or already holds an export."""
+class ExportFolderError(RuntimeError): ...
 
 
-class CheckpointError(RuntimeError):
-    """The checkpoint source is not Meta's recorded Apache-2.0 one, or its download failed."""
+class CheckpointError(RuntimeError): ...
 
 
 @dataclass(frozen=True)

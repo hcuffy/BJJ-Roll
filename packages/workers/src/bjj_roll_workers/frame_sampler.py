@@ -1,9 +1,3 @@
-"""Frame sampler (HEN-351): turns a decoded clip into the frames the tracker reads, at `tracker_config.frames_per_second`.
-
-From each sample time k / frames_per_second it keeps the first source frame at or after that time, renumbers the kept frames from 0 and
-records each one's timestamp in seconds. A clip slower than the sampling rate is refused. Frames stay in memory and are never logged.
-"""
-
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass

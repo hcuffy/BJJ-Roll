@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
 
-/** Key length in bytes for both the AES-256-GCM data keys and the HMAC-SHA256 key. */
 export const ENCRYPTION_KEY_BYTES = 32;
 
 export interface DataKeyEntry {
@@ -14,7 +13,6 @@ export interface KeyringInput {
   currentKeyVersion: number;
 }
 
-/** Holds the keys in a closure, so logging or serialising a keyring never shows key bytes. */
 export interface Keyring {
   readonly currentKeyVersion: number;
   dataKeyFor(keyVersion: number): Buffer;
@@ -40,7 +38,6 @@ function assertKeyVersion(keyVersion: number): void {
   }
 }
 
-/** Builds a keyring from keys the caller supplies. This module never reads environment variables. */
 export function createKeyring(input: KeyringInput): Keyring {
   const hmacKey = Buffer.from(input.hmacKey);
   assertKeyLength(hmacKey, "HMAC key");

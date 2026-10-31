@@ -60,7 +60,9 @@ jobs:
           pnpm --filter @bjj-roll/frontend typecheck
           pnpm --filter @bjj-roll/frontend build
       - name: Lint
-        run: pnpm lint
+        run: |
+          pnpm test:comments
+          pnpm lint
       - name: Modal EU residency guard (HEN-227)
         run: |
           sh scripts/checkModalResidency.test.sh
@@ -108,5 +110,6 @@ jobs:
         run: |
           uv run ruff check
           uv run ruff format --check
+          uv run python scripts/check_no_comments.py
       - name: Test Python workers (pytest)
         run: uv run pytest -v

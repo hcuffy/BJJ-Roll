@@ -5,8 +5,6 @@ import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const attestationRowsQuery = "SELECT 1 FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'";
 
-// HEN-308 (Sara Q3): the gate's delete confirm offers "Export my data first" only because GET /account/export is not
-// attestation-gated. Fails if export is ever gated on the attestation, records an acceptance, or logs exported data.
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-308 an account that has not accepted the attestation can export its data", () => {
   const { current, flow, capturedLogs, signUpWithOtp } = createAgeGateTestContext();
 

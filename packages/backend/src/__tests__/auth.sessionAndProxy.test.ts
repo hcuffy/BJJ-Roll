@@ -72,7 +72,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 session lifetime 
       expect(created?.token).toBe(codec.hashSessionToken(session.token));
       expect(created?.token).not.toBe(session.token);
 
-      // Two uses on the same day (within updateAge): no write.
       vi.setSystemTime(startMs + 2 * 60 * 60 * 1000);
       expect((await getAuthPath(app, "/get-session", { cookie: session.cookie, ipAddress })).status).toBe(200);
       vi.setSystemTime(startMs + 3 * 60 * 60 * 1000);
@@ -80,7 +79,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 session lifetime 
       const [sameDay] = await readSessionRow(session.userId);
       expect(sameDay?.updated_at.getTime()).toBe(created?.updated_at.getTime());
 
-      // Two uses the next day: exactly one write (first use slides, second does not).
       const nextDayFirstMs = startMs + dayMs + 60 * 60 * 1000;
       vi.setSystemTime(nextDayFirstMs);
       expect((await getAuthPath(app, "/get-session", { cookie: session.cookie, ipAddress })).status).toBe(200);
@@ -90,7 +88,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 session lifetime 
       expect(nextDay?.updated_at.getTime()).toBe(nextDayFirstMs);
       expect(nextDay?.expires_at.getTime()).toBe(nextDayFirstMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000);
 
-      // Idle for 30 days plus 1 second after the last write: rejected.
       vi.setSystemTime(nextDayFirstMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000 + 1000);
       const idleResponse = await getAuthPath(app, "/get-session", { cookie: session.cookie, ipAddress });
       expect(await idleResponse.json()).toBeNull();

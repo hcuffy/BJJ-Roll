@@ -32,10 +32,6 @@ export function withAppRoleUnscoped<Result>(
   });
 }
 
-/**
- * Calls the narrow SECURITY DEFINER lookup function as `bjj_app` without `app.user_id`.
- * Returns `user_id` for a matching `email_hash`, or `null` when unknown.
- */
 export function lookupUserIdByEmailHmac(db: Kysely<BjjRollDatabase>, emailHmac: string): Promise<string | null> {
   return withAppRoleUnscoped(db, async (transaction) => {
     const queryResult = await sql<{ userId: string | null }>`
@@ -45,10 +41,6 @@ export function lookupUserIdByEmailHmac(db: Kysely<BjjRollDatabase>, emailHmac: 
   });
 }
 
-/**
- * Pool-based pre-session lookup helper used by the Better Auth emailHash adapter
- * before `app.user_id` is established on the request context.
- */
 export async function lookupUserIdByEmailHmacFromPool(pool: Pool, emailHmac: string): Promise<string | null> {
   const client = await pool.connect();
   try {

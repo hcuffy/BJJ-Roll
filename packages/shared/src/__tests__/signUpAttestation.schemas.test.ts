@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   accountExportSchema,
   isCurrentSignUpAttestationTextVersion,
-  SIGN_UP_ATTESTATION_DUTIES,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationDuties,
+  signUpAttestationVersion,
   signUpAttestationAcceptRequestSchema,
   signUpAttestationRecordSchema,
   signUpAttestationStatusSchema,
@@ -14,15 +14,15 @@ const attestationRecord = {
   id: otherId,
   userId,
   consentType: "attestation_signup",
-  textVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+  textVersionId: signUpAttestationVersion.id,
   acceptedAt: timestamp,
   withdrawnAt: null,
 };
 
 describe("HEN-183 sign-up attestation schemas", () => {
   it("names three duties and a draft text version", () => {
-    expect(SIGN_UP_ATTESTATION_DUTIES).toHaveLength(3);
-    expect(SIGN_UP_ATTESTATION_TEXT_VERSION).toEqual({ id: "attestation-signup-draft-1", isDraft: true });
+    expect(signUpAttestationDuties).toHaveLength(3);
+    expect(signUpAttestationVersion).toEqual({ id: "attestation-signup-draft-1", isDraft: true });
   });
 
   it("a record holds the consent type, text version id, accepted-at, user id, id and withdrawn-at only", () => {
@@ -42,17 +42,15 @@ describe("HEN-183 sign-up attestation schemas", () => {
   });
 
   it("status and accept bodies are strict", () => {
-    const status = { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null };
+    const status = { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null };
     expect(signUpAttestationStatusSchema.parse(status)).toEqual(status);
-    expect(signUpAttestationAcceptRequestSchema.safeParse({ textVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id }).success).toBe(true);
-    expect(signUpAttestationAcceptRequestSchema.safeParse({ textVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, accepted: true }).success).toBe(
-      false,
-    );
+    expect(signUpAttestationAcceptRequestSchema.safeParse({ textVersionId: signUpAttestationVersion.id }).success).toBe(true);
+    expect(signUpAttestationAcceptRequestSchema.safeParse({ textVersionId: signUpAttestationVersion.id, accepted: true }).success).toBe(false);
     expect(signUpAttestationAcceptRequestSchema.safeParse({}).success).toBe(false);
   });
 
   it("only the current text version id counts as current", () => {
-    expect(isCurrentSignUpAttestationTextVersion(SIGN_UP_ATTESTATION_TEXT_VERSION.id)).toBe(true);
+    expect(isCurrentSignUpAttestationTextVersion(signUpAttestationVersion.id)).toBe(true);
     expect(isCurrentSignUpAttestationTextVersion("attestation-signup-draft-0")).toBe(false);
     expect(isCurrentSignUpAttestationTextVersion(undefined)).toBe(false);
     expect(isCurrentSignUpAttestationTextVersion(true)).toBe(false);

@@ -1,11 +1,3 @@
-"""Fake pose model and synthetic two-person clips for the HEN-319 pose tests. No model, weights or real video.
-
-Frames use the tracker fakes' label convention (red channel: 0 background, 1 the user, 2 the partner). The fake pose model
-finds the most common person label inside the box it is given and puts all 17 COCO keypoints on that label's centroid, so a
-box that is mostly covered by the partner yields the partner's pose: the mislabel a top-down model makes when athletes tangle.
-Each label gets its own score, so a partner keypoint is recognisable anywhere it might leak.
-"""
-
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -24,7 +16,6 @@ type Rectangle = tuple[int, int, int, int]
 
 
 def draw_rectangles(frame_index: int, rectangles: Sequence[tuple[int, Rectangle]], size: FrameSize = POSE_FRAME_SIZE, *, extra: bytes = b"") -> Frame:
-    """Paint (label, (x_min, y_min, x_max, y_max)) rectangles in order; later ones cover earlier ones."""
     labels = bytearray(size.width * size.height)
     for label, (x_min, y_min, x_max, y_max) in rectangles:
         for y in range(y_min, y_max):
@@ -55,7 +46,6 @@ def tracked_label(frame: Frame, label: int) -> TrackedObject:
 
 
 def frame_tracks(frame: Frame, athletes: Mapping[str, int]) -> FrameTracks:
-    """What the tracker hands over in memory: every tracked athlete's mask and box on this frame."""
     return {athlete_id: tracked_label(frame, label) for athlete_id, label in athletes.items()}
 
 
@@ -67,8 +57,6 @@ class PoseCall:
 
 @dataclass
 class LabelFakePose:
-    """Implements `bjj_roll_workers.pose.Pose` without a model. Keeps only the call log."""
-
     calls: list[PoseCall] = field(default_factory=list)
 
     def estimate(self, frame: Frame, box: Box) -> tuple[Keypoint, ...]:

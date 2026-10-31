@@ -1,15 +1,3 @@
-"""Shared coordinate types for the tracker (HEN-318) and the pose runner (HEN-319).
-
-Convention: pixels of the sampled frame, origin at the top-left corner, x grows to the right, y grows down, always tied to a
-frame index of the video sampled at the configured fps (`tracker_config.json`). A pixel (column c, row r) covers
-[c, c + 1) x [r, r + 1), so a point inside a frame of width W and height H has 0 <= x < W and 0 <= y < H. A `Box` uses the
-same axes with `x_min <= x_max` and `y_min <= y_max` (max edges exclusive). A `Keypoint` (HEN-319) is a named point on that
-frame with a score; poses are the 17 COCO keypoints in `COCO17_KEYPOINT_NAMES` order.
-
-Values are checked when they are built (negative, non-finite and non-integer frame indexes are rejected) and again against
-the frame size and frame count at the interface boundary (`validate_tap_in_frame`). Error messages never carry the values.
-"""
-
 import math
 from dataclasses import dataclass
 
@@ -51,8 +39,6 @@ class PixelPoint:
 
 @dataclass(frozen=True)
 class TapPoint:
-    """The user's tap on themselves: frame index plus pixel x/y in that frame."""
-
     frame_index: int
     x: float
     y: float
@@ -86,7 +72,6 @@ class Box:
 
 
 def box_iou(first: Box, second: Box) -> float:
-    """Intersection over union of two boxes; 0.0 when they do not overlap or both are empty."""
     overlap_width = max(0.0, min(first.x_max, second.x_max) - max(first.x_min, second.x_min))
     overlap_height = max(0.0, min(first.y_max, second.y_max) - max(first.y_min, second.y_min))
     intersection = overlap_width * overlap_height
@@ -118,8 +103,6 @@ COCO17_KEYPOINT_NAMES = (
 
 @dataclass(frozen=True)
 class Keypoint:
-    """One named body keypoint in frame pixels with the model's confidence in [0, 1]."""
-
     name: str
     x: float
     y: float
@@ -140,7 +123,6 @@ def validate_point_in_frame(point: PixelPoint | TapPoint | Keypoint, frame_size:
 
 
 def validate_tap_in_frame(tap: TapPoint, frame_size: FrameSize, frame_count: int) -> TapPoint:
-    """Boundary check for a tap: on a frame of this video and inside that frame. Returns the tap unchanged."""
     if tap.frame_index >= frame_count:
         raise InvalidCoordinateError("tap frame is outside the video")
     validate_point_in_frame(tap, frame_size)

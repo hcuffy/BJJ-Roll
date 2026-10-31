@@ -1,9 +1,3 @@
-"""Writes a video's pose result (HEN-319) inside the configured footage folder only, through HEN-318's guard.
-
-The result goes to `<footage folder>/poses/<video id>.json` (folder mode 700, file mode 600; see `tracking_output`). Only the
-user's own keypoints, the run's fps and thread count, and the bench counts are written (D6). Nothing is logged.
-"""
-
 from pathlib import Path
 
 from bjj_roll_workers.geometry import COCO17_KEYPOINT_NAMES

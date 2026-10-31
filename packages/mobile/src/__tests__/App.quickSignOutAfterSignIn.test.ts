@@ -1,6 +1,3 @@
-// A sign-out tapped right after a sign-in (HEN-315, Stamp's PR #76 nits): the sign-in's revoke of a queued old session is
-// stopped and awaited before the sign-out starts, so the two never revoke the same session at once, and the sign-out still
-// ends at the real 10 s startup timeout.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -27,16 +24,14 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const FIRST = "session-token-1";
 const SECOND = "session-token-2";
 
-/** A server that keeps sessions; `/sign-out` ends the presented session, unless that session is set to fail or hang. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
   const state = { failFor: new Set<string>(), hangFor: new Set<string>() };
-  /** Sign-out requests per session still waiting for an answer, and the most there ever were at once. */
   const inFlight = new Map<string, number>();
   const peakInFlight = new Map<string, number>();
   let signIns = 0;
@@ -46,7 +41,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -55,7 +50,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         const waiting = (inFlight.get(session) ?? 0) + 1;
         inFlight.set(session, waiting);
         peakInFlight.set(session, Math.max(waiting, peakInFlight.get(session) ?? 0));
@@ -130,7 +124,6 @@ describe("Sign-out right after a sign-in (HEN-315)", () => {
   });
 
   it("the sign-in's revoke is stopped first, never runs beside the sign-out's, and the sign-out ends at the real 10 s timeout", async () => {
-    // Session 1 signed out unconfirmed: it is queued.
     server.state.failFor.add(FIRST);
     const screen = await launchApp();
     await signIn(screen);
@@ -138,7 +131,6 @@ describe("Sign-out right after a sign-in (HEN-315)", () => {
     await settle();
     expect(marker()).toContain(FIRST);
 
-    // Session 2 signs in; its revoke of session 1 hangs. The user signs out at once.
     server.state.failFor.clear();
     server.state.hangFor.add(FIRST);
     await signIn(screen);
@@ -173,7 +165,6 @@ describe("Sign-out right after a sign-in (HEN-315)", () => {
     await settle();
     expect(marker()).toContain(FIRST);
 
-    // The sign-in's revoke reads the queue slowly; meanwhile the user signs out and the server misses session 2's sign-out.
     let releaseRead = () => {};
     const readHeld = new Promise<void>((resolve) => {
       releaseRead = resolve;

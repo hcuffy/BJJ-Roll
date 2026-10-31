@@ -1,16 +1,16 @@
-import { SIGN_UP_ATTESTATION_DUTIES, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationDuties, SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Text } from "react-native";
 import { describe, expect, it } from "vitest";
 import type { SignUpAttestationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { ATTESTATION_NEEDED_HINT, ATTESTATION_SAVING } from "../auth/signUpAttestation";
 import { GATE_READ_ERROR, SignUpAttestationGate, TRY_AGAIN } from "../screens/SignUpAttestationGate";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { colours } from "../theme/tokens";
 import { flattenStyle, renderScreen } from "./screenHarness";
 
-const CURRENT = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const CURRENT = signUpAttestationVersion.id;
 const ACCEPT = "Accept and continue";
 const required = (acceptedTextVersionId: string | null): SignUpAttestationResult => ({
   ok: true,
@@ -62,7 +62,7 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     const screen = await gate.render();
 
     expect(screen.text()).not.toContain("Account content");
-    for (const duty of SIGN_UP_ATTESTATION_DUTIES) {
+    for (const duty of signUpAttestationDuties) {
       expect(screen.text()).toContain(duty);
     }
     expect(screen.text()).toContain(CURRENT);
@@ -75,17 +75,16 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(screen.text()).toContain("Account content");
   });
 
-  const offline: SignUpAttestationResult = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
-  const serverError: SignUpAttestationResult = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown };
+  const offline: SignUpAttestationResult = { ok: false, reason: "network", message: failureMessages.network };
+  const serverError: SignUpAttestationResult = { ok: false, reason: "unknown", message: failureMessages.unknown };
   const expectNoDuties = (screen: Awaited<ReturnType<ReturnType<typeof renderGate>["render"]>>) => {
     expect(screen.text()).not.toContain("Account content");
     expect(screen.text()).not.toContain(SIGN_UP_ATTESTATION_LABEL);
-    for (const duty of SIGN_UP_ATTESTATION_DUTIES) {
+    for (const duty of signUpAttestationDuties) {
       expect(screen.text()).not.toContain(duty);
     }
   };
 
-  // Vera #74 item 1 (blocking): a failed status read is an error with a retry, never the accept prompt.
   it("a status read that fails offline shows the grey note and Try again, not the duties; a retry that succeeds reaches the app", async () => {
     const gate = renderGate([offline, accepted], []);
     const screen = await gate.render();
@@ -118,7 +117,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(gate.calls.signOuts).toBe(1);
   });
 
-  // Vera #74 item 2: offline on Accept is the grey note, not red; the next tap clears it.
   it("an Accept that fails offline shows the grey note, not a red error, and the next tap clears it", async () => {
     const gate = renderGate([required(null)], [offline, accepted]);
     const screen = await gate.render();
@@ -126,13 +124,12 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     await screen.press(ACCEPT);
 
     expect(flattenStyle(screen.queryByText(SERVER_UNREACHABLE_NOTE)?.props.style).color).toBe(colours.textSecondary);
-    expect(screen.text()).not.toContain(FAILURE_MESSAGES.network);
+    expect(screen.text()).not.toContain(failureMessages.network);
     expect(screen.text()).not.toContain("Account content");
     await screen.press(ACCEPT);
     expect(screen.text()).toContain("Account content");
   });
 
-  // Vera #74 item 3: the dimmed button says why while the box is unticked.
   it("Accept and continue has the tick hint only while the box is unticked", async () => {
     const screen = await renderGate([required(null)], []).render();
     expect(screen.getPressable(ACCEPT).props.accessibilityHint).toBe(ATTESTATION_NEEDED_HINT);
@@ -140,7 +137,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(screen.getPressable(ACCEPT).props.accessibilityHint).toBeUndefined();
   });
 
-  // Vera #74 item 8: the busy button says what is happening.
   it("Accept shows Saving… while the accept is in flight", async () => {
     const element = createElement(SignUpAttestationGate, {
       onReadStatus: () => Promise.resolve(required(null)),
@@ -163,7 +159,7 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     await screen.press(ACCEPT);
 
     expect(screen.text()).not.toContain("Account content");
-    expect(screen.text()).toContain(FAILURE_MESSAGES.unknown);
+    expect(screen.text()).toContain(failureMessages.unknown);
   });
 
   it("offers Sign out from the prompt", async () => {
@@ -173,6 +169,4 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
 
     expect(gate.calls.signOuts).toBe(1);
   });
-
-  // Delete account from the gate (Stamp 5.1.1(v), Vera round 4): SignUpAttestationGate.delete.test.ts.
 });

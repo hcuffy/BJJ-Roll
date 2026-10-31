@@ -1,5 +1,3 @@
-"""HEN-319: pose results go through HEN-318's footage-folder guard: only inside the mode-700 folder, never anywhere else."""
-
 import os
 import stat
 from pathlib import Path

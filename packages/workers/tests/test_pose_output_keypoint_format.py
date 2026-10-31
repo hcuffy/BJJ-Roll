@@ -1,5 +1,3 @@
-"""HEN-319: keypoints are COCO-17 in COCO order, in geometry.py pixels (origin top-left, x right, y down), per frame index."""
-
 import json
 import stat
 from pathlib import Path
@@ -35,7 +33,6 @@ EXPECTED_COCO17_ORDER = (
 
 
 def _moving_clip() -> list:
-    """The user (a 4x6 block) moves 2 px right per frame, so each frame index has its own pixel position."""
     return [draw_rectangles(frame_index, [(SELF_LABEL, (1 + 2 * frame_index, 2, 5 + 2 * frame_index, 8))]) for frame_index in range(5)]
 
 

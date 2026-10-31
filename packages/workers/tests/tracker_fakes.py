@@ -1,10 +1,3 @@
-"""Fake tracker and synthetic clips for the HEN-318 tracker tests. No model, weights or real video; synthetic pixels only.
-
-A synthetic frame's red channel holds a label per pixel: 0 background, 1 the user ("self"), 2 the partner. The fake
-tracker follows the label under each prompt (a tap's pixel, or the most common label under a prompt mask) through the
-frames it is given, so its masks are exact and every hand-off between chunks is visible in `calls`.
-"""
-
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -40,7 +33,6 @@ def make_clip(frame_count: int, layout: ClipLayout, size: FrameSize = FRAME_SIZE
 
 
 def drifting_self_layout(frame_index: int) -> dict[int, SquarePosition]:
-    """The user moves one pixel right every 100 frames; the partner stays put."""
     return {SELF_LABEL: (1 + frame_index // 100, 1), PARTNER_LABEL: (10, 7)}
 
 
@@ -75,8 +67,6 @@ class TrackCall:
 
 @dataclass
 class LabelFakeTracker:
-    """Implements `bjj_roll_workers.tracker.Tracker` without a model. Holds no state between calls except the call log."""
-
     calls: list[TrackCall] = field(default_factory=list)
 
     def track(self, frames: Sequence[Frame], prompts: Mapping[str, Prompt]) -> list[dict[str, TrackedObject]]:

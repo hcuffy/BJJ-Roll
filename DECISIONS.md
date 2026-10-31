@@ -38,6 +38,9 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Date:** 2026-10-22
 - **Decided by:** Sara (2026-10-22)
 - **Consequences:** HEN-58 builds the schema, RLS and the `bjj_auth_lookup` function as SQL migrations, plus the email-hash adapter wrapper. See `docs/spikes/HEN-47-better-auth.md`.
+- **Notes (moved from code comments, HEN-333):**
+  - `authAdapter.ts`: operations run one at a time on a shared transaction, so one operation's settings never apply to another's query. `authSessionScope.ts`
+    sets all four settings every time, so nothing leaks from an earlier operation in the same transaction.
 
 ## A6: One coarse position set for gi and no-gi; ViCoS classes are eval-only
 
@@ -87,6 +90,9 @@ Revised from planning D17 (email OTP + magic link) on 2026-10-27 for HEN-238.
 - **Decided by:** Sara (method and library); Henry (Apple and Google on top of email OTP)
 - **Consequences:** HEN-239 builds Apple and Google through Better Auth social providers. On the phone, session tokens live only in SecureStore
   (`@better-auth/expo`).
+- **Notes (moved from code comments, HEN-333):**
+  - `accountActions.ts` reads account responses with plain `JSON.parse`: the auth client's default parser turns ISO timestamps into Date objects, which
+    the shared schemas reject.
 
 ## D18: Every stored email and phone number is field-encrypted with an HMAC lookup hash (revised)
 
@@ -142,6 +148,11 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry
 - **Consequences:** App Store rule 4.8 is met by offering Sign in with Apple next to Google sign-in. Every sign-up path (email, Apple, Google) has the
   same 16+ gate (HEN-263). The phone check is built later in HEN-240 and stores the number per D18. HEN-239 builds the sign-in code.
+- **Notes (moved from code comments, HEN-333):**
+  - Apple only on iOS (its native button): Apple's logo artwork is licensed for Apple platforms only (Henry, 27 Oct). From `socialSignIn.ts`.
+  - `appSocialSignIn.ts`: the Apple nonce is 32 random bytes from the OS via expo-crypto, as hex, because Hermes has no Web Crypto.
+  - `socialProviders.ts`: Apple allows client secrets up to six months; a day of slack means a cached secret is never sent close to expiry.
+    Mobile signs in with Google through the browser only, so no client-sent Google id token is accepted (`disableIdTokenSignIn`).
 
 ## D26: Interim key storage is two separate deploy-time secrets
 
@@ -154,6 +165,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Sara
 - **Consequences:** The encryption module (HEN-63) reads the keys through a keyring interface, so a KMS / KEK wrapping can replace the secrets later
   without a schema change. The KMS choice stays OPEN under HEN-191 (M4). ARCHITECTURE §6 email row points here.
+- **Notes (moved from code comments, HEN-333):**
+  - `keyring.ts` holds the keys in a closure, so logging or serialising a keyring never shows key bytes.
 
 ## A7: Local CPU tracker runs in 30 s chunks at 10 fps with a 15 s fallback over 3 GiB peak RSS
 
@@ -165,11 +178,26 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **ONNX export:** We export SAM 2.1 small ourselves from Meta's Apache-2.0 checkpoint with `packages/workers/scripts/export_sam21_small_onnx.py`
   (see `packages/workers/scripts/README.md`). We never download the onnx-community export, because it carries no licence. The real export run
   happens in HEN-67, not in HEN-318.
-- **Drift thresholds (UNTUNED):** `MIN_TRACK_SCORE` 0.5, `MAX_CENTRE_JUMP_IN_BOX_DIAGONALS` 0.5 and `MAX_AREA_CHANGE_RATIO` 2.0 in `drift_detector.py`
+- **Drift thresholds (UNTUNED):** `MIN_TRACK_SCORE_UNTUNED` 0.5, `MAX_CENTRE_JUMP_IN_BOX_DIAGONALS_UNTUNED` 0.5 and `MAX_AREA_CHANGE_RATIO_UNTUNED` 2.0 in `drift_detector.py`
   are first guesses and are not tuned on real footage. HEN-67 tunes them.
 - **Date:** 2026-10-30
 - **Decided by:** Sara (her calls, 30 Oct 07:59 CET) (HEN-318)
 - **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
+- **Notes (moved from code docstrings, HEN-333):**
+  - Frame sampler (HEN-351): for each sample time k / fps it keeps the first source frame at or after that time, renumbers the kept frames from 0
+    and records each one's timestamp in seconds. A clip slower than the sampling rate is refused. Frames stay in memory and are never logged.
+  - Coordinates (`geometry.py`): sampled-frame pixels, origin top-left, x right, y down. A `Box` has `x_min <= x_max` and `y_min <= y_max`, and its
+    max edges are exclusive. `box_iou` is 0.0 when the boxes don't overlap or both are empty. Error messages never carry coordinate values.
+  - SAM 2.1 tracker backend: the weights are not shipped, downloaded or read by tests. numpy and onnxruntime are imported lazily on the first `track`
+    call. The graph input and output names are unverified until the first local smoke run.
+  - Export script: without `--checkpoint` it fetches Meta's recorded Apache-2.0 checkpoint into the mode-700 output folder and refuses any other URL
+    or licence. torch and `sam2` run in a separate Python 3.13 venv inside the mode-700 footage folder and are imported only inside `export`, so
+    CI and Ruff never need them.
+  - Re-prompt flow (HEN-317): a drift frame the tracker reports again ends the run instead of looping. Each video needs a new tracker, so nothing
+    carries over between videos.
+    Anchors (the first tap and every re-tap) are in the HEN-318 pixel convention and are checked against the video's frame size before they reach
+    the tracker (HEN-323).
+  - Job logs (HEN-227) carry only job IDs, timings, error classes, chunk counters and pose run settings.
 
 ## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads
 
@@ -177,8 +205,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
   behind one `Pose` interface (`estimate(frame, box)`) so a Modal backend can replace it. Frames come at the tracker's fps (10, A7); one session
   uses 2 intra-op threads. Both values live in `packages/workers/src/bjj_roll_workers/pose_config.json` and are stored with every run.
 - **Bench:** each run records the tangled-frame miss rate (definitions and named thresholds in `pose_bench.py`).
-- **Tangled-frame thresholds (UNTUNED):** `TANGLED_BOX_IOU_THRESHOLD` 0.3, `MIN_KEYPOINT_SCORE` 0.3, `MIN_POSE_MEAN_SCORE` 0.3 and
-  `MIN_OWN_MASK_KEYPOINT_FRACTION` 0.5 in `pose_bench.py` are first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage.
+- **Tangled-frame thresholds (UNTUNED):** `TANGLED_BOX_IOU_THRESHOLD_UNTUNED` 0.3, `MIN_KEYPOINT_SCORE_UNTUNED` 0.3, `MIN_POSE_MEAN_SCORE_UNTUNED` 0.3 and
+  `MIN_OWN_MASK_KEYPOINT_FRACTION_UNTUNED` 0.5 in `pose_bench.py` are first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage.
 - **Threads:** 2 ONNX Runtime intra-op threads stays. The HEN-67 smoke run measures it.
 - **Licence (UNCONFIRMED):** the RTMPose-m weights licence is not confirmed, and the body7 training data (AI Challenger, PoseTrack18) has
   research-only terms. This is OK for the M3 local test (no users, nothing shipped). It BLOCKS any store build until it is cleared. Shipping is a
@@ -188,6 +216,134 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry and Sara (HEN-319); licence, threads, thresholds and wiring: Sara, 30 Oct 13:57 CET
 - **Consequences:** Only the user's own keypoints are stored (D6). numpy and onnxruntime are not CI dependencies; a real run uses the HEN-318 private venv.
   No store build ships the pose runner until the licence is cleared.
+- **Notes (moved from code docstrings, HEN-333):**
+  - Pose contract (`pose.py`): `estimate(frame, box)` gets the tracker's `Box` for that frame and returns exactly `COCO17_KEYPOINT_NAMES` in that
+    order, each inside the frame in `geometry` pixels, with a score in [0, 1]. `estimate` keeps nothing between calls. Callers never see which
+    backend runs (local RTMPose-m, a later Modal backend, or the test fake).
+  - `pose.py` validation errors are fixed strings that carry no input values (no coordinates, scores or keypoint names), so they are safe to log.
+  - The pose runner estimates every tracked athlete with a box, so the bench can tell when the user's pose landed on the partner. Only the user's
+    own pose is kept; partner and bystander poses never leave the runner (D6). A frame where the tracker had no box for the user has no pose.
+  - Bench definitions: a frame where the user has no box is not tangled (that is a tracker loss, flagged by the drift detector). A tangled frame
+    with no confident keypoints at all counts as a miss. The bench report holds counts only, never keypoints, boxes or anything about the partner.
+  - Pose output: `<footage folder>/poses/<video id>.json` through the HEN-318 footage-folder guard (folder mode 700, file mode 600). It holds only
+    the user's keypoints, the run's fps and thread count, and the bench counts. Nothing is logged.
+  - RTMPose-m backend: `end2end.onnx` from OpenMMLab's RTMPose-m body7 ONNX SDK (URL and licence in the HEN-319 handoff), never shipped, downloaded or
+    read by tests. numpy and onnxruntime are imported lazily on the first `estimate`. The top-down pipeline follows mmpose/rtmlib without OpenCV:
+    the box is padded by `BOX_PADDING`, widened to the model's aspect ratio, resampled (nearest pixel, zero outside the frame) and normalised with
+    ImageNet mean/std. The SimCC x/y outputs are decoded by argmax / `SIMCC_SPLIT_RATIO`. The score is the smaller of the x and y maxima, clipped to
+    [0, 1]. This is unverified until the first local smoke run.
+  - Test fake (`tests/pose_fakes.py`): the fake model takes the most common person label inside the box, so a box mostly covered by the partner
+    yields the partner's pose, i.e. the mislabel a top-down model makes when athletes tangle. Each label has its own score, so a leaked partner
+    keypoint is recognisable.
+
+## D27: Auth limits, codes and try budgets (moved from code comments)
+
+- **Decision:** 6-digit OTP, 10-minute OTP expiry, 5 tries per OTP, 15-minute magic link, 60 s deep-link exchange code. Rate-limit window 15 minutes:
+  3 sends per email, 10 sends per IP, 20 verification tries per IP. Sessions slide over 30 days (refreshed at most once a day), 90 days at most.
+- **Per-email send counter:** Better Auth's limiter keys on IP + path only, so we count sends per email in `public.rate_limits`, keyed by the email
+  HMAC (same as `users.email_hash`), as a fixed window from the first send, with one atomic upsert per request. Clients with no known IP share one
+  bucket (fails closed). `rate_limits` is not in the account deletion cascade map: its counters (hash or id only) age out with their window,
+  so deleting the account and signing up again cannot reset the send limit or the delete-code tries.
+- **Delete code:** reuses the email-OTP machinery (same CSPRNG code, keyed hash at rest, 10-minute expiry, send counter) and goes only to the
+  signed-in user's own address. DELETE /account has its own atomic try budget: per user, `OTP_MAX_ATTEMPTS` tries per code, reset only by a new code;
+  the 15-minute window outlives the 10-minute code. Per IP, the auth verify limit. Over HTTP, check-verification-otp only checks sign-in codes,
+  so it is not a guessing oracle outside that budget. Neither the delete code nor DELETE /account is ever gated on the sign-up attestation.
+- **Date:** 2026-10-31 (decided 2026-10-22 to 2026-10-25)
+- **Decided by:** Sara (HEN-71), Henry (25 Oct, HEN-65), Bill's gate (HEN-65)
+- **Consequences:** Values live in `authLimits.ts`; any change updates this entry.
+- **Notes (moved from code comments, HEN-333):**
+  - Sign-up attestation (HEN-183, `shared/src/schemas/signUpAttestation.ts`): DRAFT wording (HEN-186); the three duties are phrased as duties the user
+    takes on, not as confessions (§309 Nr. 12 BGB). Only the text version id is stored, never the wording. The final wording waits on HEN-186 and
+    the lawyer review (HEN-45); production refuses to start while the current version is a draft (`serverConfig.ts`).
+  - `authRequestGuards.ts`: proxy headers count for the client IP only when explicitly trusted; for x-forwarded-for the right-most entry (added by
+    the trusted proxy) is used. Otherwise the socket address, else the shared bucket.
+
+## D28: No answer reveals whether an account exists
+
+- **Decision:** Sign-in sends do the same work for every email (known, unknown, or refused by the age gate): one queued job, no wait on the
+  provider, and the same session-scope query on an id no row has. Social sign-in refusals are one neutral `account_not_linked` redirect with
+  nothing that differs between attempts; an Apple or Google email counts only with an explicit verified claim. App copy never says whether an email
+  is signed up.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-239, HEN-263)
+- **Consequences:** New auth responses and copy must keep this; tests in `auth.ageGate.sameWork*` and `authCopy.noAccountExistence` pin it.
+
+## D29: The only stored provider token is Apple's refresh token, for revoke on deletion
+
+- **Decision:** Provider tokens are dropped, except Apple's refresh token, stored encrypted (marked so it is never encrypted twice) so account
+  deletion can revoke it (App Store rule 5.1.1(v)). A failed code exchange never blocks sign-in and a failed revoke never blocks deletion; both
+  are logged by user id only.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-239)
+- **Consequences:** The account deletion notice is queued; a failure to queue it is logged and the deletion still succeeds.
+
+## D30: Email queue retries and idempotency
+
+- **Decision:** Every email sent after a request goes through a pg-boss queue (own `pgboss` schema), so no response waits on the provider.
+  3 tries in all, with a doubling, jittered backoff; a try counts as failed only well past the provider's 10 s timeout. 408, 409 and 429 are retried;
+  other 4xx answers, configuration errors and payloads that cannot be opened are not. The job id is also the provider idempotency key (Lettermint
+  sends once per key for 24 h), so the same request twice, or a retry after a timeout, sends one email. The final-failure log line holds only the
+  job id, template, a fixed error class and the try count.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-284)
+- **Consequences:** Tests use an inline queue double; the real queue is covered by `emailQueue.*` and `auth.ageGate.sameWork.queued`.
+- **Notes (moved from code comments, HEN-333):**
+  - `emailQueue.ts` registers a pg-boss `error` listener: pg-boss reports background errors there, and without a listener Node would crash. The
+    message has no email data.
+
+## D31: Mobile startup budget and pending sign-out queue
+
+- **Decision:** All of startup (sign-out retry, session read, link exchange, the gate's first status read) shares one 10 s budget; a timeout counts
+  as an unreachable server. The lock and the biometric offer wait on the user, so the status read after them gets its own 10 s. A sign-out is
+  queued before it runs; each queued session is removed only on its own confirmed server sign-out, or once it is older than any server session can
+  live. A timed-out request leaves keys and queue as they are, so a late answer cannot touch a newer session. Queue writes never overlap. A sign-out
+  stops and awaits any running revoke from a sign-in or launch, so one session is never revoked twice at once. A failed revoke never blocks sign-in.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara's design, Bill's and Stamp's gates (HEN-299, HEN-303, HEN-310, HEN-314, HEN-315)
+- **Consequences:** The `App.*` startup and sign-out tests pin these rules.
+- **Notes (moved from code comments, HEN-333):**
+  - Accepted risk (Sara, HEN-314): if every SecureStore write fails and the server is down, a cold launch comes back signed in. On sign-out the
+    phone's keys are deleted first, so a server that never answers cannot leave the session in use. The server sign-out presents the cookie
+    itself: the Expo plugin's own SecureStore writes on sign-out cannot stop the server sign-out. From `signInActions.ts`.
+  - `startupTimeout.ts`: the 10 s budget exists because React Native's fetch has no timeout (HEN-303, HEN-310).
+  - Privacy (HEN-288, `biometricUnlock.ts`): the phone keeps only two on/off flags in SecureStore. Fingerprints and faces stay inside the OS prompt;
+    the app only learns success or failure, and nothing about biometric unlock is sent to the server.
+
+## D32: Modal jobs stay in the EU; encryption stays server-only
+
+- **Decision:** Node calls Modal user-data functions with `.remote()` only, and results stay under 2 MiB, so data never routes through Modal's
+  us-east storage. Every user-data function sets `region="eu"`, `routing_region="eu-west"` and `enable_memory_snapshot=False`, and uses no Volumes,
+  Dicts, Queues or bucket mounts; the video comes through a presigned URL. `@bjj-roll/shared/encryption` uses `node:crypto` and key handling, so it
+  is never re-exported from the shared index and ESLint blocks it in mobile and web code.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-48 option A, HEN-63, HEN-227)
+- **Consequences:** `checkModalResidency.sh` and the residency tests check this statically.
+- **Notes (moved from code comments, HEN-333):**
+  - `modal_call_input.py`: a rejected call input raises with a fixed message, because the rejected value may hold a URL, email or filename and is
+    never echoed.
+
+## D33: No code comments; rationale lives here
+
+- **Decision:** TS/JS and Python source has no comments or docstrings. Only tool directives stay: `eslint-disable-next-line … -- reason`,
+  `@ts-expect-error reason`, `/// <reference …/>`, a licence header, shebangs, `# noqa: CODE - reason` and `# type: ignore[code]  # reason`.
+  Names carry meaning: unknown values end in `Placeholder` (Henry decides, ARCHITECTURE §2) or `_UNTUNED` (HEN-67 tunes them).
+  `eslint-config-prettier` turns off `curly` and `max-len`; both are turned back on, as they are safe with Prettier at width 150.
+- **Date:** 2026-10-31
+- **Decided by:** Henry, via Sara (HEN-333)
+- **Consequences:** `local/no-prose-comments` (ESLint) and `packages/workers/scripts/check_no_comments.py` fail CI on a new comment.
+- **Notes (moved from code comments, HEN-333):**
+  - Mobile platform quirks with no other entry:
+    - Export sheet (`ExportDataFirstAction.tsx`, Vera, HEN-311): "shared" only when iOS reports the share completed; Android reports
+      sharedAction even on cancel, so after any closed sheet it gets the neutral "created" line.
+    - Face ID (HEN-288): iOS ends the app the first time it asks for Face ID without the `NSFaceIDUsageDescription` text in app.json, so
+      biometric unlock would crash on iPhones.
+    - Export compliance (HEN-273): the app only uses exempt encryption (HTTPS, OS hashing and random bytes), so App Store Connect need not ask
+      on each upload.
+    - Screen-reader announcements (`StatusText.tsx`): a polite live region on Android, an explicit announcement on iOS (which ignores live
+      regions).
+    - Keyboard (`AuthScreenLayout.tsx`): iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
+      adjustResize alone). Dragging the content closes the keyboard because the iOS number pad has no Done key. On iOS the keyboard covers the
+      home indicator, so while it is open the bottom gap is 24 only.
 
 ## D34: A corrupt pending sign-out queue fails closed (Bill D4, HEN-321)
 

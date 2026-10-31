@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { vi } from "vitest";
 
 export const TEST_BACKEND_URL = "http://backend.test";
@@ -11,10 +11,6 @@ export interface RecordedRequest {
   readonly body: Record<string, unknown> | null;
 }
 
-/**
- * In-memory stand-in for expo-secure-store with the methods the Expo client and sign-out use.
- * Keys in `failingKeys` can still be read, but async writes and deletes reject, as a locked or broken keystore would.
- */
 export function createMemorySecureStore() {
   const items = new Map<string, string>();
   const failingKeys = new Set<string>();
@@ -50,11 +46,9 @@ function jsonResponse(body: unknown, headers: Record<string, string> = {}, statu
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
-/** The code the fake POST /account/delete-code "emails"; DELETE /account accepts only this one. */
 export const TEST_DELETE_CODE = "654321";
 
-/** What the fake GET /account/export returns for the signed-in fake user. */
-export const TEST_ACCOUNT_EXPORT = {
+export const testAccountExport = {
   exportedAt: "2026-10-25T08:00:00.000Z",
   user: {
     id: "01964c3a-7f00-7000-8000-000000000001",
@@ -77,18 +71,12 @@ export const TEST_ACCOUNT_EXPORT = {
   ],
 } as const;
 
-/** Where the fake backend's browser sign-in starts (a stand-in for Google's or Apple's consent page). */
 export const TEST_PROVIDER_AUTHORIZATION_URL = "https://provider.example.test/authorize?state=fake-state";
 
-/** Fake backend: sign-in endpoints set a session cookie; get-session answers only when that cookie is sent. */
-/** `nativeSignInRefusal`: how the backend answers a native (id token) social sign-in instead of signing in. */
 export interface FakeBackendOptions {
   readonly nativeSignInRefusal?: { status: number; body: unknown };
-  /** How the backend answers POST /sign-in/email-otp instead of signing in. */
   readonly emailOtpRefusal?: { status: number; body: unknown };
-  /** The attestation version the signed-in fake user accepted (HEN-183); defaults to the current one. */
   readonly signUpAttestationAcceptedVersion?: string | null;
-  /** GET /account/signup-attestation answers with a body the app cannot parse. */
   readonly signUpAttestationBadPayload?: boolean;
 }
 
@@ -96,7 +84,7 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
   const requests: RecordedRequest[] = [];
   let adultConfirmed = false;
   let acceptedAttestation =
-    options.signUpAttestationAcceptedVersion === undefined ? SIGN_UP_ATTESTATION_TEXT_VERSION.id : options.signUpAttestationAcceptedVersion;
+    options.signUpAttestationAcceptedVersion === undefined ? signUpAttestationVersion.id : options.signUpAttestationAcceptedVersion;
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const bodyText = request.method === "GET" ? "" : await request.text();
@@ -109,7 +97,6 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
     });
     if (pathname.endsWith("/sign-in/social")) {
       const body = requests.at(-1)?.body;
-      // Native Apple sign-in posts an identity token and gets the session cookie; the browser flow gets the provider URL.
       if (body?.idToken !== undefined) {
         if (options.nativeSignInRefusal) {
           return jsonResponse(options.nativeSignInRefusal.body, {}, options.nativeSignInRefusal.status);
@@ -128,7 +115,6 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
     if (pathname.endsWith("/get-session")) {
       return jsonResponse(signedIn ? { user: { id: "user-1" }, session: { id: "session-1", expiresAt: "2099-01-01T00:00:00.000Z" } } : null);
     }
-    // Account routes (HEN-65) sit outside /api/auth and need the session cookie.
     if (
       pathname === "/account/export" ||
       pathname === "/account" ||
@@ -141,15 +127,15 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
       }
       if (pathname === "/account/signup-attestation") {
         if (request.method === "POST") {
-          if (requests.at(-1)?.body?.textVersionId !== SIGN_UP_ATTESTATION_TEXT_VERSION.id) {
+          if (requests.at(-1)?.body?.textVersionId !== signUpAttestationVersion.id) {
             return jsonResponse({ error: "Invalid request" }, {}, 400);
           }
-          acceptedAttestation = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+          acceptedAttestation = signUpAttestationVersion.id;
         }
         if (options.signUpAttestationBadPayload === true) {
           return jsonResponse({ required: "maybe" });
         }
-        const current = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+        const current = signUpAttestationVersion.id;
         return jsonResponse({ required: acceptedAttestation !== current, currentTextVersionId: current, acceptedTextVersionId: acceptedAttestation });
       }
       if (pathname === "/account/age-confirmation") {
@@ -168,7 +154,7 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
         const codeMatches = requests.at(-1)?.body?.code === TEST_DELETE_CODE;
         return codeMatches ? jsonResponse({ deleted: true }) : jsonResponse({ error: "Invalid or expired code" }, {}, 403);
       }
-      return jsonResponse(TEST_ACCOUNT_EXPORT);
+      return jsonResponse(testAccountExport);
     }
     return jsonResponse({ status: true });
   };

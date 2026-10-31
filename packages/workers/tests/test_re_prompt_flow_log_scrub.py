@@ -1,5 +1,3 @@
-"""HEN-317: re-prompt flow logs carry no filename, URL, token or frame bytes. Synthetic values only."""
-
 import json
 
 import pytest
@@ -20,8 +18,6 @@ FORBIDDEN_FRAGMENTS = [PRESIGNED_URL, PRESIGNED_QUERY, "https://", "X-Amz-", UPL
 
 
 class PoisonedTracker:
-    """Drift reasons carry URL, filename and token text that must never reach the logs."""
-
     def __init__(self) -> None:
         self.drifts = [
             DriftEvent(frame_index=120, reason=f"mask_jump near {PRESIGNED_URL} in {UPLOADED_FILENAME}"),

@@ -32,7 +32,6 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     const images = screen.findAllByType("Image");
     expect(images).toHaveLength(1);
     expect(String(images[0]?.props.source)).toMatch(/google-sign-in-dark-pill\.png$/u);
-    // The bundle's @1x is 180×40: 56 tall keeps that ratio (252 wide), so the image is never stretched.
     expect(flattenStyle(images[0]?.props.style)).toEqual({ height: 56, width: 252 });
     expect(images[0]?.props).toMatchObject({
       resizeMode: "contain",
@@ -64,7 +63,6 @@ describe("HEN-239 brand sign-in buttons (Google dark theme, Apple's own button)"
     expect(busy.props.accessibilityState).toEqual({ disabled: true, busy: true });
     expect(String(busyScreen.findAllByType("Image")[0]?.props.source)).toMatch(/google-sign-in-dark-pill\.png$/u);
     expect(busyScreen.queryByText("Opening Google…")).not.toBeNull();
-    // Vera delta item 3: the spinner is decoration; only the words are read (and announced politely).
     const [spinner, ...extraSpinners] = busyScreen.findAllByType("ActivityIndicator");
     expect(extraSpinners).toHaveLength(0);
     expect(spinner?.props).toMatchObject({ accessible: false, accessibilityElementsHidden: true, importantForAccessibility: "no" });

@@ -1,5 +1,3 @@
-"""HEN-316 gate: the loader rejects a duplicate class id and a duplicate detail id within one class."""
-
 import json
 from pathlib import Path
 

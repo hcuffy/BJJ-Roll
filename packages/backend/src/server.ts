@@ -3,7 +3,6 @@ import { createAppFromEnvironment } from "./app.js";
 
 const { app, config, emailQueue } = createAppFromEnvironment();
 
-// The email worker runs in this process (HEN-284). Jobs live in Postgres, so a restart picks up what was not sent yet.
 await emailQueue.start();
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {

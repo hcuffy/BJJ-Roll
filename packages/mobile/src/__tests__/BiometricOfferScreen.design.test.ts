@@ -20,7 +20,6 @@ describe("BiometricOfferScreen design (Vera round 2)", () => {
 
     expect(turnOn).toMatchObject({ backgroundColor: colours.primary, minHeight: sizes.buttonHeight });
     expect(notNow).toMatchObject({ backgroundColor: colours.surfaceRaised, minHeight: sizes.buttonHeight, borderRadius: radius.pill });
-    // Full width like Turn on: nothing narrows it.
     expect(notNow.alignSelf).toBeUndefined();
     expect(notNow.width).toBeUndefined();
   });
@@ -30,18 +29,17 @@ describe("BiometricOfferScreen design (Vera round 2)", () => {
 
     expect(text).toContain("Keeps anyone else using this phone out of your BJJ Roll account.");
     expect(text).toMatch(/stays? on your phone\. BJJ Roll never sees (it|them)\./);
-    // HOLD (Henry): nothing promises a lock when the app comes back from the background.
     expect(text).not.toMatch(/opens/);
   });
 
   it("fix 8: Android back on the offer is 'Not now', and stops listening once the offer is gone", async () => {
     const onDone = vi.fn();
     const shown = { offer: true };
-    const Host = () =>
+    const hostScreen = () =>
       shown.offer
         ? createElement(BiometricOfferScreen, { kind: "biometrics", onTurnOn: () => Promise.resolve({ ok: true } as const), onDone })
         : null;
-    const screen = await renderScreen(createElement(Host));
+    const screen = await renderScreen(createElement(hostScreen));
 
     expect(pressHardwareBack()).toBe(true);
     expect(onDone).toHaveBeenCalledTimes(1);

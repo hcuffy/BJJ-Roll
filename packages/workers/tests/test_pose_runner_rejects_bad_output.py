@@ -1,5 +1,3 @@
-"""HEN-319: the pose runner checks every backend's output at the boundary, so a bad backend fails the run instead of being stored."""
-
 from dataclasses import dataclass
 
 import pytest
@@ -18,22 +16,18 @@ VIDEO_ID = "3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f"
 
 @dataclass
 class OutsideFramePose:
-    """A backend that breaks the contract: 17 COCO keypoints, but placed outside the frame."""
-
     def estimate(self, frame: Frame, box: Box) -> tuple[Keypoint, ...]:
         return tuple(Keypoint(name=name, x=float(frame.size.width), y=box.y_min, score=0.9) for name in COCO17_KEYPOINT_NAMES)
 
 
 @dataclass
 class ShortPose:
-    """A backend that breaks the contract: one keypoint missing."""
-
     def estimate(self, frame: Frame, box: Box) -> tuple[Keypoint, ...]:
         return tuple(Keypoint(name=name, x=box.x_min, y=box.y_min, score=0.9) for name in COCO17_KEYPOINT_NAMES[:-1])
 
 
 @pytest.mark.parametrize("pose", [OutsideFramePose(), ShortPose()], ids=["outside_frame", "missing_keypoint"])
-def test_pose_runner_rejects_bad_backend_output(pose: OutsideFramePose | ShortPose) -> None:
+def test_pose_runner_fails_the_run_on_bad_backend_output_instead_of_storing_it(pose: OutsideFramePose | ShortPose) -> None:
     frames = [draw_rectangles(frame_index, [(SELF_LABEL, (2, 3, 8, 11))]) for frame_index in range(3)]
     tracks = {frame.frame_index: frame_tracks(frame, {"self": SELF_LABEL}) for frame in frames}
 

@@ -17,7 +17,7 @@ vi.mock("../auth/appAuthClient", () => ({
 }));
 
 const { App } = await import("../App");
-const { PENDING_SIGN_OUT_KEY, SESSION_STORAGE_KEYS } = await import("../auth/signInActions");
+const { PENDING_SIGN_OUT_KEY, sessionStorageKeys } = await import("../auth/signInActions");
 const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 
@@ -30,9 +30,7 @@ const OLDER_SESSION_MARKER = "better-auth.session_token=older-session.signature"
 describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Paths (by ending) whose requests get no answer until the app aborts them, or until released. */
   let hangingPaths: Set<string>;
-  /** Held requests by path ending; releasing one delivers the real backend answer. */
   let held: Map<string, (() => void)[]>;
   let holdInsteadOfHang: boolean;
   let abortedRequests: number;
@@ -195,7 +193,6 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
       holdInsteadOfHang = true;
 
       const screen = await launchApp();
-      // The session read answers after 6 s; the gate then has only the 4 s left.
       await advance(6000);
       held.get("/get-session")?.forEach((release) => release());
       await settle();
@@ -241,7 +238,6 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
 
       await advance(STARTUP_REQUEST_TIMEOUT_MS);
       expect(abortedRequests).toBe(1);
-      // A late answer changes nothing: the revoke counts as failed and the next launch retries it.
       held.get("/sign-out")?.forEach((release) => release());
       await settle();
       expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toBe(OLDER_SESSION_MARKER);
@@ -257,7 +253,7 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
       hangingPaths.add("/sign-out");
 
       await screen.press("Sign out");
-      expect(SESSION_STORAGE_KEYS.some((key) => secureStore.items.has(key))).toBe(false);
+      expect(sessionStorageKeys.some((key) => secureStore.items.has(key))).toBe(false);
       await advance(STARTUP_REQUEST_TIMEOUT_MS - 1);
       expect(screen.text()).toContain("Loading");
       await advance(1);

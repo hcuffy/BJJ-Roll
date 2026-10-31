@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { failureMessages, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { signInWithProvider, socialFailureMessage, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "../auth/signUpAttestation";
 import { AgeConfirmationFields } from "./AgeConfirmationFields";
@@ -15,7 +15,7 @@ import { SignInHeader } from "./SignInHeader";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
-import { EMAIL_INPUT_PROPS, TextField } from "./TextField";
+import { emailInputProps, TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
@@ -25,23 +25,16 @@ export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 export interface EmailEntryScreenProps extends StartupRetryProps {
   readonly client: MobileAuthClient;
   readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
-  /** Error from a failed sign-in link, shown as a card above the title until the next action. */
   readonly linkError?: string | null;
-  /** Why the link failed; see LinkErrorCard. */
   readonly linkErrorReason?: LinkErrorCardProps["reason"];
   readonly onClearLinkError?: () => void;
-  /** One-time neutral notice, e.g. after the account was deleted; cleared by the next input or action. */
   readonly accountNotice?: string | null;
   readonly onClearAccountNotice?: () => void;
-  /** The backend could not be reached (startup or sign-in link); shows a muted note under the email field. */
   readonly serverUnreachable?: boolean;
   readonly onClearServerUnreachable?: () => void;
-  /** Changes when an opened sign-in link failed: a new attempt, so this screen's own note and red error go (HEN-304). */
   readonly linkAttempt?: number;
-  /** Apple and Google buttons to show (HEN-239); none without `socialSignIn`. */
   readonly socialProviders?: readonly SocialProvider[];
   readonly socialSignIn?: SocialSignInDependencies;
-  /** A social sign-in finished with a session. */
   readonly onSignedIn?: () => void;
 }
 
@@ -66,18 +59,15 @@ export function EmailEntryScreen({
   const [email, setEmail] = useState("");
   const [age16Confirmed, setAge16Confirmed] = useState(false);
   const [age18Confirmed, setAge18Confirmed] = useState(false);
-  // HEN-183: the sign-up duties box; every send carries the current text version id once it is ticked.
   const [attestationAccepted, setAttestationAccepted] = useState(false);
   const [attestationError, setAttestationError] = useState<string | null>(null);
   const [sending, setSending] = useState<Sending>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
-  // False only when this submit also brought up a new email error, which is then the one announced (Vera items 8 and delta 6).
   const [announceAgeError, setAnnounceAgeError] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
-  // This screen's own send failed on the network; App's serverUnreachable covers startup and links.
   const [offline, setOffline] = useState(false);
   const [socialProgress, setSocialProgress] = useState<"opening" | "signingIn">("opening");
   const [socialError, setSocialError] = useState<string | null>(null);
@@ -86,7 +76,6 @@ export function EmailEntryScreen({
   const sendHint = missingHint(isEmailAddress(email), age16Confirmed, attestationAccepted);
   const answers = { age16Confirmed, age18Confirmed, signUpAttestationAccepted: attestationAccepted };
 
-  // A failed sign-in link is a new attempt: this screen's own offline note and red errors from the last one go (HEN-304, HEN-311).
   useEffect(() => setOffline(false), [linkAttempt]);
   useEffect(() => setFormError(null), [linkAttempt]);
   useEffect(() => setSocialError(null), [linkAttempt]);
@@ -99,7 +88,6 @@ export function EmailEntryScreen({
     setNotice(null);
   };
 
-  /** Age, email and offline failures go to their own slots; anything else goes to `showOther` (the form error by default). */
   const showFailure = (result: Extract<ActionResult, { ok: false }>, showOther: (message: string | null) => void = setFormError) => {
     if (result.reason === "ageRequired") {
       setAgeError(result.message);
@@ -114,11 +102,9 @@ export function EmailEntryScreen({
     }
   };
 
-  /** Checks the form like a user expects: every missing piece gets its own message, and nothing is sent. */
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
-    setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
-    // An email error already showing from blur is not read again, so the age error must be heard instead.
+    setEmailError(emailValid ? null : failureMessages.invalidEmail);
     setAnnounceAgeError(emailValid || emailError !== null);
     setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
     setAttestationError(attestationAccepted ? null : SIGN_UP_ATTESTATION_REFUSAL_MESSAGE);
@@ -148,10 +134,8 @@ export function EmailEntryScreen({
     }
   };
 
-  /** Social sign-in needs the 16+ and duties boxes, not the email (the provider gives it), and sends the answers like the email buttons. */
   const signInWithSocial = async (provider: SocialProvider) => {
     startAction();
-    // A new attempt: an offline note from an earlier one must not sit next to this one's result (HEN-287, Vera interim item 4).
     onClearServerUnreachable?.();
     setOffline(false);
     setEmailError(null);
@@ -208,7 +192,7 @@ export function EmailEntryScreen({
         label="Email"
         focusKey={startup.focusEmailKey}
         error={emailError}
-        {...EMAIL_INPUT_PROPS}
+        {...emailInputProps}
         value={email}
         onChangeText={(text) => {
           setEmail(text);
@@ -218,7 +202,7 @@ export function EmailEntryScreen({
         }}
         onBlur={() => {
           if (email.trim() !== "" && !isEmailAddress(email)) {
-            setEmailError(FAILURE_MESSAGES.invalidEmail);
+            setEmailError(failureMessages.invalidEmail);
           }
         }}
         onSubmitEditing={() => void send("code")}
@@ -231,7 +215,6 @@ export function EmailEntryScreen({
         announceAgeError={announceAgeError}
         onPress16={() => {
           startAction();
-          // Unticking 16+ also unticks 18+; ticking 18+ never ticks 16+ for the user (Vera item 2).
           if (age16Confirmed) {
             setAge18Confirmed(false);
           }
@@ -246,7 +229,6 @@ export function EmailEntryScreen({
       <SignUpAttestationFields
         accepted={attestationAccepted}
         error={attestationError}
-        // Announced only when it is the one thing missing; the email or 16+ error is read first otherwise.
         announceError={isEmailAddress(email) && age16Confirmed}
         onPress={() => {
           startAction();

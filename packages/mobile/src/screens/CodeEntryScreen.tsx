@@ -13,22 +13,17 @@ import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 const CODE_LENGTH = 6;
-/** The code screen's link-error copy: the code is still a way in here (CTO decision, HEN-304). */
 export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter the code from your email, or send a new one.";
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
   readonly email: string;
-  /** The optional 18+ tick from the email screen; Resend sends it again so the latest send keeps it (HEN-263). */
   readonly age18Confirmed?: boolean;
-  /** A sign-in link opened on this screen failed (HEN-304): the form's card, in the red error slot, until the next attempt. */
   readonly linkError?: string | null;
   readonly linkErrorReason?: LinkErrorCardProps["reason"];
   readonly onClearLinkError?: () => void;
-  /** A sign-in link opened on this screen failed on the network; shows the calm note. */
   readonly serverUnreachable?: boolean;
   readonly onClearServerUnreachable?: () => void;
-  /** Changes when an opened sign-in link failed: a new attempt, so this screen's own note and red errors go. */
   readonly linkAttempt?: number;
   readonly onSignedIn: () => void;
   readonly onBack: () => void;
@@ -55,8 +50,6 @@ export function CodeEntryScreen({
   const [notice, setNotice] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const resendCooldown = useCountdown(RESEND_COOLDOWN_SECONDS);
-  // Refs, not state: the 6th digit and the Done key can arrive in the same tick, before a re-render,
-  // so both handlers must see the latest digits and the in-flight request immediately.
   const latestCode = useRef("");
   const inFlight = useRef(false);
 
@@ -66,7 +59,6 @@ export function CodeEntryScreen({
     setOffline(false);
   }, [linkAttempt]);
 
-  /** Every attempt starts clean: the last attempt's note and errors, and a failed link's card or note, go. */
   const startAttempt = () => {
     onClearLinkError?.();
     onClearServerUnreachable?.();
@@ -91,7 +83,6 @@ export function CodeEntryScreen({
     inFlight.current = true;
     setIsVerifying(true);
     startAttempt();
-    // The user ticked the 16+ box on the email screen; it is required to get here.
     const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true });
     inFlight.current = false;
     setIsVerifying(false);
@@ -144,7 +135,6 @@ export function CodeEntryScreen({
           latestCode.current = text;
           setCode(text);
           setCodeError(null);
-          // The 6th digit submits on its own.
           if (text.trim().length === CODE_LENGTH) {
             void verify(text);
           }

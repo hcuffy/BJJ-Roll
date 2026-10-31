@@ -6,11 +6,10 @@ import { SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS, 
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
 const REVOKE_UNPROVEN_ACCESS_PREFIX = "revoke-unproven-account-access:";
-const HASHED_SESSION_TOKEN_PATTERN = /^[0-9a-f]{64}$/u;
+const hashedSessionTokenPattern = /^[0-9a-f]{64}$/u;
 
 export type AuthTransaction = Transaction<Record<string, unknown>>;
 
-/** Transaction-local settings read by the RLS policies in migrations 001 and 002. */
 export interface AuthScopeSettings {
   userId: string | null;
   verificationIdentifier: string | null;
@@ -22,12 +21,10 @@ export function emptyScopeSettings(): AuthScopeSettings {
   return { userId: null, verificationIdentifier: null, verificationId: null, sessionTokenHash: null };
 }
 
-/** Every auth query runs as bjj_app (NOBYPASSRLS), whatever role the pool logs in as. */
 export async function enterAppRole(transaction: AuthTransaction): Promise<void> {
   await sql`SET LOCAL ROLE bjj_app`.execute(transaction);
 }
 
-/** Sets all four settings every time so nothing leaks from an earlier operation in the same transaction. */
 export async function applyScopeSettings(transaction: AuthTransaction, settings: AuthScopeSettings): Promise<void> {
   await sql`SELECT
     set_config('app.user_id', ${settings.userId ?? ""}, true),
@@ -42,27 +39,20 @@ export async function lookupUserIdByEmailHmacInTransaction(transaction: AuthTran
 }
 
 export function isHashedSessionToken(value: string): boolean {
-  return HASHED_SESSION_TOKEN_PATTERN.test(value);
+  return hashedSessionTokenPattern.test(value);
 }
 
-/** Session tokens are stored only as a keyed HMAC; a value that already is one passes through. */
 export function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): string {
   return isHashedSessionToken(value) ? value : codec.hashSessionToken(value);
 }
 
-/** The nil UUID: no user row has it, so a lookup for an unknown email matches nothing. */
 const NO_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 export interface ResolvedWhereScope {
   readonly clauses: Where[] | undefined;
-  /** Raw session token from the where clause, restored on rows returned to Better Auth. */
   readonly rawSessionToken: string | null;
 }
 
-/**
- * Encodes where clauses (email -> HMAC, identifiers -> hashed form, session token -> HMAC) and sets the
- * transaction-local settings the RLS policies need. Runs inside the bjj_app transaction: no pool-role reads.
- */
 export async function resolveWhereScope(
   transaction: AuthTransaction,
   { model, where }: { model: string; where: Where[] | undefined },
@@ -77,7 +67,6 @@ export async function resolveWhereScope(
     const { field, value } = clause;
     if (modelKey === "user" && field === "email" && typeof value === "string") {
       const userId = await lookupUserIdByEmailHmacInTransaction(transaction, codec.computeEmailHmac(value));
-      // HEN-263: an unknown email still runs the same query, on an id no row has, so it does the same work as a known one.
       settings.userId = userId;
       transformed.push({ ...clause, field: "id", value: userId ?? NO_USER_ID });
       continue;

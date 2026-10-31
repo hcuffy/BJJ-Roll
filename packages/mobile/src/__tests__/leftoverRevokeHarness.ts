@@ -14,8 +14,8 @@ export const LOCKED_TITLE = "BJJ Roll is locked";
 export const GOOD_LINK = "bjjroll://auth?code=one-time-exchange-code";
 const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
-const LOGGED_SECRETS = ["session-token-", "signature", "session_token", "signed-session-value", "@example.test"];
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
+const loggedSecrets = ["session-token-", "signature", "session_token", "signed-session-value", "@example.test"];
 
 export interface AppClientSlot {
   current: MobileAuthClient | null;
@@ -55,7 +55,7 @@ export function createSessionServer() {
     if ([...state.downPaths].some((path) => pathname.endsWith(path))) {
       throw new TypeError("fetch failed");
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/magic-link/exchange")) {
       counts.exchanges += 1;
       return newSession();
@@ -130,7 +130,7 @@ export function expectNoSecretsLogged(spies: readonly MockInstance[]): void {
     .flatMap((spy): unknown[] => spy.mock.calls.flat())
     .map((value) => inspect(value, { depth: 8 }))
     .join("\n");
-  for (const secret of LOGGED_SECRETS) {
+  for (const secret of loggedSecrets) {
     expect(logged).not.toContain(secret);
   }
 }

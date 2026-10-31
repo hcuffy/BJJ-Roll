@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, signUpAttestationStatusSchema } from "@bjj-roll/shared";
+import { signUpAttestationVersion, signUpAttestationStatusSchema } from "@bjj-roll/shared";
 import type { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 import type { AuthCryptoCodec } from "../auth/authSecrets.js";
@@ -9,8 +9,6 @@ import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const refreshFailed = "signup_attestation_refresh_failed";
 
-// HEN-183 (Bill's gate, #74 round 6; from his probe): a failed attestation refresh never fails the sign-in, and its log line carries
-// the user id only, never the email.
 describe("HEN-183 a failed attestation refresh at sign-in (after hook)", () => {
   it.each(["/sign-in/email-otp", "/magic-link/verify"])("on %s resolves and logs only the user id", async (path) => {
     const events: { event: AuthEventName; userId: string }[] = [];
@@ -39,7 +37,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 a failed attesta
     const user = await signUpWithOtp("refresh.fails@example.com", "198.51.100.251", { age16Confirmed: true });
     const { pool, app } = current();
     await pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [user.userId]);
-    // The refresh's insert fails as if the database refused it; nothing else in this suite writes attestation records.
     await pool.query(
       "CREATE FUNCTION public.hen183_refuse_attestation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'refresh refused'; END $$",
     );
@@ -48,7 +45,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 a failed attesta
         "WHEN (NEW.consent_type = 'attestation_signup') EXECUTE FUNCTION public.hen183_refuse_attestation()",
     );
     try {
-      const ticked = { age16Confirmed: true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+      const ticked = { age16Confirmed: true, signUpAttestationTextVersionId: signUpAttestationVersion.id };
       const send = await postAuthJson(app, otpSendPath, { body: { email: user.email, type: "sign-in", ...ticked }, ipAddress: user.ipAddress });
       expect(send.status).toBe(200);
       const signIn = await postAuthJson(app, otpSignInPath, {
@@ -57,7 +54,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 a failed attesta
       });
       expect(signIn.status).toBe(200);
 
-      // The new session works, and the account is still prompted because no record was written.
       const cookie = extractSessionCookie(signIn);
       const status = await flow.accountRequest("GET", "/account/signup-attestation", { cookie, ipAddress: user.ipAddress });
       expect(status.status).toBe(200);

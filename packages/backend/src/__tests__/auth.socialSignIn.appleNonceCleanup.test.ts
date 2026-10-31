@@ -17,7 +17,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 used Apple nonce
     return environment;
   };
 
-  /** Seeds a verification row through the admin pool, `secondsFromNow` before or after now. */
   const seedRow = async (identifier: string, secondsFromNow: number): Promise<void> => {
     await current().pool.query(
       `INSERT INTO public.verifications (id, identifier, value, expires_at, created_at, updated_at)

@@ -4,7 +4,7 @@ import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { AGE_GATE_REFUSAL_MESSAGE } from "../auth/ageConfirmation";
-import { FAILURE_MESSAGES, type FailureReason } from "../auth/signInActions";
+import { failureMessages, type FailureReason } from "../auth/signInActions";
 import { EmailEntryScreen, TICK_AGE_BOX_MESSAGE } from "../screens/EmailEntryScreen";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
@@ -102,11 +102,11 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     await screen.press("Continue with email");
 
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
-    expect(screen.queryByText(FAILURE_MESSAGES.invalidEmail)?.props).toMatchObject({ accessibilityLiveRegion: "polite", accessibilityRole: "alert" });
+    expect(screen.queryByText(failureMessages.invalidEmail)?.props).toMatchObject({ accessibilityLiveRegion: "polite", accessibilityRole: "alert" });
     const ageError = screen.queryByText(TICK_AGE_BOX_MESSAGE);
     expect(ageError?.props.accessibilityLiveRegion).toBe("polite");
     expect(ageError?.props.accessibilityRole).toBeUndefined();
-    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail]]);
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[failureMessages.invalidEmail]]);
   });
 
   it("announces the 16+ error when it is the only thing missing", async () => {
@@ -124,17 +124,16 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     const screen = await render();
     await screen.changeText("Email", "not-an-email");
     await screen.fire("Email", "onBlur");
-    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail]]);
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[failureMessages.invalidEmail]]);
 
     await screen.press("Continue with email");
     expect(screen.queryByText(TICK_AGE_BOX_MESSAGE)?.props.accessibilityRole).toBe("alert");
-    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[FAILURE_MESSAGES.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
+    expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[failureMessages.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
   });
 
   it("delta 2 / round 4 item 1: a link refused for age stacks the next step under the refusal in one card body, in body text", async () => {
     const refused = await render(AGE_GATE_REFUSAL_MESSAGE, "ageRequired");
     const card = refused.findAllByType("View").find((view) => flattenStyle(view.props.style).borderColor === colours.danger);
-    // The card is a row (icon slot + body); both lines sit in one column body, like the "Check your email" card.
     const cardChildren = card?.children.filter((child) => typeof child !== "string") ?? [];
     expect(cardChildren).toHaveLength(1);
     const [body] = cardChildren as { props: Record<string, unknown> }[];
@@ -142,7 +141,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(textOf(body as never)).toBe(`${AGE_GATE_REFUSAL_MESSAGE}${LINK_NEXT_STEP}`);
     expect(flattenStyle(refused.queryByText(LINK_NEXT_STEP)?.props.style).color).toBe(colours.textPrimary);
 
-    const invalid = await render(FAILURE_MESSAGES.invalidLink, "invalidLink");
+    const invalid = await render(failureMessages.invalidLink, "invalidLink");
     expect(invalid.text()).toContain("This sign-in link has expired or was already used. Send a new one.");
     expect(invalid.queryByText(LINK_NEXT_STEP)).toBeNull();
   });

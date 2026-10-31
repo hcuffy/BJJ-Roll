@@ -1,5 +1,3 @@
-// A sign-out tapped right after a cold launch (HEN-310 with HEN-315): the launch's background revoke of a queued old
-// session must not run beside the sign-out's revoke of the same session, as HEN-315 promises for the sign-in path.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -26,16 +24,14 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const FIRST = "session-token-1";
 const SECOND = "session-token-2";
 
-/** A server that keeps sessions; `/sign-out` ends the presented session, unless that session is set to fail or hang. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
   const state = { failFor: new Set<string>(), hangFor: new Set<string>() };
-  /** Sign-out requests per session still waiting for an answer, and the most there ever were at once. */
   const inFlight = new Map<string, number>();
   const peakInFlight = new Map<string, number>();
   let signIns = 0;
@@ -45,7 +41,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -54,7 +50,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         const waiting = (inFlight.get(session) ?? 0) + 1;
         inFlight.set(session, waiting);
         peakInFlight.set(session, Math.max(waiting, peakInFlight.get(session) ?? 0));
@@ -129,7 +124,6 @@ describe("Sign-out right after a cold launch (HEN-310 with HEN-315)", () => {
   });
 
   it("a sign-out right after a cold launch never revokes the launch's queued old session twice at once", async () => {
-    // Session 1 signed out unconfirmed: it is queued. Session 2 signs in; its revoke of session 1 fails too, so 1 stays queued.
     server.state.failFor.add(FIRST);
     const first = await launchApp();
     await signIn(first);
@@ -139,14 +133,12 @@ describe("Sign-out right after a cold launch (HEN-310 with HEN-315)", () => {
     await settle();
     expect(marker()).toContain(FIRST);
 
-    // Cold launch, signed in as session 2: the launch revokes session 1 in the background and that request hangs.
     server.state.failFor.clear();
     server.state.hangFor.add(FIRST);
     const screen = await launchApp();
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     expect(server.inFlight.get(FIRST)).toBe(1);
 
-    // The user signs out at once: the launch's revoke is stopped or awaited first, so session 1 is never revoked twice at once.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await screen.press("Sign out");
     await settle();

@@ -1,5 +1,3 @@
-"""HEN-318: the local SAM 2.1 small ONNX backend imports its model packages lazily, so CI (fake model only) never needs them."""
-
 import importlib
 import sys
 from pathlib import Path

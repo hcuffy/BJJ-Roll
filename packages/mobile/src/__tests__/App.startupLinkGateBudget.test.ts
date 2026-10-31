@@ -1,4 +1,3 @@
-// HEN-310: at startup a sign-in link keeps the startup budget for the gate's status read (handleSignedIn(atStartup)).
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -27,9 +26,7 @@ const SIGN_IN_LINK = "bjjroll://auth?code=one-time-exchange-code";
 describe("A cold sign-in link and the gate read share the startup 10 s (HEN-310 gate, merge 8a78fca)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Paths (by ending) whose requests get no answer until the app aborts them, or until released. */
   let hangingPaths: Set<string>;
-  /** Held requests by path ending; releasing one delivers the real backend answer. */
   let held: Map<string, (() => void)[]>;
   let holdInsteadOfHang: boolean;
   let unreachablePaths: Set<string>;

@@ -44,18 +44,15 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 account delete ke
   it("the counter row survives DELETE /account, and re-signup with the same email still hits the 3-per-window limit", async () => {
     expect(MAX_SENDS_PER_EMAIL_PER_WINDOW).toBe(3);
 
-    // Two of the three sends in the window: one used to sign in, one for the delete code (same counter, Henry 25 Oct).
     const original = await signIn(email, ipAddress);
     const deleteResponse = await deleteAccount(original);
     expect(deleteResponse.status).toBe(200);
     expect((await current().pool.query("SELECT id FROM public.users WHERE id = $1", [original.userId])).rows).toEqual([]);
     expect(await emailRateLimitRows()).toEqual([{ count: 2 }]);
 
-    // Re-signup spends the third and last send of the window; the next send is refused.
     const returning = await signIn(email, ipAddress);
     expect(returning.userId).not.toBe(original.userId);
     expect((await sendOtp()).status).toBe(429);
-    // The refused send is counted too (existing limiter behaviour), so the window keeps refusing until it expires.
     expect(await emailRateLimitRows()).toEqual([{ count: MAX_SENDS_PER_EMAIL_PER_WINDOW + 1 }]);
   });
 });

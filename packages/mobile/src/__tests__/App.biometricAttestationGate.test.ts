@@ -26,12 +26,9 @@ const LOCKED_TITLE = "BJJ Roll is locked";
 
 describe("App: biometric unlock with the sign-up attestation gate (HEN-288 x HEN-183)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Text of every screen rendered since the last launch. */
   let renderedScreens: string[] = [];
 
-  /** A fresh app process on the same phone: new auth client, same SecureStore. */
   const launchApp = async () => {
     appClient.store = secureStore;
     appClient.current = createMobileAuthClient({
@@ -43,7 +40,6 @@ describe("App: biometric unlock with the sign-up attestation gate (HEN-288 x HEN
     return await renderScreen(createElement(App), (text) => renderedScreens.push(text));
   };
 
-  /** Signs in, turns biometric unlock on at the offer, and lands on the gate (this account has no attestation record). */
   const signInTurnOnToGate = async () => {
     const screen = await launchApp();
     await screen.pressRole("checkbox");

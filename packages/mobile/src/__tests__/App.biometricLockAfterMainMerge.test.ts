@@ -1,5 +1,3 @@
-// #76 (HEN-288) on top of #90 (HEN-315) and #94 (HEN-310): the startup Try again cannot skip the lock, a sign-out from the
-// lock stops and waits for the link's old-session revoke, and the startup budget does not run on while the lock waits.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,15 +29,13 @@ const LOCKED_TITLE = "BJJ Roll is locked";
 const TRY_AGAIN = "Try again";
 const SIGN_IN_LINK = "bjjroll://auth?code=one-time-exchange-code";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const FIRST = "session-token-1";
 
-/** A server that keeps sessions; `/sign-out` ends the presented session unless it is set to fail or hang; some paths can be down. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
   const state = { failFor: new Set<string>(), hangFor: new Set<string>(), downPaths: new Set<string>() };
-  /** Sign-out requests per session still waiting for an answer, and the most there ever were at once. */
   const inFlight = new Map<string, number>();
   const peakInFlight = new Map<string, number>();
   let signIns = 0;
@@ -58,13 +54,12 @@ function createSessionServer() {
     if ([...state.downPaths].some((path) => pathname.endsWith(path))) {
       throw new TypeError("fetch failed");
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp") || pathname.endsWith("/magic-link/exchange")) {
       return newSession();
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         const waiting = (inFlight.get(session) ?? 0) + 1;
         inFlight.set(session, waiting);
         peakInFlight.set(session, Math.max(waiting, peakInFlight.get(session) ?? 0));
@@ -113,7 +108,6 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
   };
-  /** Signs in by code and turns biometric unlock on at the offer (shown once per install). */
   const signInWithLockOn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await signIn(screen);
     await screen.press("Turn on");
@@ -145,7 +139,6 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
 
-    // The lock opens the OS prompt at once; the user cancels it so the lock stays up.
     localAuthenticationFake.answers.push("user_cancel");
     server.state.downPaths.clear();
     await screen.press(TRY_AGAIN);
@@ -156,20 +149,17 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
   });
 
   it("a sign-out from the lock a link brought up stops and waits for the link's old-session revoke, never revoking twice at once", async () => {
-    // Session 1 signed out unconfirmed: it stays queued, and session 2's revoke of it fails too.
     server.state.failFor.add(FIRST);
     const screen = await launchApp();
     await signInWithLockOn(screen);
     await screen.press("Sign out");
     await settle();
-    // Sign-out turned the lock off and the offer does not come back, so it is turned on again as the setting does.
     await signIn(screen);
     await settle();
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     await secureStore.setItemAsync(BIOMETRIC_UNLOCK_KEY, "on");
     expect(marker()).toContain(FIRST);
 
-    // A sign-in link opens in the running app: it lands on the lock, and its revoke of session 1 hangs.
     server.state.failFor.clear();
     server.state.hangFor.add(FIRST);
     localAuthenticationFake.answers.push("user_cancel");

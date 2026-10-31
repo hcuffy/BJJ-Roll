@@ -25,7 +25,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
 
   const { signIn, sendOtp, accountRequest, requestDeleteCode, latestCodeFor } = createAccountTestFlow(current);
 
-  /** Everything a refused delete must leave alone: the user row, its handle, its sessions, and a working session. */
   const accountState = async (user: SignedInUser) => {
     const { pool } = current();
     const users = await pool.query("SELECT id, email_hash, handle FROM public.users WHERE id = $1", [user.userId]);
@@ -56,7 +55,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
     const other = await signIn("other.member@example.com", ipAddress);
     const otherCode = await requestDeleteCode(other);
     const code = await requestDeleteCode(user);
-    // A live sign-in code nobody has used yet (Bill: the spent one from signIn() proved nothing about purpose).
     await sendOtp(user.email, ipAddress);
     const unusedSignInCode = latestCodeFor(user.email, "sign_in");
     const before = await accountState(user);
@@ -73,10 +71,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
       expect(await response.json()).toEqual({ error: "Invalid or expired code" });
     }
     expect(await accountState(user)).toEqual(before);
-    // The refused sign-in code was live: it still signs in, so only the purpose check stopped it.
     const signInWithIt = await postAuthJson(current().app, "/sign-in/email-otp", { body: { email: user.email, otp: unusedSignInCode }, ipAddress });
     expect(signInWithIt.status).toBe(200);
-    // Three wrong tries are within the attempt budget, so the real code still works.
     expect((await deleteWith(user, { code })).status).toBe(200);
     expect(await accountState(other)).toMatchObject({ users: [{ id: other.userId }], exportStatus: 200 });
   });
@@ -115,7 +111,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
   });
 
   it("parallel wrong guesses cannot outrun the limit: then even the right code is refused and nothing is touched", async () => {
-    // The per-user try window outlives the code, so one code never gets more than OTP_MAX_ATTEMPTS tries.
     expect(RATE_LIMIT_WINDOW_SECONDS).toBeGreaterThanOrEqual(OTP_EXPIRY_SECONDS);
     const user = await signIn("parallel.guess@example.com", "198.51.100.126");
     const code = await requestDeleteCode(user);
@@ -124,12 +119,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
     const statuses = await Promise.all(Array.from({ length: guesses }, async () => (await deleteWith(user, { code: wrongCodeFor(code) })).status));
     expect(statuses.filter((status) => status === 403)).toHaveLength(OTP_MAX_ATTEMPTS);
     expect(statuses.filter((status) => status === 429)).toHaveLength(guesses - OTP_MAX_ATTEMPTS);
-    // From a fresh IP, so only the per-user budget can refuse it.
     const rightCode = await accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code }, ipAddress: "198.51.100.127" });
     expect(rightCode.status).toBe(429);
     expect(await accountState(user)).toEqual(before);
 
-    // Only a new code (itself limited to 3 per window) opens a new budget of tries.
     const newCode = await requestDeleteCode(user);
     expect((await accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code: newCode }, ipAddress: "198.51.100.127" })).status).toBe(
       200,

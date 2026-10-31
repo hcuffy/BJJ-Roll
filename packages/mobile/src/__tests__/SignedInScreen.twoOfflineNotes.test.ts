@@ -1,7 +1,6 @@
-// HEN-311 after #93: two grey offline notes, each in its own slot, and one clearMessages() clears both.
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness } from "./signedInScreenHarness";
@@ -12,11 +11,10 @@ const EXPORT = "Export my data";
 const CONFIRM = "Confirm I am 18 or older";
 const DIALOG_YES = "Yes, I am 18 or older";
 const TOGGLE = "Biometric unlock";
-const offline = { ok: false, reason: "network", message: FAILURE_MESSAGES.network } as const;
+const offline = { ok: false, reason: "network", message: failureMessages.network } as const;
 
 const noteCount = (screen: Screen) => screen.text().split(SERVER_UNREACHABLE_NOTE).length - 1;
 
-/** The note shows once, after `before` and ahead of `after` in reading order. */
 function expectOneNoteBetween(screen: Screen, before: string, after: string) {
   const text = screen.text();
   expect(noteCount(screen)).toBe(1);

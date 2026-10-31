@@ -1,17 +1,11 @@
 import type * as ReactModule from "react";
 import { vi } from "vitest";
 
-// Stand-ins for the native modules the app loads, so it runs under Vitest in Node.
-// Host components are plain strings that screenHarness.ts renders and queries.
 vi.mock("react-native", async () => ({
-  // addListener is backed by keyboardHarness so a test can open and close the keyboard.
   Keyboard: { addListener: (await import("./keyboardHarness")).harnessKeyboardAddListener },
-  // Backed by backHandlerHarness so a test can press Android's hardware back.
   BackHandler: (await import("./backHandlerHarness")).harnessBackHandler,
-  // Mutable so a test can switch to "ios" and back.
   Platform: { OS: "android" },
   AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },
-  // Backed by appStateHarness so a test can send the app to the background and back.
   AppState: { addEventListener: (await import("./appStateHarness")).harnessAppStateAddEventListener },
   Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })), sharedAction: "sharedAction", dismissedAction: "dismissedAction" },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
@@ -26,7 +20,6 @@ vi.mock("react-native", async () => ({
   StatusBar: "StatusBar",
   Switch: "Switch",
 }));
-// The safe-area library's view gets its own host name so tests can tell it apart from RN's deprecated built-in.
 vi.mock("react-native-safe-area-context", async () => {
   const { safeAreaInsetsState } = await import("./screenHarness");
   return { SafeAreaProvider: "SafeAreaProvider", SafeAreaView: "SafeAreaContextView", useSafeAreaInsets: () => safeAreaInsetsState };
@@ -48,7 +41,6 @@ vi.mock("expo-apple-authentication", () => ({
   AppleAuthenticationButtonStyle: { WHITE: 0, WHITE_OUTLINE: 1, BLACK: 2 },
   signInAsync: vi.fn(() => Promise.reject(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" }))),
 }));
-// expo-crypto backed by Node's crypto, so nonces are really random and hashes really SHA-256.
 vi.mock("expo-crypto", async () => {
   const { createHash, randomBytes } = await import("node:crypto");
   return {
@@ -58,5 +50,4 @@ vi.mock("expo-crypto", async () => {
       Promise.resolve(algorithm === "SHA-256" ? createHash("sha256").update(data).digest("hex") : Promise.reject(new Error("unsupported"))),
   };
 });
-// The OS biometric prompt; tests set the phone up through localAuthenticationFake.
 vi.mock("expo-local-authentication", async () => (await import("./localAuthenticationFake")).localAuthenticationModule);

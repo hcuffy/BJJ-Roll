@@ -21,20 +21,16 @@ export interface DeleteAccountCodeStepProps {
 
 type Task = "delete" | "resend";
 
-/** Second step of delete account (HEN-65): the emailed code, then the one danger pill. The code never submits on its own. */
 export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, onAccountDeleted, onCancel }: DeleteAccountCodeStepProps) {
   const [code, setCode] = useState("");
   const [runningTask, setRunningTask] = useState<Task | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  // The grey note in the form error's slot when delete or resend can't reach the server (HEN-305); typing keeps it.
   const [offline, setOffline] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const heading = useRef<ComponentRef<typeof Text>>(null);
 
-  // Like the confirm, this step acts as a dialog: screen-reader focus starts on its heading.
   useEffect(() => {
     if (heading.current) {
       AccessibilityInfo.sendAccessibilityEvent(heading.current, "focus");
@@ -90,7 +86,6 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
 
   return (
     <AuthScreenLayout>
-      {/* Same Display title as the confirm step, so the two steps read as one dialog. */}
       <Text accessibilityRole="header" style={textStyles.display}>
         You are signed in
       </Text>

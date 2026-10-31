@@ -1,7 +1,7 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, type SignUpAttestationTextVersion } from "@bjj-roll/shared";
+import { signUpAttestationVersion, type SignUpAttestationTextVersion } from "@bjj-roll/shared";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { loadSocialProviderConfig, type SocialProviderConfig } from "./auth/socialProviders.js";
-import { loadAuthKeyringFromEnvironment, TRUSTABLE_PROXY_IP_HEADERS, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
+import { loadAuthKeyringFromEnvironment, trustableProxyIpHeaders, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
 
 export const DATABASE_URL_ENV = "DATABASE_URL";
 export const AUTH_BASE_URL_ENV = "AUTH_BASE_URL";
@@ -20,18 +20,14 @@ export interface ServerConfig {
   readonly emailFromAddress: string;
   readonly trustedProxyIpHeaders: readonly TrustableProxyIpHeader[];
   readonly port: number;
-  /** HEN-239: Google is required; Apple stays off until all its variables are set (Henry's Apple developer account). */
   readonly socialProviders: SocialProviderConfig;
-  /** HEN-183: the sign-up attestation text version new records store. Never a draft in production. */
   readonly signUpAttestationTextVersionId: string;
 }
 
 export interface LoadServerConfigOptions {
-  /** Tests only: stands in for the shipped SIGN_UP_ATTESTATION_TEXT_VERSION. */
   readonly signUpAttestationTextVersion?: SignUpAttestationTextVersion;
 }
 
-/** Errors name the variable only; values are never echoed. */
 function requireVariable(env: ServerEnvironment, name: string): string {
   const value = env[name]?.trim();
   if (!value) {
@@ -46,19 +42,15 @@ function parseTrustedProxyIpHeaders(raw: string | undefined): TrustableProxyIpHe
   }
   return raw.split(",").map((entry) => {
     const headerName = entry.trim().toLowerCase();
-    if (!(TRUSTABLE_PROXY_IP_HEADERS as readonly string[]).includes(headerName)) {
-      throw new Error(`${AUTH_TRUSTED_PROXY_IP_HEADERS_ENV} accepts only: ${TRUSTABLE_PROXY_IP_HEADERS.join(", ")}`);
+    if (!(trustableProxyIpHeaders as readonly string[]).includes(headerName)) {
+      throw new Error(`${AUTH_TRUSTED_PROXY_IP_HEADERS_ENV} accepts only: ${trustableProxyIpHeaders.join(", ")}`);
     }
     return headerName as TrustableProxyIpHeader;
   });
 }
 
-/**
- * Reads and validates everything the server needs at startup, so a misconfigured deploy fails before
- * listening. Both auth secrets are decoded and checked here (length, distinctness).
- */
 export function loadServerConfig(env: ServerEnvironment, options: LoadServerConfigOptions = {}): ServerConfig {
-  const signUpAttestationTextVersion = options.signUpAttestationTextVersion ?? SIGN_UP_ATTESTATION_TEXT_VERSION;
+  const signUpAttestationTextVersion = options.signUpAttestationTextVersion ?? signUpAttestationVersion;
   if (env.NODE_ENV === "production" && signUpAttestationTextVersion.isDraft) {
     throw new Error(`Sign-up attestation text version ${signUpAttestationTextVersion.id} is a draft; production needs a lawyer-reviewed version`);
   }

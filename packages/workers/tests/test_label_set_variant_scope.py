@@ -1,5 +1,3 @@
-"""HEN-316 gate: only `mount_escape` lists variants, and a ground-truth `variant` is an event field only (never on Lane A)."""
-
 import json
 from pathlib import Path
 

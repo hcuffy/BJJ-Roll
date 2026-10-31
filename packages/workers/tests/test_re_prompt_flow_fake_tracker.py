@@ -1,5 +1,3 @@
-"""HEN-317: "Was this you?" re-prompt flow against a fake tracker. No Modal, SAM, network or real video; synthetic values only."""
-
 from dataclasses import dataclass, field
 
 import pytest
@@ -27,8 +25,6 @@ SECOND_VIDEO_FIRST_TAP = TapPoint(frame_index=3, x=0.6, y=0.2)
 
 @dataclass
 class FakeTracker:
-    """Reports the scripted drifts in order and records every anchor; tracking (re)starts at each anchor's frame."""
-
     scripted_drifts: list[DriftEvent]
     anchors: list[TapPoint] = field(default_factory=list)
     tracked_from_frames: list[int] = field(default_factory=list)
@@ -52,8 +48,6 @@ class FakeFrameSource:
 
 @dataclass
 class ScriptedPrompter:
-    """Answers each prompt with the next scripted answer and records what it was shown."""
-
     answers: list[PromptAnswer]
     shown: list[tuple[DriftEvent, bytes]] = field(default_factory=list)
 
@@ -152,7 +146,7 @@ def test_re_prompt_flow_second_video_starts_with_nothing_from_the_first() -> Non
 
 def test_re_prompt_flow_rejects_an_unknown_style() -> None:
     with pytest.raises(ValueError):
-        VideoRun(FIRST_VIDEO_ID, "nogi", FIRST_TAP, FRAME_SIZE)  # type: ignore[arg-type]
+        VideoRun(FIRST_VIDEO_ID, "nogi", FIRST_TAP, FRAME_SIZE)  # type: ignore[arg-type]  # a wrong type on purpose
 
 
 def test_re_prompt_flow_counts_per_style_sum_two_videos_of_the_same_style() -> None:
@@ -174,8 +168,6 @@ def test_re_prompt_flow_counts_per_style_sum_two_videos_of_the_same_style() -> N
 
 @dataclass
 class StuckTracker:
-    """Reports the same drift on every call, as a tracker stuck on one frame would; fails the test instead of hanging."""
-
     drift: DriftEvent
     calls: int = 0
 
@@ -189,7 +181,7 @@ class StuckTracker:
         return self.drift
 
 
-def test_re_prompt_flow_stops_when_the_tracker_repeats_a_drift_frame() -> None:
+def test_re_prompt_flow_ends_the_run_instead_of_looping_when_the_tracker_repeats_a_drift_frame() -> None:
     tracker = StuckTracker(DriftEvent(frame_index=120, reason="mask_jump"))
     prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3)])
 

@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { generateTestAuthSecrets, GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV } from "../auth/index.js";
 import { AUTH_BASE_URL_ENV, DATABASE_URL_ENV, EMAIL_FROM_ADDRESS_ENV, LETTERMINT_API_KEY_ENV, loadServerConfig } from "../serverConfig.js";
@@ -18,18 +18,18 @@ const reviewedTextVersion = { id: "attestation-signup-2027-01", isDraft: false }
 
 describe("HEN-183 sign-up attestation text version in the startup config check", () => {
   it("the shipped sign-up attestation text is a draft until the lawyer review (HEN-45)", () => {
-    expect(SIGN_UP_ATTESTATION_TEXT_VERSION.isDraft).toBe(true);
-    expect(SIGN_UP_ATTESTATION_TEXT_VERSION.id).toContain("draft");
+    expect(signUpAttestationVersion.isDraft).toBe(true);
+    expect(signUpAttestationVersion.id).toContain("draft");
   });
 
   it("a production config with a draft attestation text version fails before the server starts", () => {
     expect(() => loadServerConfig(validEnvironment("production"))).toThrow(
-      `Sign-up attestation text version ${SIGN_UP_ATTESTATION_TEXT_VERSION.id} is a draft; production needs a lawyer-reviewed version`,
+      `Sign-up attestation text version ${signUpAttestationVersion.id} is a draft; production needs a lawyer-reviewed version`,
     );
   });
 
   it.each([undefined, "", "development", "test"])("NODE_ENV=%s accepts the draft attestation text version", (nodeEnvironment) => {
-    expect(loadServerConfig(validEnvironment(nodeEnvironment)).signUpAttestationTextVersionId).toBe(SIGN_UP_ATTESTATION_TEXT_VERSION.id);
+    expect(loadServerConfig(validEnvironment(nodeEnvironment)).signUpAttestationTextVersionId).toBe(signUpAttestationVersion.id);
   });
 
   it("a production config with a reviewed (non-draft) text version starts", () => {

@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 /// <reference types="node" />
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
@@ -18,10 +18,8 @@ import appConfig from "../../app.json";
 const sha256Hex = (value: string): string => createHash("sha256").update(value).digest("hex");
 const NEUTRAL_GOOGLE_COPY = "We couldn't sign you in with Google. Sign in with your email instead.";
 const NEUTRAL_COPY = "We couldn't sign you in this way. Sign in with your email instead.";
-/** The same answers the email and code screens send (HEN-263): 16+ ticked, 18+ not. */
-const AGE_16 = { age16Confirmed: true, age18Confirmed: false, signUpAttestationAccepted: true } as const;
+const age16 = { age16Confirmed: true, age18Confirmed: false, signUpAttestationAccepted: true } as const;
 
-/** A fake Apple sheet with a fixed raw nonce; hashing is real SHA-256 so the test sees what Apple would get. */
 function fakeAppleNative(signInAsync: AppleNativeSignIn["signInAsync"], rawNonce = "raw-nonce-0123456789abcdef") {
   return { signInAsync: vi.fn(signInAsync), createNonce: () => rawNonce, sha256Hex: (value: string) => Promise.resolve(sha256Hex(value)) };
 }
@@ -70,14 +68,14 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       { ok: true },
     );
     expect(backend.requests[0]?.body).toMatchObject({
-      additionalData: { age16Confirmed: true, age18Confirmed: true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
+      additionalData: { age16Confirmed: true, age18Confirmed: true, signUpAttestationTextVersionId: signUpAttestationVersion.id },
     });
   });
 
   it("Google: sends the 16+ and 18+ answers, opens the provider URL through the Expo proxy, and swaps the returned code for a session", async () => {
     const { backend, browser, storage, dependencies } = createTestDependencies();
 
-    expect(await signInWithProvider(dependencies, "google", AGE_16)).toEqual({ ok: true });
+    expect(await signInWithProvider(dependencies, "google", age16)).toEqual({ ok: true });
 
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/sign-in/social`);
     expect(backend.requests[0]?.body).toEqual({
@@ -85,7 +83,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       callbackURL: "bjjroll://auth/social",
       errorCallbackURL: "bjjroll://auth/social",
       disableRedirect: true,
-      additionalData: { age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
+      additionalData: { age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: signUpAttestationVersion.id },
     });
     const [proxyUrl, redirectUrl] = browser.openAuthSessionAsync.mock.calls[0] ?? [];
     const proxy = new URL(proxyUrl ?? "");
@@ -107,7 +105,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     ] as const;
     for (const [browserResult, reason] of cases) {
       const { backend, dependencies } = createTestDependencies({ browserResult });
-      const result = await signInWithProvider(dependencies, "google", AGE_16);
+      const result = await signInWithProvider(dependencies, "google", age16);
       expect(result).toMatchObject({ ok: false, reason });
       expect(backend.requests.map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/sign-in/social"]);
     }
@@ -117,7 +115,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     const appleNative = fakeAppleNative(() => Promise.resolve({ identityToken: "fake.identity.token", authorizationCode: "fake-apple-code" }));
     const { backend, browser, storage, dependencies } = createTestDependencies({ platform: "ios", appleNative });
 
-    expect(await signInWithProvider(dependencies, "apple", AGE_16)).toEqual({ ok: true });
+    expect(await signInWithProvider(dependencies, "apple", age16)).toEqual({ ok: true });
 
     expect(appleNative.signInAsync).toHaveBeenCalledWith(sha256Hex("raw-nonce-0123456789abcdef"));
     expect(backend.requests[0]?.body).toEqual({
@@ -126,7 +124,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       additionalData: {
         age16Confirmed: true,
         age18Confirmed: false,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
         appleAuthorizationCode: "fake-apple-code",
       },
     });
@@ -137,13 +135,13 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
   it("Apple on iOS: closing the sheet is silent; the backend's age refusal shows the 16+ message", async () => {
     const canceled = fakeAppleNative(() => Promise.reject(Object.assign(new Error("canceled"), { code: "ERR_REQUEST_CANCELED" })));
     const closed = createTestDependencies({ platform: "ios", appleNative: canceled });
-    expect(await signInWithProvider(closed.dependencies, "apple", AGE_16)).toEqual({ ok: false, reason: "ignored", message: null });
+    expect(await signInWithProvider(closed.dependencies, "apple", age16)).toEqual({ ok: false, reason: "ignored", message: null });
     expect(closed.backend.fetchImplementation).not.toHaveBeenCalled();
 
     const signedIn = fakeAppleNative(() => Promise.resolve({ identityToken: "fake.identity.token", authorizationCode: null }));
     const refusal = { status: 400, body: { code: "AGE_CONFIRMATION_REQUIRED", message: "x" } };
     const refused = createTestDependencies({ platform: "ios", appleNative: signedIn, nativeSignInRefusal: refusal });
-    expect(await signInWithProvider(refused.dependencies, "apple", AGE_16)).toEqual({
+    expect(await signInWithProvider(refused.dependencies, "apple", age16)).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
@@ -155,14 +153,14 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     const refusal = { status: 401, body: { code: "OAUTH_LINK_ERROR", message: "account not linked" } };
     const { dependencies } = createTestDependencies({ platform: "ios", appleNative, nativeSignInRefusal: refusal });
 
-    expect(await signInWithProvider(dependencies, "apple", AGE_16)).toEqual({ ok: false, reason: "accountNotLinked", message: NEUTRAL_COPY });
+    expect(await signInWithProvider(dependencies, "apple", age16)).toEqual({ ok: false, reason: "accountNotLinked", message: NEUTRAL_COPY });
   });
 
   it("names Google in Google's neutral refusal", async () => {
     const browserResult = { type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=account_not_linked` };
     const google = createTestDependencies({ browserResult });
 
-    expect(await signInWithProvider(google.dependencies, "google", AGE_16)).toEqual({
+    expect(await signInWithProvider(google.dependencies, "google", age16)).toEqual({
       ok: false,
       reason: "accountNotLinked",
       message: NEUTRAL_GOOGLE_COPY,
@@ -173,7 +171,7 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
     for (const options of [{ platform: "android" }, { platform: "ios" }] as const) {
       const { backend, browser, dependencies } = createTestDependencies(options);
 
-      expect(await signInWithProvider(dependencies, "apple", AGE_16)).toMatchObject({ ok: false, reason: "unknown" });
+      expect(await signInWithProvider(dependencies, "apple", age16)).toMatchObject({ ok: false, reason: "unknown" });
       expect(backend.fetchImplementation).not.toHaveBeenCalled();
       expect(browser.openAuthSessionAsync).not.toHaveBeenCalled();
     }

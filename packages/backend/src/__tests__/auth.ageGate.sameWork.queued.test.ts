@@ -13,7 +13,6 @@ import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestCont
 import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-/** Records each try; `fail` makes every try throw after it is recorded. */
 class FailingEmailSender extends FakeEmailSender {
   fail = false;
 
@@ -36,7 +35,6 @@ interface Observed {
   readonly status: number;
   readonly body: string;
   readonly headers: [string, string][];
-  /** App SQL only: pg-boss runs its own timers in the same process, so its `pgboss.*` queries are left out. */
   readonly appQueries: string[];
   readonly jobsAdded: number;
 }
@@ -83,7 +81,6 @@ const observeSend = async (environment: StartedAuthTestEnvironment, path: string
   };
 };
 
-/** Signs knownEmail up with the code that `readCode` finds once the send has returned. */
 const signUpKnownEmail = async (environment: StartedAuthTestEnvironment, readCode: () => Promise<string>): Promise<void> => {
   const { app } = environment;
   const body = { email: knownEmail, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation };
@@ -92,15 +89,12 @@ const signUpKnownEmail = async (environment: StartedAuthTestEnvironment, readCod
   expect((await postAuthJson(app, otpSignInPath, { body: { email: knownEmail, otp } })).status).toBe(200);
 };
 
-// HEN-263 again with the real HEN-284 queue: every variant stores exactly one job and returns without waiting for the provider.
-// The worker is off (HEN-313): it deletes each job once sent, so with it on, a row count around a request could read 0 new jobs.
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with sign-in emails stored on the HEN-284 pg-boss queue", () => {
   let environment: StartedAuthTestEnvironment | undefined;
 
   beforeAll(async () => {
     const started = await startAuthTestEnvironment({ emailQueue: "pg-boss", emailQueueWorker: false });
     environment = started;
-    // No worker sends the code, so read it from the one stored job.
     await signUpKnownEmail(started, async () => {
       const { rows } = await started.pool.query<{ data: { sealed: string } }>("SELECT data FROM pgboss.job WHERE name = $1", [EMAIL_QUEUE_NAME]);
       expect(rows).toHaveLength(1);
@@ -176,7 +170,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 same work, with 
             (await environment?.pool.query("SELECT 1 FROM pgboss.job WHERE name = $1 AND state < 'completed'", [EMAIL_QUEUE_NAME]))?.rows,
           ).toEqual([]),
         {
-          // The sign-up job drains on its own; a full parallel run once needed more than 15 s.
           timeout: 30_000,
           interval: 100,
         },

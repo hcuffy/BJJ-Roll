@@ -38,7 +38,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
         const responses: { status: number; body: string }[] = [];
         for (const [index, variant] of ageAnswerVariants.entries()) {
           for (const email of ["known.member@example.com", `unknown.${path.length}.${index}@example.com`]) {
-            // The known email is sent to ten times here; clear only its per-email counter so the 3-per-15-min limit does not answer instead.
             await current().pool.query("DELETE FROM public.rate_limits WHERE key LIKE 'email:%'");
             const sentBefore = emailSender.sentMessages.length;
             const response = await postAuthJson(app, path, {
@@ -69,7 +68,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
       const before = { users: await countRows("users"), sessions: await countRows("sessions"), consent: await countRows("consent_records") };
       const rateLimitsBefore = await rateLimitCounts();
 
-      // The answer counts only from the send; a tick sent with the code itself cannot get past the gate.
       const refused = await postAuthJson(app, otpSignInPath, {
         body: { email, otp: latestOtpFor(email), age16Confirmed: true },
         ipAddress: "198.51.100.181",

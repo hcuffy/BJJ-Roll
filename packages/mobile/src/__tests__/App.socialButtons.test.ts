@@ -9,7 +9,6 @@ import appConfig from "../../app.json";
 
 vi.mock("../auth/appAuthClient", () => ({ appAuthClient: null, appSecureStore: null, appBackendUrl: "http://backend.test" }));
 
-/** The sign-in wiring the shipped app (app.json) gets on a platform, read the way App.tsx reads it. */
 async function shippedSocialSignIn(
   platform: string,
   expoConfig: unknown = appConfig.expo,

@@ -1,5 +1,3 @@
-"""HEN-318: results are written only inside the configured footage folder (mode 700); nothing is written anywhere else."""
-
 import os
 import stat
 from pathlib import Path

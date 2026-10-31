@@ -14,9 +14,6 @@ export interface RateLimitRuleConfig {
   readonly max: number;
 }
 
-/**
- * Better Auth per-IP rate-limit rules backed by `public.rate_limits` in PostgreSQL (HEN-71 AC 5).
- */
 export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
   "/email-otp/send-verification-otp": {
     window: RATE_LIMIT_WINDOW_SECONDS,
@@ -26,7 +23,6 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
     window: RATE_LIMIT_WINDOW_SECONDS,
     max: MAX_SENDS_PER_IP_PER_WINDOW,
   },
-  // HEN-239: starting Apple or Google sign-in, and the provider callback (wildcard: /callback/apple, /callback/google).
   "/sign-in/social": {
     window: RATE_LIMIT_WINDOW_SECONDS,
     max: MAX_VERIFIES_PER_IP_PER_WINDOW,
@@ -57,18 +53,10 @@ export const authIpRateLimitCustomRules: Record<string, RateLimitRuleConfig> = {
   },
 };
 
-/**
- * Key of the per-email send counter in `public.rate_limits`; the email HMAC equals `users.email_hash`.
- * The row is not removed on account deletion; it ages out with its window (HEN-65).
- */
 export function emailRateLimitKey(emailHmac: string): string {
   return `email:${emailHmac}`;
 }
 
-/**
- * One more request on this `public.rate_limits` key, counted atomically (one upsert), so parallel requests each count.
- * Fixed window from the first request. Returns the count in the current window.
- */
 export async function incrementRateLimitCounter(pool: Pool, key: string, windowSeconds: number): Promise<number> {
   const client = await pool.connect();
   try {
@@ -99,7 +87,6 @@ export async function incrementRateLimitCounter(pool: Pool, key: string, windowS
   }
 }
 
-/** Drops the counter for this key, so its budget starts again. */
 export async function resetRateLimitCounter(pool: Pool, key: string): Promise<void> {
   const client = await pool.connect();
   try {
@@ -115,10 +102,6 @@ export async function resetRateLimitCounter(pool: Pool, key: string): Promise<vo
   }
 }
 
-/**
- * Enforces the Postgres-backed 3 sends / email / 15 minutes rate limit using the keyed email HMAC (never plaintext email).
- * Fixed window from the first send; `public.rate_limits` comes from migration 002 (no runtime DDL).
- */
 export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {
   const rateLimitKey = emailRateLimitKey(codec.computeEmailHmac(rawEmail));
   const currentCount = await incrementRateLimitCounter(pool, rateLimitKey, RATE_LIMIT_WINDOW_SECONDS);

@@ -9,7 +9,6 @@ export interface AgeCheckboxProps {
   readonly onPress: () => void;
 }
 
-/** One tick row: box and label are a single 48-tall checkbox; a disabled row is dimmed and announced as disabled. */
 export function AgeCheckbox({ label, checked, hint, disabled = false, onPress }: AgeCheckboxProps) {
   return (
     <Pressable

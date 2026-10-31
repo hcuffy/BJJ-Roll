@@ -28,12 +28,9 @@ const TOGGLE_LABEL = "Biometric unlock";
 
 describe("App opt-in biometric unlock (HEN-288)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Text of every screen rendered since the last launch. */
   let renderedScreens: string[] = [];
 
-  /** A fresh app process on the same phone: new auth client, same SecureStore. */
   const launchApp = async () => {
     appClient.store = secureStore;
     appClient.current = createMobileAuthClient({
@@ -52,7 +49,6 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
   };
-  /** First sign-in on this phone, answering the offer with `answer`. */
   const firstSignIn = async (answer: "Turn on" | "Not now") => {
     const screen = await launchApp();
     await signIn(screen);
@@ -173,7 +169,6 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
   });
 
   describe("settings toggle", () => {
-    // The whole row is the switch (Vera round 2, fix 4): a tap flips it.
     const toggleValue = (screen: Screen) => (screen.getByRole("switch").props.accessibilityState as { checked: boolean }).checked;
     const toggle = async (screen: Screen, value: boolean) => {
       expect(toggleValue(screen)).toBe(!value);
@@ -226,7 +221,6 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
       const nextLaunch = await launchApp();
 
       expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
-      // The fake prompt passes by default, so a lock screen that unlocked itself would still end signed in (Bill, round 3).
       expect(renderedScreens.some((rendered) => rendered.includes(LOCKED_TITLE))).toBe(false);
       expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBeNull();
     });
@@ -243,7 +237,6 @@ describe("App opt-in biometric unlock (HEN-288)", () => {
       const nextLaunch = await launchApp();
 
       expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
-      // The fake prompt passes by default, so a lock screen that unlocked itself would still end signed in (Bill, round 3).
       expect(renderedScreens.some((rendered) => rendered.includes(LOCKED_TITLE))).toBe(false);
       expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBeNull();
     });

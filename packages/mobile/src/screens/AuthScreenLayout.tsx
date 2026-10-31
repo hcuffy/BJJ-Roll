@@ -4,15 +4,6 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { spacing } from "../theme/tokens";
 import { authStyles } from "./authStyles";
 
-/**
- * Shared frame for the sign-in screens: safe area, keyboard-avoiding, scrollable, top-aligned.
- * - Top and sides: safe-area-context SafeAreaView (status bar, notch, cut-outs; Android draws edge-to-edge).
- * - Bottom: the nav bar / home indicator inset plus 24 is padding inside the scroll view, so the last button
- *   can always scroll clear of it. On iOS the keyboard covers the home indicator, so while it is open the gap is 24 only.
- * - Keyboard: iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
- *   adjustResize alone). Taps work with the keyboard open, and dragging the content closes it
- *   (the iOS number pad has no Done key).
- */
 export function AuthScreenLayout({ children }: { readonly children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const iosKeyboardOpen = useIosKeyboardOpen();
@@ -30,7 +21,6 @@ export function AuthScreenLayout({ children }: { readonly children: ReactNode })
   );
 }
 
-/** True while the iOS keyboard is open (or opening). Always false on Android. */
 function useIosKeyboardOpen(): boolean {
   const [open, setOpen] = useState(false);
   useEffect(() => {

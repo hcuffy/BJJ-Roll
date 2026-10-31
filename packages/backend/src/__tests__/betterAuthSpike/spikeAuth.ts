@@ -11,7 +11,6 @@ import { createEmailProtection, type EmailProtection } from "./emailProtection.j
 import { protectAdapter } from "./protectedAdapter.js";
 import { consumeEmailSendBudget, lookupUserIdAsAppRole } from "./spikeSchema.js";
 
-// HEN-47 spike only. Sara's PLAN.md section 6 numbers, expressed as Better Auth 1.7.7 options.
 const fifteenMinutesInSeconds = 15 * 60;
 const oneDayInSeconds = 24 * 60 * 60;
 export const otpExpirySeconds = 10 * 60;

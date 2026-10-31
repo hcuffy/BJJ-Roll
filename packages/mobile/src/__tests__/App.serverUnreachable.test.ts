@@ -17,7 +17,6 @@ vi.mock("../auth/appAuthClient", () => ({
   },
   appBackendUrl: "http://backend.test",
 }));
-// The real actions by default; a test can make one reject outright, as an unexpected error would.
 vi.mock("../auth/signInActions", async (importOriginal) => {
   const actual = await importOriginal<typeof SignInActions>();
   return { ...actual, completeMagicLink: vi.fn(actual.completeMagicLink), signOut: vi.fn(actual.signOut) };
@@ -40,7 +39,6 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     appClient.current = createMobileAuthClient({
       backendUrl: TEST_BACKEND_URL,
       storage: secureStore,
-      // What React Native's fetch does when 10.0.2.2:3000 is not listening.
       fetchImplementation: vi.fn((input: string | URL | Request, init?: RequestInit) =>
         serverDown ? Promise.reject(new TypeError("fetch failed")) : backend.fetchImplementation(input, init),
       ),
@@ -78,12 +76,9 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     const note = screen.queryByText(SERVER_UNREACHABLE_NOTE);
     expect(note?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
-    // Calm, not an alert: TalkBack must not read it as one (Vera, round 2 item 1).
     expect(note?.props.accessibilityRole).toBeUndefined();
-    // Muted body text, not the red error style.
     expect(flattenStyle(note?.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22, color: colours.textSecondary });
     expect(flattenStyle(note?.props.style).color).not.toBe(colours.danger);
-    // Under the email field, above the age box.
     expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeGreaterThan(screen.text().indexOf("Email"));
     expect(screen.text().indexOf(SERVER_UNREACHABLE_NOTE)).toBeLessThan(screen.text().indexOf(AGE_CONFIRMATION_LABEL));
   });
@@ -184,7 +179,6 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
     expect(secureStore.items.has("bjjroll_session_data")).toBe(false);
-    // The user asked to sign out and is signed out on this phone, so no server note here.
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
@@ -213,7 +207,6 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     const screen = await startApp();
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
 
-    // Server back; the user opens a sign-in link from an earlier email, so no submit clears the note first.
     serverDown = false;
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     await screen.rerender();

@@ -1,5 +1,3 @@
-"""HEN-318: the runner checks its inputs and the backend's output at the boundary before anything is tracked or kept."""
-
 from collections.abc import Mapping, Sequence
 
 import pytest

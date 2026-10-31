@@ -12,20 +12,17 @@ import { formatCountdown } from "./useCountdown";
 export interface LinkSentScreenProps {
   readonly email: string;
   readonly notice: string | null;
-  /** A sign-in link opened on this view failed (HEN-304); shown as the form's card in the red error slot. */
   readonly linkError: string | null;
   readonly linkErrorReason: LinkErrorCardProps["reason"];
   readonly offline: boolean;
   readonly formError: string | null;
   readonly cooldownSecondsLeft: number;
-  /** A new link is being sent right now. */
   readonly sending: boolean;
   readonly canUseDifferentEmail: boolean;
   readonly onResend: () => void;
   readonly onUseDifferentEmail: () => void;
 }
 
-/** "Check your email" after a sign-in link was sent, with a resend cooldown. */
 export function LinkSentScreen(props: LinkSentScreenProps) {
   const { email, notice, offline, formError, cooldownSecondsLeft, sending } = props;
   return (

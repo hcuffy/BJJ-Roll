@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, sealAppleRefreshToken } from "./appleTokens.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
-const IDENTIFIER_EMAIL_PREFIXES = ["sign-in-otp-", "email-verification-otp-", "forget-password-otp-", "change-email-confirmation-"] as const;
+const identifierEmailPrefixes = ["sign-in-otp-", "email-verification-otp-", "forget-password-otp-", "change-email-confirmation-"] as const;
 
-const SIXTY_FOUR_HEX_PATTERN = /^[0-9a-f]{64}$/u;
+const sixtyFourHexPattern = /^[0-9a-f]{64}$/u;
 
 export function normalizeModelKey(model: string): string {
   const lowered = model.toLowerCase();
@@ -27,10 +27,10 @@ export function normalizeModelKey(model: string): string {
 }
 
 export function transformVerificationIdentifier(rawIdentifier: string, codec: AuthCryptoCodec): string {
-  for (const prefix of IDENTIFIER_EMAIL_PREFIXES) {
+  for (const prefix of identifierEmailPrefixes) {
     if (rawIdentifier.startsWith(prefix)) {
       const suffix = rawIdentifier.slice(prefix.length);
-      if (SIXTY_FOUR_HEX_PATTERN.test(suffix)) {
+      if (sixtyFourHexPattern.test(suffix)) {
         return rawIdentifier;
       }
       return `${prefix}${codec.computeEmailHmac(suffix)}`;
@@ -43,10 +43,10 @@ export function transformVerificationIdentifier(rawIdentifier: string, codec: Au
 }
 
 export function extractEmailHmacFromIdentifier(rawIdentifier: string, codec: AuthCryptoCodec): string | null {
-  for (const prefix of IDENTIFIER_EMAIL_PREFIXES) {
+  for (const prefix of identifierEmailPrefixes) {
     if (rawIdentifier.startsWith(prefix)) {
       const suffix = rawIdentifier.slice(prefix.length);
-      if (SIXTY_FOUR_HEX_PATTERN.test(suffix)) {
+      if (sixtyFourHexPattern.test(suffix)) {
         return suffix;
       }
       if (suffix.includes("@")) {
@@ -69,14 +69,10 @@ export function extractEmailFromVerificationValue(rawValue: string): string | nu
   }
 }
 
-const DROPPED_ACCOUNT_TOKEN_FIELDS = ["accessToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope"] as const;
+const droppedAccountTokenFields = ["accessToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope"] as const;
 
-/**
- * HEN-239: provider tokens are not stored. The one exception is Apple's refresh token, kept encrypted so account deletion can
- * revoke it. Anything else (or a refresh token on a write that does not say it is Apple's) is dropped.
- */
 function encodeAccountTokens(encoded: Record<string, unknown>, codec: AuthCryptoCodec): void {
-  for (const field of DROPPED_ACCOUNT_TOKEN_FIELDS) {
+  for (const field of droppedAccountTokenFields) {
     delete encoded[field];
   }
   const refreshToken = encoded.refreshToken;

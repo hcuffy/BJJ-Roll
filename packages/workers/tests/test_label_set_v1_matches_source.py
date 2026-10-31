@@ -1,9 +1,5 @@
-"""HEN-316 gate: label_set_v1.json encodes label set v1 (HEN-44) exactly: every level 2 detail in source order, its snake_case id,
-its source name as `label`, and its [Gi] flag. Expected table written from HEN-44-label-set.md, not from the JSON."""
-
 from bjj_roll_workers.label_set import load_label_set
 
-# class id -> ((detail id, source name, gi_only), ...) in source order
 SOURCE_DETAILS = {
     "standing": (
         ("neutral_stance", "neutral stance", False),

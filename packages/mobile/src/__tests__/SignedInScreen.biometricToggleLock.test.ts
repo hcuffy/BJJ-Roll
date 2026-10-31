@@ -2,7 +2,7 @@ import { AccessibilityInfo } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import type { BiometricCheck } from "../auth/biometricUnlock";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { flattenStyle, type renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness, deferred, EXPORT_JSON } from "./signedInScreenHarness";
@@ -11,12 +11,12 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 type Harness = ReturnType<typeof createSignedInScreenHarness>;
 
 const TOGGLE = "Biometric unlock";
-const OTHER_ACTIONS = ["Sign out", "Export my data", "Confirm I am 18 or older", "Delete account"];
-const SERVER_FAILURE = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown } as const;
+const otherActions = ["Sign out", "Export my data", "Confirm I am 18 or older", "Delete account"];
+const serverFailure = { ok: false, reason: "unknown", message: failureMessages.unknown } as const;
 
 const labelColour = (screen: Screen) => flattenStyle(screen.queryByText(TOGGLE)?.props.style).color;
 const toggleEnabled = (screen: Screen) => screen.getByLabelText(TOGGLE).props.disabled !== true;
-const otherActionsDisabled = (screen: Screen) => OTHER_ACTIONS.map((title) => screen.isDisabled(title));
+const otherActionsDisabled = (screen: Screen) => otherActions.map((title) => screen.isDisabled(title));
 
 describe("SignedInScreen: the biometric toggle and the other account actions lock each other (HEN-331, Vera)", () => {
   let harness: Harness;
@@ -78,7 +78,7 @@ describe("SignedInScreen: the biometric toggle and the other account actions loc
     [
       "the server refuses the export",
       () => {
-        harness.state.exportResult = Promise.resolve(SERVER_FAILURE);
+        harness.state.exportResult = Promise.resolve(serverFailure);
       },
     ],
   ])("export: the toggle is enabled again after %s", async (_case, arrange) => {
@@ -91,7 +91,7 @@ describe("SignedInScreen: the biometric toggle and the other account actions loc
   });
 
   it("18+: the toggle is enabled again after the server refuses the save", async () => {
-    harness.state.adultResult = Promise.resolve<AgeConfirmationResult>(SERVER_FAILURE);
+    harness.state.adultResult = Promise.resolve<AgeConfirmationResult>(serverFailure);
     const screen = await harness.render();
     await screen.press("Confirm I am 18 or older");
     await screen.press("Yes, I am 18 or older");

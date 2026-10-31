@@ -120,7 +120,6 @@ describe.each(screens)("%s screen design", (_name, build) => {
     const [safeArea, ...extra] = screen.findAllByType("SafeAreaContextView");
     expect(extra).toHaveLength(0);
     expect(flattenStyle(safeArea?.props.style)).toMatchObject({ flex: 1, backgroundColor: colours.background });
-    // The bottom edge is padded inside the scroll view instead, so content can scroll clear of the nav bar.
     expect(safeArea?.props.edges).toEqual(["top", "left", "right"]);
     expect(screen.findAllByType("SafeAreaView")).toHaveLength(0);
   });
@@ -235,7 +234,6 @@ describe("code entry design details", () => {
     const label = screen.findAllByType("Text").find((text) => textOf(text) === "6-digit code");
     expect(flattenStyle(label?.props.style)).toMatchObject({ fontSize: 13, fontWeight: "500" });
     expect(flattenStyle(screen.queryByText("Code expires in 10 minutes.")?.props.style).color).toBe(colours.textSecondary);
-    // A blocked secondary pill has no fill and a muted label, so it reads clearly as "not yet" next to an active one.
     expect(flattenStyle(screen.getPressable("Resend in 0:30").props.style)).toMatchObject({
       backgroundColor: "transparent",
       borderRadius: radius.pill,

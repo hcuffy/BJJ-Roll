@@ -2,12 +2,6 @@ import type { ReactElement, ReactNode } from "react";
 import { vi } from "vitest";
 import { attachHostReference } from "./hostReference";
 
-/**
- * Minimal screen renderer for Vitest in Node (no DOM, no extra test dependencies).
- * Function components are called directly; useState/useEffect come from harnessUseState/harnessUseEffect (see nativeModuleMocks.ts);
- * react-native host components are mocked as strings. Queries and events follow Testing Library naming.
- */
-
 export interface HostNode {
   readonly type: string;
   readonly props: Record<string, unknown>;
@@ -27,12 +21,9 @@ interface PendingEffect {
   readonly effect: () => unknown;
 }
 
-/** Deep link the mocked expo-linking useURL() returns. */
 export const deepLinkState: { url: string | null } = { url: null };
-/** What the mocked useSafeAreaInsets returns; a test can set a bottom nav-bar inset and reset it. */
 export const safeAreaInsetsState = { top: 0, bottom: 0, left: 0, right: 0 };
 
-// Checked by shape, not via react's isValidElement: this module must not import react at runtime (react is mocked to use it).
 function isReactElement(node: ReactNode): node is ReactElement {
   return typeof node === "object" && node !== null && "type" in node && "props" in node;
 }
@@ -87,7 +78,6 @@ export function harnessUseEffect(effect: () => unknown, deps?: readonly unknown[
   const { slots, index } = nextHook();
   const previousDeps = slots.values[index] as readonly unknown[] | undefined;
   if (!sameDeps(previousDeps, deps)) {
-    // Recorded now, so a state change in an earlier effect of this batch does not queue this one a second time.
     slots.values[index] = deps;
     activeRenderer?.pendingEffects.push({ slots, index, effect });
   }
@@ -113,7 +103,6 @@ class ScreenRenderer {
   private rerenderRequested = false;
   root: (HostNode | string)[] = [];
 
-  /** Gets the text of every render, so a test can check what was shown in between. */
   onRender?: (text: string) => void;
 
   constructor(private readonly element: ReactNode) {}
@@ -204,7 +193,6 @@ function allNodes(nodes: readonly (HostNode | string)[]): HostNode[] {
   return nodes.flatMap((node) => (typeof node === "string" ? [] : [node, ...allNodes(node.children)]));
 }
 
-/** Lets pending promises (fake fetch, SecureStore, state updates) settle. Works with real and with Vitest fake timers. */
 export async function settle(): Promise<void> {
   for (let round = 0; round < 20; round += 1) {
     await (vi.isFakeTimers() ? vi.advanceTimersByTimeAsync(0) : new Promise((resolve) => setTimeout(resolve, 0)));
@@ -213,7 +201,6 @@ export async function settle(): Promise<void> {
 
 type StyleValue = Record<string, unknown> | readonly StyleValue[] | false | null | undefined | ((state: { pressed: boolean }) => StyleValue);
 
-/** Flattens a React Native style prop like StyleSheet.flatten; a Pressable style function gets { pressed }. */
 export function flattenStyle(style: unknown, pressed = false): Record<string, unknown> {
   const value = style as StyleValue;
   if (typeof value === "function") {
@@ -232,7 +219,6 @@ export async function renderScreen(element: ReactNode, onRender?: (text: string)
 
   const nodes = () => allNodes(renderer.root);
   const pressableWithText = (text: string): HostNode => {
-    // By visible text, or by exact accessibility label for a button that is an image (the official Google button).
     const matches = nodes().filter(
       (node) => typeof node.props.onPress === "function" && (textOf(node).includes(text) || node.props.accessibilityLabel === text),
     );
@@ -265,7 +251,6 @@ export async function renderScreen(element: ReactNode, onRender?: (text: string)
     pressables: () => nodes().filter((node) => typeof node.props.onPress === "function"),
     getPressable: (text: string) => pressableWithText(text),
     isDisabled: (text: string) => pressableWithText(text).props.disabled === true,
-    /** Presses like a user: a disabled Pressable ignores the press. */
     press: async (text: string) => {
       const target = pressableWithText(text);
       if (target.props.disabled !== true) {
@@ -281,7 +266,6 @@ export async function renderScreen(element: ReactNode, onRender?: (text: string)
       (screen.getByLabelText(label).props.onChangeText as (text: string) => void)(value);
       await settle();
     },
-    /** Calls a prop handler on the element with this accessibility label (onBlur, onFocus, onSubmitEditing). */
     fire: async (label: string, handler: string) => {
       (screen.getByLabelText(label).props[handler] as () => void)();
       await settle();

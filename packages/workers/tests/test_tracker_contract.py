@@ -1,6 +1,3 @@
-"""HEN-318: the Tracker contract (`track(frames, prompts)` -> per frame `{athlete_id: {mask, box, score}}`), checked on the fake
-model, plus the adapter that lets the HEN-317 re-prompt flow drive the chunked runner. Synthetic data only."""
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 

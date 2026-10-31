@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AccountCodeResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness, deferred, EXPORT_JSON } from "./signedInScreenHarness";
 
@@ -9,7 +9,7 @@ type Harness = ReturnType<typeof createSignedInScreenHarness>;
 type AccountFailure = Extract<AccountCodeResult, { ok: false }>;
 
 const TOGGLE = "Biometric unlock";
-const NETWORK_FAILURE: AccountFailure = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
+const networkFailure: AccountFailure = { ok: false, reason: "network", message: failureMessages.network };
 
 function toggleDisabled(screen: Screen) {
   const row = screen.getByLabelText(TOGGLE);
@@ -21,8 +21,8 @@ function toggleDisabled(screen: Screen) {
   };
 }
 
-const ALL_DISABLED = { row: true, screenReader: true, switch: true };
-const ALL_ENABLED = { row: false, screenReader: false, switch: false };
+const allDisabled = { row: true, screenReader: true, switch: true };
+const allEnabled = { row: false, screenReader: false, switch: false };
 
 describe("SignedInScreen: the biometric toggle is locked while another action runs (HEN-331)", () => {
   let harness: Harness;
@@ -32,21 +32,21 @@ describe("SignedInScreen: the biometric toggle is locked while another action ru
   });
 
   const expectToggleWorksAgain = async (screen: Screen) => {
-    expect(toggleDisabled(screen)).toEqual(ALL_ENABLED);
+    expect(toggleDisabled(screen)).toEqual(allEnabled);
     await screen.press(TOGGLE);
     expect(harness.state.biometricChanges).toEqual([true]);
   };
 
   it.each([
     ["succeeds", { ok: true, json: EXPORT_JSON } as const],
-    ["fails", NETWORK_FAILURE],
+    ["fails", networkFailure],
   ])("export: disabled for screen readers too while it runs, a tap changes nothing, enabled again once it %s", async (_outcome, result) => {
     const exportResult = deferred<typeof result>();
     harness.state.exportResult = exportResult.promise;
     const screen = await harness.render();
     await screen.press("Export my data");
 
-    expect(toggleDisabled(screen)).toEqual(ALL_DISABLED);
+    expect(toggleDisabled(screen)).toEqual(allDisabled);
     await screen.press(TOGGLE);
     expect(harness.state.biometricChanges).toEqual([]);
 
@@ -57,7 +57,7 @@ describe("SignedInScreen: the biometric toggle is locked while another action ru
 
   it.each([
     ["succeeds", { ok: true } as const],
-    ["fails", NETWORK_FAILURE],
+    ["fails", networkFailure],
   ])("18+ save: disabled while it runs, enabled again once it %s", async (_outcome, result) => {
     const adultResult = deferred<typeof result>();
     harness.state.adultResult = adultResult.promise.then((settled) =>
@@ -67,7 +67,7 @@ describe("SignedInScreen: the biometric toggle is locked while another action ru
     await screen.press("Confirm I am 18 or older");
     await screen.press("Yes, I am 18 or older");
 
-    expect(toggleDisabled(screen)).toEqual(ALL_DISABLED);
+    expect(toggleDisabled(screen)).toEqual(allDisabled);
     await screen.press(TOGGLE);
     expect(harness.state.biometricChanges).toEqual([]);
 
@@ -84,7 +84,7 @@ describe("SignedInScreen: the biometric toggle is locked while another action ru
     await screen.press("Email me a code");
     expect(screen.queryByLabelText(TOGGLE)).toBeNull();
 
-    codeResult.resolve(NETWORK_FAILURE);
+    codeResult.resolve(networkFailure);
     await screen.rerender();
     expect(screen.queryByLabelText(TOGGLE)).toBeNull();
     await screen.press("Cancel");
@@ -92,7 +92,7 @@ describe("SignedInScreen: the biometric toggle is locked while another action ru
   });
 
   it.each([
-    ["fails", NETWORK_FAILURE, 0],
+    ["fails", networkFailure, 0],
     ["succeeds", { ok: true } as const, 1],
   ])("delete itself: the toggle is not shown while it runs and never changes; when it %s", async (_outcome, result, deletedCalls) => {
     const deleteResult = deferred<typeof result>();

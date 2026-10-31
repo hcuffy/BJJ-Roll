@@ -12,7 +12,6 @@ export function readSocketAddress(context: Context): string | undefined {
   }
 }
 
-// 32 KiB covers an email, a one-time code, and a short deep link, and still rejects oversized auth bodies.
 export const AUTH_REQUEST_BODY_LIMIT_BYTES = 32 * 1024;
 
 export function mountAuthRoutes(app: Hono, auth: Pick<AuthInstance, "handler">): void {

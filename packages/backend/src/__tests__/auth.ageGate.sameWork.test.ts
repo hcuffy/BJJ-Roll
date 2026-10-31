@@ -6,7 +6,6 @@ import { magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestCont
 import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-/** Records each send when it starts; while `hold` is on, a send never finishes until `release()`. */
 class HoldingEmailSender extends FakeEmailSender {
   hold = false;
   #releases: (() => void)[] = [];
@@ -46,14 +45,10 @@ const sendPaths = [
   { name: "magic link send", path: magicLinkSendPath, extraBody: { callbackURL: DEEP_LINK_CALLBACK_URL } },
 ];
 
-// Timing is shown by structure, not a stopwatch (Sara, 26 Oct): the same SQL in the same order, the same response, and the email
-// queued without waiting for it, for a known email, an unknown email, and a send whose sign-up will be refused (no 16+ tick).
-// This suite uses the inline test queue; the real pg-boss path is in auth.ageGate.sameWork.queued.test.ts (HEN-284).
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 known, unknown and refused sends do the same work", () => {
   const emailSender = new HoldingEmailSender();
   let environment: StartedAuthTestEnvironment | undefined;
   let ipSuffix = 10;
-  // Kept as a plain function and called with apply, so `this` is always the client that ran the query.
   const originalQuery = Object.getOwnPropertyDescriptor(Client.prototype, "query")?.value as (this: Client, ...queryArguments: unknown[]) => unknown;
 
   const observeSend = async (path: string, body: Record<string, unknown>): Promise<Observed> => {

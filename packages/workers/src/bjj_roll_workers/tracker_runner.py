@@ -1,16 +1,3 @@
-"""Chunked tracking of one video (HEN-318): runs any `tracker.Tracker` backend over a whole clip.
-
-The clip is split into chunks of `chunk_frames` (30 s at 10 fps) that overlap by `chunk_overlap_frames` (1 s). The first
-chunk starts at the user's tap; every later chunk starts inside the previous one's last second and is re-prompted from the
-previous chunk's masks on that first overlap frame. Overlap frames are kept from the earlier chunk. Peak RSS is logged after
-each chunk; once it is over `peak_rss_limit_bytes`, the following chunks use `fallback_chunk_frames` (15 s), and the fallback log names the
-chunk that tripped it (0-based `chunkIndex`) and the new chunk length (`chunkFrames`). All numbers come from `tracker_config`.
-
-Only the user's own track ("self") is kept in the result; partner and bystander taps are tracked in memory to keep the
-user's mask apart and are dropped (D6). Each call starts from that video's own tap only (D15). Drift events are part of the
-result and are never logged; logs carry the job ID, timings, peak RSS and chunk counters only (`job_logging`).
-"""
-
 import resource
 import sys
 import time
@@ -31,14 +18,11 @@ type RssReader = Callable[[], int]
 
 
 def read_peak_rss_bytes() -> int:
-    """Peak resident set size of this process so far (ru_maxrss is KiB on Linux, bytes on macOS)."""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * _RU_MAXRSS_BYTES_PER_UNIT
 
 
 @dataclass(frozen=True)
 class VideoTrackingResult:
-    """The user's own track for one video, from the tap frame on, plus its drift events (frame index + reason)."""
-
     video_id: str
     frames: tuple[TrackedFrame, ...]
     drift_events: tuple[DriftEvent, ...]
@@ -83,7 +67,6 @@ def track_video(
     other_taps: Mapping[str, TapPoint] | None = None,
     rss_reader: RssReader = read_peak_rss_bytes,
 ) -> VideoTrackingResult:
-    """Track the user from `own_tap` to the end of `frames` (frame index = position, sampled at `config.frames_per_second`)."""
     if not isinstance(own_tap, TapPoint):
         raise TypeError("each video needs the user's own tap")
     other_taps = dict(other_taps or {})
@@ -108,12 +91,6 @@ def track_video(
 
 
 class RePromptTrackerAdapter:
-    """Lets the HEN-317 re-prompt flow (`re_prompt_flow.Tracker`) drive the chunked runner for one video.
-
-    `anchor(tap)` (re)tracks the user from the tap frame to the end; frames before it are kept from the earlier run.
-    `next_drift()` hands out the drift events found from that frame on. Make a new adapter per video (D15).
-    """
-
     def __init__(
         self,
         job_id: str,

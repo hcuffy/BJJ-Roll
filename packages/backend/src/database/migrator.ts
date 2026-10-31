@@ -15,10 +15,6 @@ function resolveDefaultMigrationsDirectory(): string {
 
 const defaultMigrationsDirectory = resolveDefaultMigrationsDirectory();
 
-/**
- * Loads plain `.sql` migration files in lexicographical order and executes each
- * inside Kysely's migrator transaction.
- */
 export class SqlFileMigrationProvider implements MigrationProvider {
   private readonly migrationsDirectory: string;
 

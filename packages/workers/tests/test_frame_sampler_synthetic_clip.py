@@ -1,6 +1,3 @@
-"""HEN-351: the frame sampler keeps the tracker's 10 fps from a decoded clip, renumbers the kept frames from 0 and records each
-one's timestamp. Synthetic clips only."""
-
 import pytest
 
 from bjj_roll_workers.frame_sampler import sample_frames

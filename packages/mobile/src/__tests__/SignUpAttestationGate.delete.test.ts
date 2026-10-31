@@ -1,9 +1,9 @@
-import { SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, SignUpAttestationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SignUpAttestationGate, TRY_AGAIN } from "../screens/SignUpAttestationGate";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { colours } from "../theme/tokens";
@@ -17,17 +17,16 @@ const EMAIL_CODE = "Email me a code";
 const CODE_TITLE = "Enter the code we emailed you";
 const prompt: SignUpAttestationResult = {
   ok: true,
-  status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+  status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
 };
-const readError: SignUpAttestationResult = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown };
-const offline: AccountCodeResult = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
-const rateLimited: AccountCodeResult = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited };
+const readError: SignUpAttestationResult = { ok: false, reason: "unknown", message: failureMessages.unknown };
+const offline: AccountCodeResult = { ok: false, reason: "network", message: failureMessages.network };
+const rateLimited: AccountCodeResult = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited };
 const gateScreens = [
   ["the re-accept prompt", prompt, SIGN_UP_ATTESTATION_LABEL],
   ["the status-read error screen", readError, TRY_AGAIN],
 ] as const;
 
-/** A gated account (prompt or read error) with recording delete callbacks; each code request takes the next result. */
 async function renderGate(
   read: SignUpAttestationResult,
   codeResults: (AccountCodeResult | Promise<AccountCodeResult>)[] = [{ ok: true }],
@@ -136,13 +135,12 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     await screen.press(DELETE_ENTRY);
     await screen.press(EMAIL_CODE);
 
-    const error = `We could not send the code. ${FAILURE_MESSAGES.rateLimited}`;
+    const error = `We could not send the code. ${failureMessages.rateLimited}`;
     expect(flattenStyle(screen.queryByText(error)?.props.style).color).toBe(colours.danger);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
     expect(screen.text()).toContain(CONFIRM_TITLE);
   });
 
-  // Vera round 4 item 3: the destructive action sits a section gap (24) below Sign out.
   it.each(gateScreens)("on %s, Delete account sits 24 below Sign out", async (_case, read) => {
     const { screen } = await renderGate(read);
     const signOut = screen.getPressable("Sign out");
@@ -156,7 +154,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(gap + above).toBe(24);
   });
 
-  // Vera round 4 item 4: Android back on a delete step acts like its Cancel.
   it("Android back on the confirm and on the code step returns to the gate; on the gate it is not handled", async () => {
     const { calls, screen } = await renderGate(prompt);
     await screen.press(DELETE_ENTRY);
@@ -174,7 +171,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(pressHardwareBack()).toBe(false);
   });
 
-  // Vera #74 round 5: back never does more than the visible Cancel, which is disabled while a request is in flight.
   it("Android back while the first code is sending is ignored; the send then opens the code step", async () => {
     const send = deferred<AccountCodeResult>();
     const { screen } = await renderGate(prompt, [send.promise]);
@@ -217,14 +213,13 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(pressHardwareBack()).toBe(true);
     await screen.rerender();
     expect(screen.text()).toContain(CODE_TITLE);
-    deletion.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    deletion.resolve({ ok: false, reason: "unknown", message: failureMessages.unknown });
     await screen.rerender();
 
-    const error = `Your account was not deleted. ${FAILURE_MESSAGES.unknown}`;
+    const error = `Your account was not deleted. ${failureMessages.unknown}`;
     expect(flattenStyle(screen.queryByText(error)?.props.style).color).toBe(colours.danger);
     expect(screen.text()).toContain(CODE_TITLE);
     expect(calls.deleted).toBe(0);
-    // Once nothing is in flight, back is Cancel again.
     expect(pressHardwareBack()).toBe(true);
     await screen.rerender();
     expect(screen.text()).toContain(SIGN_UP_ATTESTATION_LABEL);

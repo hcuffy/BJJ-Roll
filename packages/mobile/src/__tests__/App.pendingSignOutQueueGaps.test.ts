@@ -1,6 +1,3 @@
-// Bill's HEN-314 gate tests @ f382ef3 (re-gate). Plants that broke agreed behaviour and survived the suite: a cookie-less "1" marker
-// (pre-HEN-299 format, or a sign-out whose cookie read failed) dropped on read; an unreadable queue overwritten; sign-out retrying only
-// the first leftover (AC1: "any leftover old sessions"). Harness copied from App.pendingSignOutQueue.test.ts.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -26,12 +23,11 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const FIRST = "session-token-1";
 const SECOND = "session-token-2";
 const THIRD = "session-token-3";
 
-/** A server that keeps sessions; `/sign-out` ends the presented session, unless that session is set to fail or hang. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
@@ -43,7 +39,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -52,7 +48,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         return await new Promise((_resolve, reject) =>
           init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
         );
@@ -99,7 +94,6 @@ describe("Pending sign-out queue gaps (Bill, HEN-314 re-gate @ f382ef3)", () => 
     await settle();
   };
   const marker = () => secureStore.items.get(PENDING_SIGN_OUT_KEY) ?? "";
-  /** Session 1 signed out unconfirmed, then session 2 signed in: session 1 is queued and session 2 is stored. */
   const leftoverQueuedThenSignedIn = async () => {
     server.state.failFor.add(FIRST);
     const screen = await launchApp();
@@ -133,7 +127,6 @@ describe("Pending sign-out queue gaps (Bill, HEN-314 re-gate @ f382ef3)", () => 
   it('a cookie-less "1" marker with a session still stored is finished at launch: sign-in shown, session ended, marker cleared', async () => {
     const screen = await launchApp();
     await signIn(screen);
-    // What a pre-HEN-299 build, or a sign-out whose cookie read failed, leaves when the key deletes and the server sign-out both failed.
     secureStore.items.set(PENDING_SIGN_OUT_KEY, "1");
 
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
@@ -171,7 +164,6 @@ describe("Pending sign-out queue gaps (Bill, HEN-314 re-gate @ f382ef3)", () => 
     await screen.press("Sign out");
     await settle();
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
-    // No relaunch: this sign-out alone ends both leftovers and the current session.
     expect([...server.liveSessions]).toEqual([]);
     expect(server.liveSessions.has(THIRD)).toBe(false);
     expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);

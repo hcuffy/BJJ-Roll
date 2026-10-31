@@ -2,7 +2,6 @@ import type { ModalClient } from "modal";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { callModalJob, modalAppName, modalFunctionNames, type ModalFunctionLookup } from "../jobs/modalJobCaller.js";
 
-// HEN-227 / HEN-48 option A: Node calls the Modal function with the JS SDK's `.remote()` only. Synthetic ids, no Modal client, no network.
 const jobId = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 const inputObjectKey = "videos/3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f/source.mp4";
 const succeededResult = { outcome: "succeeded", jobId, outputObjectKeys: [], needsUserConfirmation: false };

@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { readFileSync } from "node:fs";
@@ -44,7 +44,6 @@ describe("EmailEntryScreen", () => {
       }),
     );
 
-  /** Ticks 16+ (the first checkbox) and the HEN-183 sign-up duties, the two boxes every send needs. */
   const tickRequiredBoxes = async (screen: Awaited<ReturnType<typeof renderEmailEntry>>) => {
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
@@ -66,7 +65,6 @@ describe("EmailEntryScreen", () => {
 
     expect(flattenStyle(screen.getPressable("Continue with email").props.style).backgroundColor).toBe(colours.surfaceRaised);
     expect(flattenStyle(screen.queryByText("Continue with email")?.props.style).color).toBe(colours.textSecondary);
-    // Dimmed, but still pressable, so it must not tell screen readers it is disabled; the hint explains what is missing.
     expect(screen.getPressable("Continue with email").props.disabled).toBe(false);
     expect(screen.getPressable("Continue with email").props.accessibilityState).toMatchObject({ disabled: false });
     expect(screen.getPressable("Continue with email").props.accessibilityHint).toBe("Tick the 16 or older box first.");
@@ -182,7 +180,7 @@ describe("EmailEntryScreen", () => {
           type: "sign-in",
           age16Confirmed: true,
           age18Confirmed: false,
-          signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+          signUpAttestationTextVersionId: signUpAttestationVersion.id,
         },
       ],
     ]);
@@ -206,14 +204,14 @@ describe("EmailEntryScreen", () => {
         callbackURL: "bjjroll://auth",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
       {
         email: "member@example.test",
         type: "sign-in",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
     ]);
     expect(sentAdult).toEqual([true]);
@@ -272,9 +270,7 @@ describe("EmailEntryScreen", () => {
     expect(screen.findAllByType("TextInput")).toEqual([]);
     expect(flattenStyle(screen.queryByText(`Link expires in ${MAGIC_LINK_EXPIRY_MINUTES} minutes.`)?.props.style).color).toBe(colours.textSecondary);
 
-    // Same 30s cooldown as Resend code.
     expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
-    // Blocked: no fill and a muted label. Ready again: the surface-2 pill with a white label.
     expect(flattenStyle(screen.getPressable("Resend in 0:30").props.style).backgroundColor).toBe("transparent");
     expect(flattenStyle(screen.queryByText("Resend in 0:30")?.props.style).color).toBe(colours.textSecondary);
     await vi.advanceTimersByTimeAsync(30_000);

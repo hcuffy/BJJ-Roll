@@ -1,14 +1,12 @@
 import { AuthButton } from "./AuthButton";
 
 export interface EmailSendButtonsProps {
-  /** Email valid and both required boxes ticked; otherwise the buttons look disabled but still explain on tap. */
   readonly ready: boolean;
   readonly hint: string | undefined;
   readonly sending: string | null;
   readonly onSend: (kind: "code" | "link") => void;
 }
 
-/** The two email actions on the sign-in screen: the primary code button and the secondary sign-in link button. */
 export function EmailSendButtons({ ready, hint, sending, onSend }: EmailSendButtonsProps) {
   return (
     <>

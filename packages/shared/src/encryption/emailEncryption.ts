@@ -1,7 +1,6 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import type { Keyring } from "./keyring.js";
 
-/** Marker for this module. Also bound into every ciphertext as GCM additional data. Must never appear in a client bundle. */
 export const ENCRYPTION_MODULE_MARKER = "bjj-roll-encryption-v1";
 
 const CIPHER_ALGORITHM = "aes-256-gcm";
@@ -22,12 +21,10 @@ export class EmailDecryptionError extends Error {
   }
 }
 
-/** `lower(trim(email))`, applied before the lookup hash. */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** AES-256-GCM with a fresh random 12-byte nonce per call, under the keyring's current key version. */
 export function encryptEmail(keyring: Keyring, email: string): EncryptedEmail {
   const keyVersion = keyring.currentKeyVersion;
   const nonce = randomBytes(NONCE_BYTES);
@@ -37,7 +34,6 @@ export function encryptEmail(keyring: Keyring, email: string): EncryptedEmail {
   return { keyVersion, nonce, ciphertext, authTag: cipher.getAuthTag() };
 }
 
-/** Decrypts with the data key named by `keyVersion`. Any failure throws an error that holds no plaintext or key bytes. */
 export function decryptEmail(keyring: Keyring, encrypted: EncryptedEmail): string {
   try {
     if (encrypted.nonce.byteLength !== NONCE_BYTES || encrypted.authTag.byteLength !== AUTH_TAG_BYTES) {
@@ -54,7 +50,6 @@ export function decryptEmail(keyring: Keyring, encrypted: EncryptedEmail): strin
   }
 }
 
-/** HMAC-SHA256 of the normalised email with the keyring's HMAC key (never a data key). Stable across data key rotation. */
 export function emailLookupHash(keyring: Keyring, email: string): Buffer {
   return createHmac("sha256", keyring.hmacKey()).update(normalizeEmail(email), "utf8").digest();
 }

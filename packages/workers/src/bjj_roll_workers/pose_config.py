@@ -1,10 +1,3 @@
-"""Pose runner settings (HEN-319, DECISIONS.md A8), read from `pose_config.json` next to this module.
-
-`frames_per_second` is the sampling rate of the frames the pose runner gets; it must match the tracker's
-(`tracker_config.json`). `intra_op_threads` is ONNX Runtime's CPU thread count for one pose session. Both are reported
-with every run.
-"""
-
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path

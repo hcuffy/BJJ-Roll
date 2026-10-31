@@ -1,5 +1,3 @@
-// #76 (HEN-288) x #94 (HEN-310), Bill gate test: a startup Try again that reaches the server while the biometric setting
-// cannot be read fails closed: it lands on the lock, never on the signed-in screen (Stamp nit 1, store notes ede0690).
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,14 +26,12 @@ const SIGNED_IN_SCREEN = "You are signed in";
 const LOCKED_TITLE = "BJJ Roll is locked";
 const TRY_AGAIN = "Try again";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 
-/** A server that keeps sessions; `/sign-out` ends the presented session unless it is set to fail or hang; some paths can be down. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
   const state = { failFor: new Set<string>(), hangFor: new Set<string>(), downPaths: new Set<string>() };
-  /** Sign-out requests per session still waiting for an answer, and the most there ever were at once. */
   const inFlight = new Map<string, number>();
   const peakInFlight = new Map<string, number>();
   let signIns = 0;
@@ -54,13 +50,12 @@ function createSessionServer() {
     if ([...state.downPaths].some((path) => pathname.endsWith(path))) {
       throw new TypeError("fetch failed");
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp") || pathname.endsWith("/magic-link/exchange")) {
       return newSession();
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         const waiting = (inFlight.get(session) ?? 0) + 1;
         inFlight.set(session, waiting);
         peakInFlight.set(session, Math.max(waiting, peakInFlight.get(session) ?? 0));
@@ -109,7 +104,6 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
     await screen.press("Continue with email");
     await screen.changeText("6-digit code", "123456");
   };
-  /** Signs in by code and turns biometric unlock on at the offer (shown once per install). */
   const signInWithLockOn = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await signIn(screen);
     await screen.press("Turn on");
@@ -140,7 +134,6 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(screen.text()).toContain(SERVER_UNREACHABLE_NOTE);
 
-    // From now on the phone's store fails to read the biometric setting; every other key reads as usual.
     const readNow = secureStore.getItemAsync.bind(secureStore);
     secureStore.getItemAsync = async (key: string) => {
       if (key === BIOMETRIC_UNLOCK_KEY) {

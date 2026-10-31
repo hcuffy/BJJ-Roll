@@ -6,17 +6,13 @@ import { AuthScreenLayout } from "./AuthScreenLayout";
 import { authStyles } from "./authStyles";
 
 export interface AdultConfirmStepProps {
-  /** Writes the 18+ record; called at most once per opening. */
   readonly onConfirm: () => void;
-  /** Closes the dialog; nothing is written. */
   readonly onCancel: () => void;
 }
 
-/** Confirm dialog before the 18+ record is written (Henry, HEN-263): same in-screen pattern as "Delete your account?". */
 export function AdultConfirmStep({ onConfirm, onCancel }: AdultConfirmStepProps) {
   const heading = useRef<ComponentRef<typeof Text>>(null);
 
-  // Acts as a dialog: screen reader focus moves to its heading when it opens.
   useEffect(() => {
     if (heading.current) {
       AccessibilityInfo.sendAccessibilityEvent(heading.current, "focus");

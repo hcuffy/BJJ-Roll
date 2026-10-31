@@ -1,15 +1,3 @@
-"""Re-prompt flow ("Was this you?") on tracker drift (HEN-317, code part of HEN-72).
-
-The flow talks to a tracker through `Tracker`: drift events come in (HEN-67 drift log shape: frame index + reason),
-anchors go out (a frame index and a tap point in the HEN-318 pixel convention, checked against the video's frame size before
-they reach the tracker). The SAM 2.1 adapter from HEN-67 plugs in here later; tests use a fake.
-
-Each drift is shown once with its frame and answered once: "yes" keeps the track, a re-tap re-anchors the tracker at the
-drift frame and tracking continues from there. Counts and corrections live only in that video's result, and every call
-starts from that video's own first tap, so nothing is carried to another video (D15). Logs carry the job ID and timings
-only (`job_logging`); drift reasons, frames and taps are never logged.
-"""
-
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -24,21 +12,16 @@ _STYLES: tuple[str, ...] = get_args(Style.__value__)
 
 @dataclass(frozen=True)
 class DriftEvent:
-    """One entry of the HEN-67 drift log."""
-
     frame_index: int
     reason: str
 
 
 @dataclass(frozen=True)
-class KeepTrack:
-    """The user answered "yes, this was me"."""
+class KeepTrack: ...
 
 
 @dataclass(frozen=True)
 class ReTap:
-    """The user tapped themselves on the drift frame."""
-
     x: float
     y: float
 
@@ -47,13 +30,9 @@ type PromptAnswer = KeepTrack | ReTap
 
 
 class Tracker(Protocol):
-    def anchor(self, tap: TapPoint) -> None:
-        """Put the track on the tapped person at `tap.frame_index`; tracking continues from that frame."""
-        ...
+    def anchor(self, tap: TapPoint) -> None: ...
 
-    def next_drift(self) -> DriftEvent | None:
-        """Track on from the current anchor and return the next drift, or None at the end of the video."""
-        ...
+    def next_drift(self) -> DriftEvent | None: ...
 
 
 class FrameSource(Protocol):
@@ -98,7 +77,6 @@ class RePromptCounts:
 
 
 def run_re_prompt_flow(job_id: str, video: VideoRun, tracker: Tracker, frame_source: FrameSource, prompter: Prompter) -> VideoRePromptResult:
-    """Track one video from its first tap, prompting once per drift; a drift frame reported again ends the run. `tracker` must be new for this video."""
     started_at = time.monotonic()
     log_job_event("re_prompt_flow_started", job_id)
     prompted_frames: set[int] = set()

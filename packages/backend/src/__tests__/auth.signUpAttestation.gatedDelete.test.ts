@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import { createAgeGateTestContext } from "./ageGateTestContext.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-// HEN-183 (Bill's gate, #74 round 6; from his probe): an account held at the re-accept prompt can still delete itself on the
-// server (Apple 5.1.1(v), Play account deletion). Fails if the delete code or DELETE /account is ever gated on the attestation.
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 an account that has not accepted the attestation can delete itself", () => {
   const { current, flow, signUpWithOtp } = createAgeGateTestContext();
 
@@ -14,7 +12,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 an account that 
     const status = await flow.accountRequest("GET", "/account/signup-attestation", { cookie: user.cookie, ipAddress: user.ipAddress });
     expect(signUpAttestationStatusSchema.parse(await status.json()).required).toBe(true);
 
-    // requestDeleteCode expects 200 from POST /account/delete-code; DELETE /account then uses the emailed code.
     const code = await flow.requestDeleteCode(user);
     const deletion = await flow.accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code }, ipAddress: user.ipAddress });
     expect(deletion.status).toBe(200);

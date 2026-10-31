@@ -1,11 +1,3 @@
-"""Writes a video's tracking result (HEN-318) inside the configured footage folder only.
-
-The footage folder must already exist with mode 700; it is never created here. The result goes to
-`<footage folder>/tracks/<video id>.json` (folder mode 700, file mode 600). The video ID must be a UUID, never a filename,
-and the resolved path must stay inside the footage folder (no `..`, no symlink out). Only the user's own track and its drift
-events are written (D6). Nothing is logged.
-"""
-
 import json
 import os
 import re
@@ -45,7 +37,6 @@ def _result_document(result: VideoTrackingResult) -> dict[str, object]:
 
 
 def write_result_document(footage_folder: Path, folder_name: str, video_id: str, document: dict[str, object]) -> Path:
-    """Write `document` to `<footage folder>/<folder_name>/<video id>.json` after every guard above. Shared with HEN-319."""
     if not _UUID_PATTERN.fullmatch(video_id):
         raise UnsafeOutputPathError("video id must be a UUID")
     if not footage_folder.is_dir() or footage_folder.is_symlink():

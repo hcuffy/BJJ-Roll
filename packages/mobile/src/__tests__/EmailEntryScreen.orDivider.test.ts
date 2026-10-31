@@ -31,7 +31,6 @@ describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (V
   });
 
   it("puts the email buttons first, the 'or' row next, and the brand buttons after it", async () => {
-    // Apple shows on iOS only, as Apple's native button (no Text node): order it among the buttons.
     Platform.OS = "ios";
     const screen = await renderSignIn(["apple", "google"]);
     const texts = screen.findAllByType("Text").map(textOf);
@@ -40,7 +39,6 @@ describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (V
     expect(at("Continue with email")).toBeGreaterThanOrEqual(0);
     expect(at("Continue with email")).toBeLessThan(at("Email me a sign-in link instead"));
     expect(at("Email me a sign-in link instead")).toBeLessThan(at("or"));
-    // Vera interim item 2: the muted 16+ line sits between the divider and the brand buttons.
     expect(at("or")).toBeLessThan(at("Tick the 16 or older box first."));
     const [apple] = screen.findAllByType("AppleAuthenticationButton");
     const pressables = screen.pressables();
@@ -54,7 +52,6 @@ describe("HEN-239 sign-in order: email, 'or' divider, 16+ line, brand buttons (V
 
     expect(others).toHaveLength(0);
     expect(row?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants" });
-    // The actions stack has a 16 gap; the row adds 8 each side to make Vera's 24.
     expect(flattenStyle(row?.props.style)).toMatchObject({ flexDirection: "row", alignItems: "center", marginVertical: 8 });
     const [lineBefore, word, lineAfter] = row?.children ?? [];
     for (const line of [lineBefore, lineAfter]) {

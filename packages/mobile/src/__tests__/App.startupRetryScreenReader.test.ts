@@ -27,9 +27,7 @@ const SEND_CODE_PATH = "/email-otp/send-verification-otp";
 describe("Startup Try again for screen readers (HEN-310)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Paths (by ending) whose requests get no answer until the app aborts them, or until released. */
   let hangingPaths: Set<string>;
-  /** Held requests by path ending; releasing one delivers the real backend answer. */
   let held: Map<string, (() => void)[]>;
   let holdInsteadOfHang: boolean;
   let unreachablePaths: Set<string>;
@@ -58,7 +56,6 @@ describe("Startup Try again for screen readers (HEN-310)", () => {
     });
     return await renderScreen(createElement(App));
   };
-  /** Starts signed out with the server down, so sign-in shows the startup note and Try again. */
   const launchOffline = async () => {
     unreachablePaths.add("/get-session");
     const screen = await launchApp();
@@ -67,7 +64,6 @@ describe("Startup Try again for screen readers (HEN-310)", () => {
     vi.mocked(AccessibilityInfo.sendAccessibilityEvent).mockClear();
     return screen;
   };
-  /** Ticks the boxes and taps Continue with email while the send cannot reach the server, so sign-in stays up. */
   const continueWithEmailOffline = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     unreachablePaths.add(SEND_CODE_PATH);
     await screen.pressRole("checkbox");
@@ -77,7 +73,6 @@ describe("Startup Try again for screen readers (HEN-310)", () => {
   };
   const noteAnnouncements = () =>
     vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls.filter(([text]) => text === SERVER_UNREACHABLE_NOTE).length;
-  /** Focus events on the Email input; the harness re-creates host nodes on each render, so it matches by label. */
   const emailFocusMoves = () =>
     vi
       .mocked(AccessibilityInfo.sendAccessibilityEvent)

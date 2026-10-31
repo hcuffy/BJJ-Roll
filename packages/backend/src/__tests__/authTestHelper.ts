@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import type { Hono } from "hono";
 import type { Pool } from "pg";
 import { createApp } from "../app.js";
@@ -20,19 +20,15 @@ export const testBaseUrl = "http://localhost:3000";
 
 export const defaultTestClientIp = "203.0.113.10";
 
-/** HEN-183: the attestation field every account-creating request needs, at the current text version. */
-export const currentSignUpAttestation = { signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id } as const;
+export const currentSignUpAttestation = { signUpAttestationTextVersionId: signUpAttestationVersion.id } as const;
 
 export interface StartedAuthTestEnvironment {
   database: MigratedTestDatabase;
-  /** Admin pool (BYPASSRLS superuser) for inspecting raw rows only. */
   pool: Pool;
-  /** NOBYPASSRLS login role the auth code under test connects as. */
   appLogin: AppRoleLoginPool;
   app: Hono;
   auth: AuthInstance;
   emailSender: FakeEmailSender;
-  /** Dead-letter log lines of the real queue; always empty with the inline one. */
   emailQueueLogLines: EmailQueueLogLine[];
   codec: AuthCryptoCodec;
   stop: () => Promise<void>;
@@ -41,9 +37,7 @@ export interface StartedAuthTestEnvironment {
 export async function startAuthTestEnvironment(
   overrides?: Partial<Pick<CreateAuthOptions, "trustedProxyIpHeaders" | "logger" | "socialProviders" | "logAuthEvent">> & {
     emailSender?: FakeEmailSender;
-    /** "inline" (default) sends at once without waiting; "pg-boss" runs the real HEN-284 queue on the test database. */
     emailQueue?: "inline" | "pg-boss";
-    /** pg-boss only: false stores jobs but runs no worker, so nothing is sent and no job row is deleted. Default true. */
     emailQueueWorker?: boolean;
   },
 ): Promise<StartedAuthTestEnvironment> {
@@ -92,13 +86,11 @@ export async function startAuthTestEnvironment(
   };
 }
 
-/** Hono node-server env shape: getConnInfo reads the TCP peer address from here. */
 export function socketEnvironment(ipAddress: string): { incoming: { socket: { remoteAddress: string } } } {
   return { incoming: { socket: { remoteAddress: ipAddress } } };
 }
 
 export interface AuthRequestOptions {
-  /** TCP peer address (socket), not a header. */
   ipAddress?: string;
   cookie?: string;
   headers?: Record<string, string>;

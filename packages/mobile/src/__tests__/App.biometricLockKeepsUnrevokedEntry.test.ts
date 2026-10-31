@@ -22,15 +22,10 @@ const { App } = await import("../App");
 
 const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
+const sessionCookiePattern = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
 
-/**
- * A server that keeps sessions, as Better Auth `/sign-out` does: every sign-in starts a new one with its own signed cookie
- * (`<token>.<signature>`); `/sign-out` deletes the session whose cookie the request presents and answers success even when
- * it presents none. Requests from a live session reach the shared fake backend as signed in; others reach it signed out.
- */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Map<string, string>();
@@ -39,7 +34,7 @@ function createSessionServer() {
   let signIns = 0;
 
   const sessionOf = (request: Request): string | null => {
-    const signedValue = SESSION_COOKIE_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1];
+    const signedValue = sessionCookiePattern.exec(request.headers.get("cookie") ?? "")?.[1];
     if (!signedValue) {
       return null;
     }
@@ -147,7 +142,6 @@ describe("a lock-path revoke that fails keeps the old session queued (HEN-288 x 
     await settle();
     expect(await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)).toBe("on");
 
-    // The server still errors on sign-out when the link lands on the lock: the old entry must stay queued.
     const signOutsBefore = server.signOutRequests.length;
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
@@ -158,7 +152,6 @@ describe("a lock-path revoke that fails keeps the old session queued (HEN-288 x 
     expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
     expect(marker()).toContain(OLD_SESSION);
 
-    // Server healthy; the next launch ends the old session and clears its entry; the new session stays signed in.
     server.state.signOutEndpointErrors = false;
     deepLinkState.url = null;
     localAuthenticationFake.answers.push("user_cancel");

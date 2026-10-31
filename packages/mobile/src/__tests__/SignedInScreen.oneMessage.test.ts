@@ -1,17 +1,15 @@
-// HEN-305, one message at a time (Sara via Vera): an offline export on the delete confirm clears an earlier red code error,
-// so the grey note never shows next to red (Bill's gate probe, Q1).
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness, deferred } from "./signedInScreenHarness";
 
-const offline = { ok: false, reason: "network", message: FAILURE_MESSAGES.network } as const;
-const rateLimited = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited } as const;
-const unknown = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown } as const;
-const ADULT_ERROR = `We could not save that. ${FAILURE_MESSAGES.unknown}`;
-const EXPORT_ERROR = `Export failed. ${FAILURE_MESSAGES.unknown}`;
+const offline = { ok: false, reason: "network", message: failureMessages.network } as const;
+const rateLimited = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited } as const;
+const unknown = { ok: false, reason: "unknown", message: failureMessages.unknown } as const;
+const ADULT_ERROR = `We could not save that. ${failureMessages.unknown}`;
+const EXPORT_ERROR = `Export failed. ${failureMessages.unknown}`;
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
@@ -19,7 +17,6 @@ function alerts(screen: Screen) {
   return screen.findAllByType("Text").filter((node) => node.props.accessibilityRole === "alert");
 }
 
-/** Opens the 18+ confirm and answers Yes; the harness's adultResult decides the outcome. */
 async function confirmAdult(screen: Screen) {
   await screen.press("Confirm I am 18 or older");
   await screen.press("Yes, I am 18 or older");
@@ -33,7 +30,7 @@ describe("SignedInScreen delete confirm: one message at a time (HEN-305)", () =>
     const screen = await harness.render();
     await screen.press("Delete account");
     await screen.press("Email me a code");
-    expect(screen.text()).toContain(`We could not send the code. ${FAILURE_MESSAGES.rateLimited}`);
+    expect(screen.text()).toContain(`We could not send the code. ${failureMessages.rateLimited}`);
 
     state.exportResult = Promise.resolve<AccountExportResult>(offline);
     await screen.press("Export my data first");

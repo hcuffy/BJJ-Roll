@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
-// HEN-47 spike only. Hand-written SQL standing in for "our migrations own Better Auth's tables".
-// Column names are snake_case; Kysely's CamelCasePlugin maps Better Auth's camelCase fields onto them.
 export const spikeSchemaSql = `
 CREATE TABLE users (
   id text PRIMARY KEY,
@@ -74,7 +72,6 @@ GRANT EXECUTE ON FUNCTION auth_lookup_user_id(text) TO bjj_app;
 
 export const spikeTables = ["users", "sessions", "accounts", "verifications", "rate_limits"] as const;
 
-// Runs the lookup the way the app role would: inside a transaction switched to bjj_app.
 export async function lookupUserIdAsAppRole(pool: Pool, emailHash: string): Promise<string | null> {
   const client = await pool.connect();
   try {
@@ -91,7 +88,6 @@ export async function lookupUserIdAsAppRole(pool: Pool, emailHash: string): Prom
   }
 }
 
-// Per-email send budget (Better Auth's own limiter keys on IP + path only), stored in the same rate_limits table.
 export async function consumeEmailSendBudget(pool: Pool, emailHash: string, windowMilliseconds: number): Promise<number> {
   const now = Date.now();
   const result = await pool.query<{ count: number }>(

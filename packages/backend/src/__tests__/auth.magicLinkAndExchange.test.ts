@@ -56,7 +56,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     const rawToken = parsedMagicUrl.searchParams.get("token") ?? "";
     expect(rawToken.length).toBeGreaterThan(10);
 
-    // Verify magic-link token is hashed at rest with 15-minute expiry
     const hashedToken = `magic-link:${codec.hashMagicLinkToken(rawToken)}`;
     const storedMagicRow = await pool.query<{ value: string; lifetime: number }>(
       "SELECT value, extract(epoch FROM expires_at - created_at)::int AS lifetime FROM public.verifications WHERE identifier = $1",
@@ -65,7 +64,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(storedMagicRow.rowCount).toBe(1);
     expect(Math.abs((storedMagicRow.rows[0]?.lifetime ?? 0) - MAGIC_LINK_EXPIRY_SECONDS)).toBeLessThanOrEqual(5);
 
-    // Verify magic link: returns 302 to bjjroll://auth/callback?code=<exchange_code> ONLY
     const verifyResponse = await getAuthPath(app, magicLinkUrl, { ipAddress });
     expect(verifyResponse.status).toBe(302);
     expect(verifyResponse.headers.get("set-cookie")).toBeNull();
@@ -78,11 +76,9 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(exchangeCode.length).toBeGreaterThan(16);
     expect(location).not.toContain(rawToken);
 
-    // Verify magic-link token was single-use (replaying verify fails)
     const replayVerify = await getAuthPath(app, magicLinkUrl, { ipAddress });
     expect(replayVerify.headers.get("location") ?? "").not.toContain("code=");
 
-    // Verify exchange code is stored hashed at rest with 60-second expiry
     const hashedExchangeIdentifier = `magic-link-exchange:${codec.hashExchangeCode(exchangeCode)}`;
     const storedExchangeRow = await pool.query<{ lifetime: number }>(
       "SELECT extract(epoch FROM expires_at - created_at)::int AS lifetime FROM public.verifications WHERE identifier = $1",
@@ -91,13 +87,11 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(storedExchangeRow.rowCount).toBe(1);
     expect(Math.abs((storedExchangeRow.rows[0]?.lifetime ?? 0) - MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS)).toBeLessThanOrEqual(5);
 
-    // Raw DB dump never contains plaintext email, raw magic-link token, or raw exchange code
     const rawDumpBeforeExchange = await dumpRawAuthTables(pool);
     expect(rawDumpBeforeExchange.toLowerCase()).not.toContain("magic.user@example.com");
     expect(rawDumpBeforeExchange).not.toContain(rawToken);
     expect(rawDumpBeforeExchange).not.toContain(exchangeCode);
 
-    // Trade one-time exchange code over HTTPS for a session
     const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", {
       body: { code: exchangeCode },
       ipAddress,
@@ -113,7 +107,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(exchangePayload.user.emailVerified).toBe(true);
     expect(location).not.toContain(exchangePayload.token);
 
-    // Cookie issued by exchange route authenticates /get-session
     const sessionCookie = extractSessionCookie(exchangeResponse);
     expect(sessionCookie).toContain("=");
     const getSessionResponse = await getAuthPath(app, "/get-session", {
@@ -122,7 +115,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     });
     expect(getSessionResponse.status).toBe(200);
 
-    // Exchange code is single-use: second exchange attempt returns 401
     const secondExchange = await postAuthJson(app, "/magic-link/exchange", {
       body: { code: exchangeCode },
       ipAddress,
@@ -136,7 +128,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     const startMs = Date.parse("2026-03-01T10:00:00.000Z");
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-      // Magic link used 1 second after 15 minutes: rejected, no exchange code.
       vi.setSystemTime(startMs);
       await postAuthJson(app, "/sign-in/magic-link", {
         body: { email: "expired.magic.one@example.com", age16Confirmed: true, ...currentSignUpAttestation },
@@ -148,7 +139,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       expect(expiredVerify.status).toBe(400);
       expect(expiredVerify.headers.get("location") ?? "").not.toContain("code=");
 
-      // Magic link used 1 second before 15 minutes: accepted.
       const secondStartMs = startMs + 60 * 60 * 1000;
       vi.setSystemTime(secondStartMs);
       await postAuthJson(app, "/sign-in/magic-link", {
@@ -162,13 +152,11 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       const lateCode = new URL(validVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
       expect(lateCode.length).toBeGreaterThan(16);
 
-      // Exchange code used 1 second after 60 seconds: rejected, and the row is gone (single use even when expired).
       vi.setSystemTime(Date.now() + MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS * 1000 + 1000);
       const expiredExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: lateCode }, ipAddress });
       expect(expiredExchange.status).toBe(401);
       expect(extractSessionCookie(expiredExchange)).toBe("");
 
-      // A fresh code used at 59 seconds: accepted.
       await postAuthJson(app, "/sign-in/magic-link", {
         body: { email: "expired.magic.two@example.com", age16Confirmed: true, ...currentSignUpAttestation },
         ipAddress,
@@ -245,14 +233,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       }
     }
 
-    // A bad token with a hostile errorCallbackURL: still 400, no redirect to the error URL.
     const badToken = await getAuthPath(app, "/magic-link/verify?token=not-a-real-token&errorCallbackURL=https%3A%2F%2Fevil.example.com", {
       ipAddress: "198.51.102.200",
     });
     expect(badToken.status).toBe(400);
     expect(badToken.headers.get("location")).toBeNull();
 
-    // The rejected attempts did not consume the token: a clean verify still works, with deep-link error/new-user URLs.
     magicLink.searchParams.set("newUserCallbackURL", "bjjroll://auth/welcome");
     magicLink.searchParams.set("errorCallbackURL", "bjjroll://auth/error");
     const cleanVerify = await getAuthPath(app, magicLink.toString(), { ipAddress: "198.51.102.201" });

@@ -1,5 +1,3 @@
-"""HEN-227: user-data job logs carry only the job ID, timings and the error class. Synthetic values only."""
-
 import json
 
 import pytest
@@ -34,7 +32,7 @@ def test_user_data_job_exception_logs_only_job_id_and_error_class(capsys: pytest
     result = run_user_data_job(JOB_ID, OBJECT_KEY, _failing_handler)
 
     captured = capsys.readouterr()
-    print(captured.out, end="")  # Shown with `pytest -s` as the HEN-227 log-scrub evidence.
+    print(captured.out, end="")
     assert result == {"outcome": "failed", "jobId": JOB_ID, "errorClass": "internal", "retryable": True}
     entries = _log_entries(captured.out)
     assert [sorted(entry) for entry in entries] == [["event", "jobId"], ["durationSeconds", "errorClass", "event", "jobId"]]

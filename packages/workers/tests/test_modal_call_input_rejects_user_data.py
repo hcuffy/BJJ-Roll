@@ -1,5 +1,3 @@
-"""HEN-227: a Modal function accepts a job ID and a server-built object key, nothing else. Synthetic values only."""
-
 import pytest
 
 from bjj_roll_workers.modal_call_input import InvalidModalCallInputError, ModalCallInput, parse_modal_call_input

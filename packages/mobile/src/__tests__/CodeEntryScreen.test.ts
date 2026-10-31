@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
@@ -159,11 +159,10 @@ describe("CodeEntryScreen", () => {
       type: "sign-in",
       age16Confirmed: true,
       age18Confirmed: false,
-      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      signUpAttestationTextVersionId: signUpAttestationVersion.id,
     });
     const notice = "We sent a new code to member@example.test.";
     expect(screen.queryByText(notice)?.props.accessibilityLiveRegion).toBe("polite");
-    // A muted confirmation line, not plain white body text and not an error.
     expect(flattenStyle(screen.queryByText(notice)?.props.style).color).toBe(colours.textSecondary);
     expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
   });
@@ -182,7 +181,7 @@ describe("CodeEntryScreen", () => {
         type: "sign-in",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
     ]);
   });
@@ -203,7 +202,6 @@ describe("CodeEntryScreen", () => {
   it("sends one request when the 6th digit and the Done key arrive in the same tick (same render's handlers)", async () => {
     const screen = await renderCodeEntry();
     await screen.changeText("6-digit code", "12345");
-    // Both handlers come from one render, as when autofill delivers the last digit and Done fires before React re-renders.
     const { onChangeText, onSubmitEditing } = screen.getByLabelText("6-digit code").props as {
       onChangeText: (text: string) => void;
       onSubmitEditing: () => void;

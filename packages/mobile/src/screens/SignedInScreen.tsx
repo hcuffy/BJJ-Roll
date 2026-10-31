@@ -17,18 +17,13 @@ import { authStyles } from "./authStyles";
 import { useSignedInMessages } from "./useSignedInMessages";
 import { moveScreenReaderFocus } from "./moveScreenReaderFocus";
 
-/** The biometric unlock toggle's callbacks come from BiometricUnlockSettingProps (HEN-288). */
 export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onSignOut: () => void;
   readonly onExportData: () => Promise<AccountExportResult>;
-  /** Emails a fresh code; DELETE /account only succeeds with it (Henry's decision, HEN-65). */
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
-  /** Called once the backend confirmed the deletion and the local session is gone. */
   readonly onAccountDeleted: () => void;
-  /** Reads whether the account confirmed 18+ (HEN-263). */
   readonly onReadAgeConfirmation: () => Promise<AgeConfirmationResult>;
-  /** Records a new 18+ confirmation; only deleting the account undoes it. */
   readonly onConfirmAdult: () => Promise<AgeConfirmationResult>;
 }
 
@@ -36,13 +31,11 @@ type AccountTask = "export" | "code" | "adult";
 type DeleteStep = "none" | "confirm" | "code";
 
 const styles = StyleSheet.create({
-  // 16 margin + the layout's 16 gap = 32 above the section; 8 from the label to its items, 16 between items.
   accountSection: { marginTop: spacing.medium, gap: spacing.small },
   accountItems: { gap: spacing.medium },
   sectionLabel: { ...typeScale.label, color: colours.textSecondary },
 });
 
-/** Placeholder home until the real one lands, plus the account actions (HEN-65): export my data and delete account. */
 export function SignedInScreen({
   onSignOut,
   onExportData,
@@ -54,12 +47,10 @@ export function SignedInScreen({
   ...biometricCallbacks
 }: SignedInScreenProps) {
   const biometricSetting = useBiometricUnlockSetting(biometricCallbacks);
-  // Every action clears every message slot, both grey notes and the biometric toggle's error first: one message at a time.
   const messages = useSignedInMessages(biometricSetting);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("none");
   const [runningTask, setRunningTask] = useState<AccountTask | null>(null);
   const [age18Confirmed, setAge18Confirmed] = useState<AdultStatus>("checking");
-  // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a request.
   const inFlight = useRef(false);
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntry = useRef<ComponentRef<typeof View>>(null);
@@ -67,11 +58,8 @@ export function SignedInScreen({
   const [adultDialogOpen, setAdultDialogOpen] = useState(false);
   const adultEntry = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToAdultEntry = useRef(false);
-  // Set when this visit's confirm saved; cleared once focus has moved to the confirmed row (Vera round 4 item 3).
   const [adultJustConfirmed, setAdultJustConfirmed] = useState(false);
 
-  // The confirm acts as a dialog: focus moves into it when it opens, and back to Delete account when it is cancelled.
-  // The code step moves focus to its own heading.
   useEffect(() => {
     if (deleteStep === "confirm") {
       moveScreenReaderFocus(confirmHeading.current);
@@ -88,13 +76,11 @@ export function SignedInScreen({
     }
   }, [adultDialogOpen]);
 
-  // Read once per visit to this screen; the parent passes a fresh callback on every render.
   const readAgeConfirmation = useRef(onReadAgeConfirmation);
   useEffect(() => {
     let active = true;
     void readAgeConfirmation.current().then((result) => {
       if (active) {
-        // A failed read still offers the button: each confirm adds a new record, so confirming twice is harmless.
         setAge18Confirmed(result.ok ? result.status.age18Confirmed : "failed");
       }
     });
@@ -172,7 +158,6 @@ export function SignedInScreen({
   if (adultDialogOpen) {
     return (
       <AdultConfirmStep
-        // Either way out, focus goes back to the 18+ slot: the button on Cancel, "Saving…" on Yes, then the confirmed row once saved.
         onConfirm={() => {
           setAdultDialogOpen(false);
           void confirmAdultAge();
@@ -219,7 +204,6 @@ export function SignedInScreen({
         variant="secondary"
         disabled={isBusy}
         onPress={() => {
-          // Only when shown: an extra render after sign-out would flash this screen again (HEN-314, HEN-311).
           if (messages.showsMessage) {
             messages.clearMessages();
           }

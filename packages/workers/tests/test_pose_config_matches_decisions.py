@@ -1,5 +1,3 @@
-"""HEN-319: pose fps and ONNX Runtime thread count come from config (DECISIONS.md A8) and are reported with each run."""
-
 import json
 from pathlib import Path
 

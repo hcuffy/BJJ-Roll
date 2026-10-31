@@ -1,6 +1,3 @@
-"""HEN-319 / D6: the partner's pose is estimated in memory only. After a run on a two-person clip, no partner keypoint is in
-the result, on disk or in the logs."""
-
 import json
 import os
 import stat

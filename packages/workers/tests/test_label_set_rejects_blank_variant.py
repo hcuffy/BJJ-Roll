@@ -1,5 +1,3 @@
-"""HEN-316 gate: a variant on mount_escape must be exactly one of the listed ids; blank or padded strings are rejected."""
-
 import json
 from pathlib import Path
 

@@ -1,5 +1,3 @@
-"""HEN-318: chunk length, overlap, fps, RSS limit and fallback come from config (DECISIONS.md A7), not from code."""
-
 import json
 from pathlib import Path
 

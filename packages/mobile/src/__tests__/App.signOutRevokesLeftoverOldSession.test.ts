@@ -1,5 +1,3 @@
-// Pins #82 behaviour (Bill's HEN-303 gate, M7): a new sign-out first tries once more to end an older session still waiting
-// in the marker, so that session is not forgotten when the marker is replaced. Harness copied from App.revokeOldSession.test.ts.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -25,15 +23,10 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
+const sessionCookiePattern = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
 
-/**
- * A server that keeps sessions, as Better Auth `/sign-out` does: every sign-in starts a new one with its own signed cookie
- * (`<token>.<signature>`); `/sign-out` deletes the session whose cookie the request presents and answers success even when
- * it presents none. Requests from a live session reach the shared fake backend as signed in; others reach it signed out.
- */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Map<string, string>();
@@ -42,7 +35,7 @@ function createSessionServer() {
   let signIns = 0;
 
   const sessionOf = (request: Request): string | null => {
-    const signedValue = SESSION_COOKIE_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1];
+    const signedValue = sessionCookiePattern.exec(request.headers.get("cookie") ?? "")?.[1];
     if (!signedValue) {
       return null;
     }
@@ -114,7 +107,6 @@ describe("Signing out also ends an older session still waiting to be ended (HEN-
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     await settle();
   };
-  /** Signed in as session 1, then sign-out cannot reach the server: the phone forgets the session, the server still has it. */
   const signOutLeftUnfinished = async (email = MEMBER_EMAIL) => {
     const screen = await launchApp();
     await signIn(screen, email);
@@ -149,7 +141,6 @@ describe("Signing out also ends an older session still waiting to be ended (HEN-
 
   it("signing out while an older session is still waiting ends both sessions on the server", async () => {
     const screen = await signOutLeftUnfinished();
-    // Ending the old session fails at sign-in, so its marker stays (covered in App.revokeOldSession).
     server.state.signOutEndpointDown = true;
     await signIn(screen);
     server.state.signOutEndpointDown = false;
@@ -160,7 +151,6 @@ describe("Signing out also ends an older session still waiting to be ended (HEN-
     await settle();
 
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
-    // Both the old session (from the marker) and the session just signed out are gone on the server.
     expect([...server.liveSessions.keys()]).toEqual([]);
     expect(marker()).toBeNull();
   });

@@ -1,5 +1,3 @@
-"""HEN-316: the ground-truth validator accepts a valid file and rejects each broken rule. Small synthetic fixtures only."""
-
 import copy
 import json
 from collections.abc import Callable
@@ -53,20 +51,14 @@ def _delete(path: tuple) -> Callable[[dict], None]:
 
 
 REJECTIONS = [
-    # A class outside the set.
     pytest.param(_set(("positions", 1, "class"), "x_guard"), "unknown_class", id="position-class-outside-set"),
     pytest.param(_set(("events", 0, "class"), "arm_drag"), "unknown_class", id="event-class-outside-set"),
     pytest.param(_set(("positions", 0, "class"), "takedown"), "unknown_class", id="event-class-in-position-lane"),
-    # Overlapping Lane A segments.
     pytest.param(_set(("positions", 1, "start"), 10), "overlap", id="overlapping-positions"),
-    # A missing or unknown style.
     pytest.param(_delete(("style",)), "style", id="missing-style"),
     pytest.param(_set(("style",), "nogi"), "style", id="unknown-style"),
-    # A gi-only detail on a no-gi video.
     pytest.param(_set(("style",), "no-gi"), "gi_only_detail", id="gi-detail-on-no-gi"),
-    # A submission without an outcome.
     pytest.param(_delete(("events", 2, "outcome")), "missing_outcome", id="submission-without-outcome"),
-    # An unknown extra field.
     pytest.param(_set(("notes",), "good roll"), "unknown_field", id="extra-top-level-field"),
     pytest.param(_set(("positions", 0, "comment"), "slow start"), "unknown_field", id="extra-position-field"),
     pytest.param(_set(("events", 1, "filename"), "IMG_4412.MOV"), "unknown_field", id="extra-event-field"),

@@ -1,10 +1,5 @@
 import type { EmailQueue, EmailSender, QueuedEmail } from "../email/index.js";
 
-/**
- * Test double for the HEN-284 queue: starts the send straight away and does not wait for it, so the response never waits on the
- * provider and a test can read the sent message right after the response. No retry, no storage: the real queue is tested in
- * emailQueue.*.test.ts and auth.ageGate.sameWork.queued.test.ts.
- */
 export class InlineEmailQueue implements EmailQueue {
   constructor(private readonly emailSender: EmailSender) {}
 

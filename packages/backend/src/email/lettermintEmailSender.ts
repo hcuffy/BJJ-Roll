@@ -38,11 +38,6 @@ function isAbortOrTimeoutError(error: unknown): boolean {
   return errorName === "TimeoutError" || errorName === "AbortError";
 }
 
-/**
- * Lettermint transactional email sender behind `EmailSender`.
- * Takes its API key and sender address via start-up configuration (never reads environment variables directly),
- * performs a single HTTP POST with no internal retry, and strips all PII and credentials from thrown errors.
- */
 export class LettermintEmailSender implements EmailSender {
   readonly #apiKey: string;
   readonly #fromAddress: string;
@@ -105,7 +100,6 @@ export class LettermintEmailSender implements EmailSender {
         headers: {
           "Content-Type": "application/json",
           "x-lettermint-token": this.#apiKey,
-          // Lettermint sends once per key for 24 h, so a retry after a timeout does not send the email twice.
           ...(idempotencyKey === undefined ? {} : { "Idempotency-Key": idempotencyKey }),
         },
         body: JSON.stringify(requestBody),

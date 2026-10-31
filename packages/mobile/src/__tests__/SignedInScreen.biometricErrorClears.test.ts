@@ -1,6 +1,5 @@
-// HEN-311 after #76: the biometric toggle's red error is a signed-in message too, so clearMessages() clears it with the rest.
 import { beforeEach, describe, expect, it } from "vitest";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness } from "./signedInScreenHarness";
@@ -14,7 +13,6 @@ const CONFIRM = "Confirm I am 18 or older";
 const DIALOG_YES = "Yes, I am 18 or older";
 const EXPORT_ERROR = "Too many tries.";
 
-// The 18+ dialog and the delete confirm cover the account section, so those actions close it again before the check.
 const signedInActions: [string, string[]][] = [
   ["Export my data", ["Export my data"]],
   ["the 18+ tap", [CONFIRM, "Cancel"]],
@@ -52,9 +50,8 @@ describe("SignedInScreen: a signed-in action clears the biometric toggle error (
     expect(harness.state.signOutCalls).toBe(1);
   });
 
-  // Vera: a toggle start is a signed-in action too, so it calls clearMessages() first.
   it("18+ offline (grey note showing), then toggle fails: only the red toggle error shows, no grey note", async () => {
-    harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: failureMessages.network });
     harness.state.biometricChangeResult = Promise.resolve({ ok: false, failure: "failed" });
     const screen = await harness.render();
     await screen.press(CONFIRM);

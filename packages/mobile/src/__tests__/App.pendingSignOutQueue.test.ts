@@ -1,5 +1,3 @@
-// The pending sign-out queue (HEN-314, Sara's design; Bill's Q3 and Stamp's timeout rule): each queued old session is
-// cleared only on its own confirmed server sign-out. A failed or timed-out revoke stays queued for the next try.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -26,11 +24,10 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const FIRST = "session-token-1";
 const SECOND = "session-token-2";
 
-/** A server that keeps sessions; `/sign-out` ends the presented session, unless that session is set to fail or hang. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
@@ -42,7 +39,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -51,7 +48,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out") && session !== null) {
       if (state.hangFor.has(session)) {
-        // A host that never answers: the request ends only when the app aborts it.
         return await new Promise((_resolve, reject) =>
           init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
         );
@@ -98,7 +94,6 @@ describe("Pending sign-out queue: cleared per entry, only on its own confirmed e
     await settle();
   };
   const marker = () => secureStore.items.get(PENDING_SIGN_OUT_KEY) ?? "";
-  /** Session 1 signed out unconfirmed, then session 2 signed in: session 1 is queued and session 2 is stored. */
   const leftoverQueuedThenSignedIn = async () => {
     server.state.failFor.add(FIRST);
     const screen = await launchApp();

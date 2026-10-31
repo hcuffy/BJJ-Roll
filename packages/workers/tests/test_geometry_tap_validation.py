@@ -1,5 +1,3 @@
-"""HEN-318: one coordinate convention (pixels, origin top-left, x right, y down, per frame index), validated at the boundary."""
-
 import math
 
 import pytest
@@ -26,7 +24,7 @@ def test_geometry_rejects_negative_or_non_finite_coordinates(x: float, y: float)
 @pytest.mark.parametrize("frame_index", [-1, True, 1.5])
 def test_geometry_rejects_a_bad_frame_index(frame_index: object) -> None:
     with pytest.raises(InvalidCoordinateError):
-        TapPoint(frame_index=frame_index, x=1.0, y=1.0)  # type: ignore[arg-type]
+        TapPoint(frame_index=frame_index, x=1.0, y=1.0)  # type: ignore[arg-type]  # a wrong type on purpose
 
 
 @pytest.mark.parametrize("tap", [TapPoint(0, 640.0, 10.0), TapPoint(0, 10.0, 360.0), TapPoint(100, 10.0, 10.0)])

@@ -1,6 +1,3 @@
-"""HEN-351: sampling a clip, tracking it and fetching the checkpoint log no video bytes, signed URLs, filenames, footage paths, emails,
-tokens or secrets. Synthetic values and a mocked fetch only."""
-
 import importlib.util
 import logging
 import stat

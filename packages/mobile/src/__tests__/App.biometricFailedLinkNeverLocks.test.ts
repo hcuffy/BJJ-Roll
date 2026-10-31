@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen } from "./screenHarness";
@@ -24,15 +24,10 @@ const { App } = await import("../App");
 const SIGNED_IN_SCREEN = "You are signed in";
 const LOCKED_TITLE = "BJJ Roll is locked";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
-const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
+const EXPIRED_MESSAGE = failureMessages.invalidLink;
 
-/**
- * HEN-288 merged with main 66c8eb1 (#83 timeouts, #84 link results): the lock decision lives in the link's success branch,
- * after the timed exchange. A failed or timed-out link changes nothing for a locked app, and a timeout never locks.
- */
 describe("a failed magic link never shows the biometric lock (HEN-288 x HEN-304, Bill gate @ f353356)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let exchangeHangs: boolean;
   let renderedScreens: string[] = [];
@@ -55,7 +50,6 @@ describe("a failed magic link never shows the biometric lock (HEN-288 x HEN-304,
     renderedScreens = [];
     return await renderScreen(createElement(App), (text) => renderedScreens.push(text));
   };
-  /** Signs in by code with biometric unlock turned on at the offer, as a member did before this launch. */
   const signInWithBiometricOn = async () => {
     const screen = await launchApp();
     await screen.pressRole("checkbox");
@@ -96,7 +90,6 @@ describe("a failed magic link never shows the biometric lock (HEN-288 x HEN-304,
   });
 
   it("signed out with the biometric flag left on: a rejected link at cold start shows the link card, never the lock", async () => {
-    // The flag is cleared best effort at sign-out; if that write failed, a signed-out phone can still hold "on".
     await secureStore.setItemAsync(BIOMETRIC_UNLOCK_KEY, "on");
     deepLinkState.url = REJECTED_LINK;
     const screen = await launchApp();

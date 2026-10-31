@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, signUpAttestationStatusSchema, type SignUpAttestationStatus } from "@bjj-roll/shared";
+import { signUpAttestationVersion, signUpAttestationStatusSchema, type SignUpAttestationStatus } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import type { SignedInUser } from "./accountTestFlow.js";
@@ -6,11 +6,9 @@ import { createAgeGateTestContext, magicLinkSendPath, otpSendPath, otpSignInPath
 import { extractSessionCookie, getAuthPath, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-const currentVersionId = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const currentVersionId = signUpAttestationVersion.id;
 const oldVersionId = "attestation-signup-draft-0";
 
-// HEN-183 (Sara, 27 Oct): the duties tick on the sign-in screen also writes the record for an existing account, so a returning user
-// who ticked is not asked a second time. The send still answers every email the same way.
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the sign-in tick refreshes the attestation for existing accounts", () => {
   const { current, flow, latestOtpFor, latestMagicLinkFor, signUpWithOtp } = createAgeGateTestContext();
 
@@ -28,7 +26,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the sign-in tick
     return result.rows.map((row) => row.text_version_id);
   };
 
-  /** An account made before HEN-183 (no record), or one that accepted an older text version. */
   const existingUser = async (email: string, ipAddress: string, acceptedVersion: string | null): Promise<SignedInUser> => {
     const user = await signUpWithOtp(email, ipAddress, { age16Confirmed: true });
     await current().pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [user.userId]);

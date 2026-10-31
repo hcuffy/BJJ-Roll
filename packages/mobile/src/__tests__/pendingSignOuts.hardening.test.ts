@@ -1,5 +1,3 @@
-// The pending sign-out queue stays small, stops retrying sessions the server says are gone, never loses an entry to a race,
-// and fails safe on bad stored data (HEN-315, Sara's calls 2026-10-29).
 import { readFileSync } from "node:fs";
 import { inspect } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,13 +8,11 @@ import { createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const cookieOf = (token: string) => `better-auth.session_token=${token}.signature`;
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
-/** Requests that present no session cookie (the stored session is gone from the phone). */
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const NO_COOKIE = "no-cookie";
 
 type SignOutAnswer = number | "hang";
 
-/** `/sign-out` answers per presented session token (default 200) and records the order the sessions were presented in. */
 function createSignOutServer() {
   const answers = new Map<string, SignOutAnswer>();
   const presented: string[] = [];
@@ -25,7 +21,7 @@ function createSignOutServer() {
     if (!new URL(request.url).pathname.endsWith("/sign-out")) {
       return Response.json({});
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? NO_COOKIE;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? NO_COOKIE;
     presented.push(session);
     const answer = answers.get(session) ?? 200;
     if (answer === "hang") {
@@ -44,7 +40,6 @@ describe("Pending sign-out queue hardening (HEN-315)", () => {
   let client: ReturnType<typeof createMobileAuthClient>;
   let consoleSpies: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }[] = [];
 
-  /** Stores the queue as the app writes it: oldest first, each with the time it was queued. */
   const storeQueue = (...entries: readonly { readonly token: string; readonly ageDays: number }[]) =>
     secureStore.items.set(
       PENDING_SIGN_OUT_KEY,
@@ -138,7 +133,6 @@ describe("Pending sign-out queue hardening (HEN-315)", () => {
 
   it("writes are serialized: an add and a drop that overlap both take effect", async () => {
     secureStore.items.set(PENDING_SIGN_OUT_KEY, cookieOf("session-1"));
-    // A keystore read takes a moment, as on a phone, so both changes read the queue before either writes.
     const readNow = secureStore.getItemAsync;
     secureStore.getItemAsync = async (key: string) => {
       const value = await readNow(key);

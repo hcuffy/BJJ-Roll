@@ -1,31 +1,3 @@
-"""Label set v1 (HEN-44) and the ground-truth file format scored against it (HEN-316).
-
-The label set lives in `label_set_v1.json` next to this module. Level 1 (18 positions in Lane A, 9 events in Lane B) is the
-scoring set and is the same for gi and no-gi (DECISIONS.md A6). Level 2 is a per-class pick list; details flagged `gi_only`
-are hidden for `no-gi` videos (H9). Every id (class, detail, variant) is snake_case (`^[a-z0-9_]+$`) and stable; each detail
-also carries `label`, the source name as free display text. A detail may list `variants` (only `mount_escape` does: upa,
-elbow_knee, to_half).
-
-Ground-truth file format (JSON object, no free-text fields, unknown fields are rejected):
-
-    {
-      "video_id": "<uuid>",                 # the video's id, never a filename
-      "style": "gi" | "no-gi",
-      "positions": [                        # Lane A, segments must not overlap (touching is fine)
-        {"start": <seconds>, "end": <seconds>, "class": "<position id>", "role": "top" | "bottom" | "neutral"}
-      ],
-      "events": [                           # Lane B, a moment ("time") or a span ("start" + "end")
-        {"time": <seconds>, "class": "<event id>", "detail": "<level 2 id, optional>",
-         "variant": "<mount_escape only: a listed variant id or null>", "outcome": "attempt" | "defended" | "finish"}
-      ]
-    }
-
-`outcome` is required on `submission` events and not allowed on any other event. The `variant` key (a value or null) is allowed
-only on an event whose detail lists variants (only `mount_escape`); a non-null `variant` must be one of those. Times are seconds
-from the start of the video (finite numbers >= 0); a span's end is after its start. Errors carry a fixed rule name and a JSON path, never a value from
-the file.
-"""
-
 import json
 import math
 import re
@@ -72,12 +44,10 @@ class LabelSet:
         return tuple(label.id for label in self.events)
 
     def level1_classes(self, style: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        """The scoring set (Lane A ids, Lane B ids). The same for every style: no level 1 class is gi-only or no-gi-only."""
         self._require_style(style)
         return self.position_ids, self.event_ids
 
     def pick_list(self, class_id: str, style: str) -> tuple[str, ...]:
-        """Level 2 detail ids for one class, in source order; gi-only details are left out for `no-gi`."""
         self._require_style(style)
         for label in self.positions + self.events:
             if label.id == class_id:
@@ -85,7 +55,6 @@ class LabelSet:
         raise ValueError("unknown label class")
 
     def variants(self, class_id: str, detail_id: str) -> tuple[str, ...]:
-        """Variant ids listed for one level 2 detail; empty when the detail has none."""
         for label in self.positions + self.events:
             if label.id == class_id:
                 for detail in label.details:
@@ -103,7 +72,6 @@ _DETAIL_FIELDS = {"id", "label", "gi_only", "group", "variants"}
 
 
 def _parse_class(raw: dict) -> LabelClass:
-    # A level 1 class has no style flag, so it can't be gi-only or no-gi-only; only level 2 details carry `gi_only`.
     if set(raw) - _CLASS_FIELDS or any(set(detail) - _DETAIL_FIELDS for detail in raw["details"]):
         raise ValueError("unknown field in label set")
     details = tuple(_parse_detail(detail) for detail in raw["details"])
@@ -150,8 +118,6 @@ def load_label_set() -> LabelSet:
 
 
 class GroundTruthError(ValueError):
-    """A rejected ground-truth file. The message names the rule and the JSON path only, never a value from the file."""
-
     def __init__(self, rule: str, path: str) -> None:
         super().__init__(f"{rule} at {path}")
         self.rule = rule
@@ -226,7 +192,6 @@ def _variant(label_set: LabelSet, class_id: str, detail: str | None, raw: dict, 
         return None
     allowed = label_set.variants(class_id, detail) if detail is not None else ()
     if not allowed:
-        # The key itself, null included, is only allowed on a detail that lists variants (mount_escape).
         raise GroundTruthError("unknown_variant", path)
     variant = raw["variant"]
     if variant is None:
@@ -273,7 +238,6 @@ def _event(label_set: LabelSet, raw: object, style: str, path: str) -> Event:
 
 
 def validate_ground_truth(data: object, label_set: LabelSet | None = None) -> GroundTruth:
-    """Check a parsed ground-truth file against label set v1 and return it typed; raise GroundTruthError on the first broken rule."""
     label_set = label_set or load_label_set()
     raw = _require_object(data, _TOP_LEVEL_FIELDS, _TOP_LEVEL_FIELDS - {"style"}, "$")
     if raw.get("style") not in label_set.styles:
@@ -296,5 +260,4 @@ def validate_ground_truth(data: object, label_set: LabelSet | None = None) -> Gr
 
 
 def load_ground_truth(path: Path) -> GroundTruth:
-    """Read and validate one ground-truth JSON file from local disk."""
     return validate_ground_truth(json.loads(path.read_text(encoding="utf-8")))

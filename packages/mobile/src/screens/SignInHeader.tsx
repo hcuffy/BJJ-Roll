@@ -10,7 +10,6 @@ export interface SignInHeaderProps {
   readonly accountNotice: string | null;
 }
 
-/** Top of the sign-in screen: a failed-link card, a one-time account notice, then the title. */
 export function SignInHeader({ linkError, linkErrorReason, accountNotice }: SignInHeaderProps) {
   return (
     <>

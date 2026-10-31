@@ -21,7 +21,6 @@ describe("session storage", () => {
     const restartedClient = createMobileAuthClient(options);
     expect(await readSignedInUserId(restartedClient)).toBe("user-1");
     expect(backend.requests.at(-1)?.cookie).toContain("better-auth.session_token=signed-session-value");
-    // The session cookie is the only thing kept: no cached session data in SecureStore.
     expect([...secureStore.items.keys()]).toEqual([COOKIE_STORAGE_KEY]);
 
     await signOut(restartedClient, secureStore);

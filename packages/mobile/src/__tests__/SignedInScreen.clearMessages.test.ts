@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness } from "./signedInScreenHarness";
@@ -16,12 +16,12 @@ interface Stale {
 const CONFIRM = "Confirm I am 18 or older";
 const DIALOG_YES = "Yes, I am 18 or older";
 const SHARED = "Your data export was shared.";
-const adultFails = (reason: "network" | "rateLimited"): AgeConfirmationResult => ({ ok: false, reason, message: FAILURE_MESSAGES[reason] });
+const adultFails = (reason: "network" | "rateLimited"): AgeConfirmationResult => ({ ok: false, reason, message: failureMessages[reason] });
 
 const exportFails: Stale = {
   text: "Export failed.",
   leave: async (harness, screen) => {
-    harness.state.exportResult = Promise.resolve({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    harness.state.exportResult = Promise.resolve({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
     await screen.press("Export my data");
     harness.state.exportResult = Promise.resolve({ ok: true, json: "{}" });
   },
@@ -47,7 +47,6 @@ const staleOnMain: [string, Stale][] = [
   ["a red 18+ error", adultWith("We could not save that.", "rateLimited")],
   ["the grey offline note", adultWith(SERVER_UNREACHABLE_NOTE, "network")],
 ];
-// The 18+ dialog covers the screen, so that action closes it again before the check.
 const mainActions: [string, string[]][] = [
   ["Export", ["Export my data"]],
   ["the 18+ tap", [CONFIRM, "Cancel"]],
@@ -55,7 +54,6 @@ const mainActions: [string, string[]][] = [
   ["Sign out", ["Sign out"]],
 ];
 
-/** HEN-311 (Vera fix 2): every signed-in action starts by clearing every message slot, so only one message shows at a time. */
 describe("SignedInScreen clears stale messages at the start of each action (HEN-311)", () => {
   let harness: Harness;
 
@@ -99,7 +97,7 @@ describe("SignedInScreen clears stale messages at the start of each action (HEN-
     await screen.press("Delete account");
     await exportShared.leave(harness, screen);
     expect(screen.text()).toContain(SHARED);
-    harness.state.codeResult = Promise.resolve({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    harness.state.codeResult = Promise.resolve({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
     await screen.press("Email me a code");
 
     expect(screen.text()).toContain("We could not send the code.");
@@ -109,7 +107,7 @@ describe("SignedInScreen clears stale messages at the start of each action (HEN-
   it("on the delete confirm, Export clears a red code error", async () => {
     const screen = await harness.render();
     await screen.press("Delete account");
-    harness.state.codeResult = Promise.resolve({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    harness.state.codeResult = Promise.resolve({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
     await screen.press("Email me a code");
     expect(screen.text()).toContain("We could not send the code.");
     await screen.press("Export my data first");

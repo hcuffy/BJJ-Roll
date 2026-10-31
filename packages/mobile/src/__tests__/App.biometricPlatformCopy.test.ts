@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
-import { AuthenticationType, localAuthenticationFake, setUpEnrolledPhone, setUpPhoneWithoutBiometrics } from "./localAuthenticationFake";
+import { authenticationType, localAuthenticationFake, setUpEnrolledPhone, setUpPhoneWithoutBiometrics } from "./localAuthenticationFake";
 import { renderScreen } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -36,7 +36,7 @@ const platformCases: PlatformCase[] = [
   {
     name: "iOS Face ID",
     os: "ios",
-    sensors: [AuthenticationType.FACIAL_RECOGNITION],
+    sensors: [authenticationType.FACIAL_RECOGNITION],
     offerTitle: "Unlock BJJ Roll with Face ID?",
     lockLine: "Use Face ID or your passcode to unlock.",
     toggleLabel: "Face ID",
@@ -47,7 +47,7 @@ const platformCases: PlatformCase[] = [
   {
     name: "iOS Touch ID",
     os: "ios",
-    sensors: [AuthenticationType.FINGERPRINT],
+    sensors: [authenticationType.FINGERPRINT],
     offerTitle: "Unlock BJJ Roll with Touch ID?",
     lockLine: "Use Touch ID or your passcode to unlock.",
     toggleLabel: "Touch ID",
@@ -58,7 +58,7 @@ const platformCases: PlatformCase[] = [
   {
     name: "Android",
     os: "android",
-    sensors: [AuthenticationType.FINGERPRINT, AuthenticationType.FACIAL_RECOGNITION],
+    sensors: [authenticationType.FINGERPRINT, authenticationType.FACIAL_RECOGNITION],
     offerTitle: "Unlock BJJ Roll with your fingerprint or face?",
     lockLine: "Use your fingerprint, face or screen lock to unlock.",
     toggleLabel: "Biometric unlock",
@@ -111,7 +111,6 @@ describe.each(platformCases)("biometric unlock wording on $name (Vera round 2, f
     await screen.press("Turn on");
 
     expect(screen.queryByText(platform.toggleLabel)).not.toBeNull();
-    // The spoken name is the visible one (WCAG 2.5.3).
     expect(screen.getByRole("switch").props.accessibilityLabel).toBe(platform.toggleLabel);
     localAuthenticationFake.answers.push("user_cancel");
     expect((await launchApp()).text()).toContain(platform.lockLine);

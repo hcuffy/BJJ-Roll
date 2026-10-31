@@ -1,16 +1,3 @@
-"""Local CPU pose backend: RTMPose-m (COCO-17, 256x192, SimCC head) as an ONNX model on onnxruntime's CPU provider (HEN-319).
-
-`weights_file` is the `end2end.onnx` from OpenMMLab's RTMPose-m body7 ONNX SDK (see the HEN-319 handoff for the URL and
-licence). Weights are not shipped, downloaded or read by tests. numpy and onnxruntime are imported lazily on the first
-`estimate` call and are not CI dependencies (onnxruntime has no Python 3.15 wheel); a real run uses the HEN-318 private venv.
-
-Top-down pipeline as in mmpose/rtmlib, without OpenCV: the box is padded by `BOX_PADDING`, widened to the model's aspect
-ratio, resampled (nearest pixel, zero outside the frame) to `MODEL_INPUT_WIDTH` x `MODEL_INPUT_HEIGHT`, normalised with
-ImageNet mean/std; the SimCC x/y outputs are decoded by argmax / `SIMCC_SPLIT_RATIO` and mapped back to frame pixels. The
-score is the smaller of the x and y maxima, clipped to [0, 1]. Output channel i is `COCO17_KEYPOINT_NAMES[i]`. Unverified
-until the first local smoke run.
-"""
-
 import importlib
 from pathlib import Path
 from typing import Any
@@ -31,8 +18,6 @@ KEYPOINT_EDGE_MARGIN = 1e-3
 
 
 class RtmPoseOnnxPose:
-    """`pose.Pose` backend. The session loads on first use with `config.intra_op_threads`; nothing about a video is kept."""
-
     def __init__(self, weights_file: Path, config: PoseConfig) -> None:
         self._weights_file = weights_file
         self._config = config

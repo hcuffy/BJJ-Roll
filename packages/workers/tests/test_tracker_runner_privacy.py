@@ -1,6 +1,3 @@
-"""HEN-318: partner and bystander masks are tracked in memory only and never persisted (D6); every video needs its own tap and
-nothing about an athlete is carried from one video to the next (D15). Fake model, synthetic clips only."""
-
 import json
 import stat
 from pathlib import Path
@@ -95,7 +92,7 @@ def test_tracker_runner_refuses_a_second_video_with_no_tap_of_its_own() -> None:
     first_video_calls = len(fake.calls)
 
     with pytest.raises(TypeError):
-        track_video(JOB_ID, SECOND_VIDEO_ID, frames, None, fake, load_tracker_config(), rss_reader=lambda: 0)  # type: ignore[arg-type]
+        track_video(JOB_ID, SECOND_VIDEO_ID, frames, None, fake, load_tracker_config(), rss_reader=lambda: 0)  # type: ignore[arg-type]  # a wrong type on purpose
 
     assert len(fake.calls) == first_video_calls
 
@@ -120,7 +117,7 @@ def test_tracker_runner_refuses_a_batch_run_without_a_tap_for_each_video() -> No
     first_result = run_re_prompt_flow(JOB_ID, first_video, adapters[0], _NoFrames(), _KeepEveryTrack())
     first_video_calls = len(fake.calls)
     with pytest.raises(TypeError):
-        VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None, frame_size=frames[0].size)  # type: ignore[arg-type]
+        VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None, frame_size=frames[0].size)  # type: ignore[arg-type]  # a wrong type on purpose
 
     assert first_result.video_id == FIRST_VIDEO_ID
     assert len(fake.calls) == first_video_calls

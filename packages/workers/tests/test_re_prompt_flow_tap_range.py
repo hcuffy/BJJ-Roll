@@ -1,5 +1,3 @@
-"""HEN-323: re-prompt flow taps are range-checked against the HEN-318 pixel convention before they reach the tracker."""
-
 import math
 from dataclasses import dataclass, field
 
