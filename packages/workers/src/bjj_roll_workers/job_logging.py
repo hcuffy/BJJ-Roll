@@ -11,6 +11,8 @@ def log_job_event(
     peak_rss_bytes: int | None = None,
     chunk_index: int | None = None,
     chunk_frames: int | None = None,
+    frames_per_second: int | None = None,
+    intra_op_threads: int | None = None,
 ) -> None:
     entry: dict[str, object] = {"event": event, "jobId": job_id}
     if duration_seconds is not None:
@@ -23,4 +25,8 @@ def log_job_event(
         entry["chunkIndex"] = chunk_index
     if chunk_frames is not None:
         entry["chunkFrames"] = chunk_frames
+    if frames_per_second is not None:
+        entry["framesPerSecond"] = frames_per_second
+    if intra_op_threads is not None:
+        entry["intraOpThreads"] = intra_op_threads
     sys.stdout.write(f"{json.dumps(entry)}\n")

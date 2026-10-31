@@ -36,20 +36,24 @@ def _result_document(result: VideoTrackingResult) -> dict[str, object]:
     }
 
 
-def write_tracking_result(result: VideoTrackingResult, footage_folder: Path) -> Path:
-    if not _UUID_PATTERN.fullmatch(result.video_id):
+def write_result_document(footage_folder: Path, folder_name: str, video_id: str, document: dict[str, object]) -> Path:
+    if not _UUID_PATTERN.fullmatch(video_id):
         raise UnsafeOutputPathError("video id must be a UUID")
     if not footage_folder.is_dir() or footage_folder.is_symlink():
         raise UnsafeOutputPathError("footage folder must be an existing folder")
     if stat.S_IMODE(footage_folder.stat().st_mode) != FOOTAGE_FOLDER_MODE:
         raise UnsafeOutputPathError("footage folder must have mode 700")
     root = footage_folder.resolve(strict=True)
-    tracks_folder = root / TRACKS_FOLDER_NAME
-    target = tracks_folder / f"{result.video_id}.json"
-    if not target.resolve().is_relative_to(root) or tracks_folder.is_symlink():
+    results_folder = root / folder_name
+    target = results_folder / f"{video_id}.json"
+    if not target.resolve().is_relative_to(root) or results_folder.is_symlink():
         raise UnsafeOutputPathError("result path must stay inside the footage folder")
-    tracks_folder.mkdir(mode=FOOTAGE_FOLDER_MODE, exist_ok=True)
+    results_folder.mkdir(mode=FOOTAGE_FOLDER_MODE, exist_ok=True)
     file_descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, RESULT_FILE_MODE)
     with os.fdopen(file_descriptor, "w", encoding="utf-8") as output:
-        json.dump(_result_document(result), output)
+        json.dump(document, output)
     return target
+
+
+def write_tracking_result(result: VideoTrackingResult, footage_folder: Path) -> Path:
+    return write_result_document(footage_folder, TRACKS_FOLDER_NAME, result.video_id, _result_document(result))

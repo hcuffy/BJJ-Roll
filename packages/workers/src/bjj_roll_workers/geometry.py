@@ -71,7 +71,53 @@ class Box:
         return math.hypot(self.x_max - self.x_min, self.y_max - self.y_min)
 
 
-def validate_point_in_frame(point: PixelPoint | TapPoint, frame_size: FrameSize) -> None:
+def box_iou(first: Box, second: Box) -> float:
+    overlap_width = max(0.0, min(first.x_max, second.x_max) - max(first.x_min, second.x_min))
+    overlap_height = max(0.0, min(first.y_max, second.y_max) - max(first.y_min, second.y_min))
+    intersection = overlap_width * overlap_height
+    union = (first.x_max - first.x_min) * (first.y_max - first.y_min) + (second.x_max - second.x_min) * (second.y_max - second.y_min) - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+COCO17_KEYPOINT_NAMES = (
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+)
+"""The COCO-17 body skeleton in COCO's order. Every pose is exactly these keypoints in this order (HEN-319)."""
+
+
+@dataclass(frozen=True)
+class Keypoint:
+    name: str
+    x: float
+    y: float
+    score: float
+
+    def __post_init__(self) -> None:
+        if self.name not in COCO17_KEYPOINT_NAMES:
+            raise InvalidCoordinateError("keypoint name is not a COCO-17 keypoint")
+        _check_coordinate(self.x)
+        _check_coordinate(self.y)
+        if isinstance(self.score, bool) or not isinstance(self.score, int | float) or not 0.0 <= self.score <= 1.0:
+            raise InvalidCoordinateError("keypoint score must be in [0, 1]")
+
+
+def validate_point_in_frame(point: PixelPoint | TapPoint | Keypoint, frame_size: FrameSize) -> None:
     if not (point.x < frame_size.width and point.y < frame_size.height):
         raise InvalidCoordinateError("point is outside the frame")
 

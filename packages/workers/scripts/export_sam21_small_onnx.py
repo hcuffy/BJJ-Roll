@@ -1,13 +1,19 @@
 import argparse
 import importlib
+import os
 import stat
 import sys
-from collections.abc import Sequence
+import urllib.request
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt"
 CHECKPOINT_LICENCE = "Apache-2.0"
+CHECKPOINT_FILE = "sam2.1_hiera_small.pt"
+DOWNLOAD_CHUNK_BYTES = 1024 * 1024
+DOWNLOAD_TIMEOUT_SECONDS = 60
 MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_s.yaml"
 VISION_ENCODER_FILE = "vision_encoder.onnx"
 MASK_DECODER_FILE = "prompt_encoder_mask_decoder.onnx"
@@ -17,8 +23,22 @@ OPSET_VERSION = 17
 FOOTAGE_FOLDER_MODE = stat.S_IRWXU
 EXPORTED_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 
+type Fetch = Callable[[str], Iterable[bytes]]
+
 
 class ExportFolderError(RuntimeError): ...
+
+
+class CheckpointError(RuntimeError): ...
+
+
+@dataclass(frozen=True)
+class CheckpointSource:
+    url: str
+    licence: str
+
+
+META_CHECKPOINT = CheckpointSource(url=CHECKPOINT_URL, licence=CHECKPOINT_LICENCE)
 
 
 def check_output_folder(output_folder: Path) -> None:
@@ -28,6 +48,36 @@ def check_output_folder(output_folder: Path) -> None:
         raise ExportFolderError("output folder must be mode 700")
     if any((output_folder / name).exists() for name in (VISION_ENCODER_FILE, MASK_DECODER_FILE)):
         raise ExportFolderError("output folder already holds an export")
+
+
+def _fetch_over_https(url: str) -> Iterator[bytes]:
+    with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+        while chunk := response.read(DOWNLOAD_CHUNK_BYTES):
+            yield chunk
+
+
+def download_checkpoint(output_folder: Path, source: CheckpointSource = META_CHECKPOINT, fetch: Fetch = _fetch_over_https) -> Path:
+    if source.url != CHECKPOINT_URL:
+        raise CheckpointError("checkpoint URL is not the recorded Meta source")
+    if source.licence != CHECKPOINT_LICENCE:
+        raise CheckpointError("checkpoint licence is not Apache-2.0")
+    check_output_folder(output_folder)
+    checkpoint = output_folder / CHECKPOINT_FILE
+    try:
+        descriptor = os.open(checkpoint, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, EXPORTED_FILE_MODE)
+    except FileExistsError:
+        raise ExportFolderError("output folder already holds a checkpoint") from None
+    try:
+        with os.fdopen(descriptor, "wb") as file:
+            for chunk in fetch(source.url):
+                file.write(chunk)
+    except OSError:
+        checkpoint.unlink(missing_ok=True)
+        raise CheckpointError("checkpoint download failed") from None
+    except BaseException:
+        checkpoint.unlink(missing_ok=True)
+        raise
+    return checkpoint
 
 
 def _wrappers(torch: Any, model: Any) -> tuple[Any, Any]:
@@ -106,12 +156,12 @@ def export(checkpoint: Path, output_folder: Path) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Export SAM 2.1 small to ONNX for the local CPU tracker.")
-    parser.add_argument("--checkpoint", type=Path, required=True, help="sam2.1_hiera_small.pt from CHECKPOINT_URL, already on disk")
+    parser.add_argument("--checkpoint", type=Path, help="sam2.1_hiera_small.pt from CHECKPOINT_URL, already on disk; fetched if left out")
     parser.add_argument("--output-folder", type=Path, required=True, help="existing mode-700 folder inside the footage folder")
     arguments = parser.parse_args(argv)
     try:
-        export(arguments.checkpoint, arguments.output_folder)
-    except ExportFolderError as error:
+        export(arguments.checkpoint or download_checkpoint(arguments.output_folder), arguments.output_folder)
+    except (ExportFolderError, CheckpointError) as error:
         sys.stderr.write(f"{error}\n")
         return 1
     return 0

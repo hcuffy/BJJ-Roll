@@ -30,6 +30,7 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let signOutHangs: boolean;
+  let signOutFails: boolean;
   let unanswered: (() => void)[];
   let renderedScreens: string[] = [];
 
@@ -42,7 +43,8 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
         if (!signOutHangs || !new Request(input, init).url.endsWith("/sign-out")) {
           return backend.fetchImplementation(input, init);
         }
-        return new Promise<Response>((resolve) => unanswered.push(() => void backend.fetchImplementation(input, init).then(resolve)));
+        const answer = () => (signOutFails ? Promise.resolve(new Response("{}", { status: 500 })) : backend.fetchImplementation(input, init));
+        return new Promise<Response>((resolve) => unanswered.push(() => void answer().then(resolve)));
       }),
     });
     renderedScreens = [];
@@ -72,6 +74,7 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
     signOutHangs = false;
+    signOutFails = false;
     unanswered = [];
     deepLinkState.url = null;
     resetBackListeners();
@@ -110,6 +113,30 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
     await settle();
     expect(unanswered.length).toBeGreaterThan(0);
     expect(await flag()).toBeNull();
+  });
+
+  it.each([
+    ["succeeds", false],
+    ["fails", true],
+  ])("HEN-331: no biometric toggle can be changed while sign-out runs, and the sign-in screen follows when it %s", async (_outcome, fails) => {
+    const screen = await signInWithBiometricOn(SIGNED_IN_SCREEN);
+    signOutHangs = true;
+    signOutFails = fails;
+    const rendersBefore = renderedScreens.length;
+    expect(screen.findAllByType("Switch")).toHaveLength(1);
+
+    await screen.press("Sign out");
+    await settle();
+    expect(unanswered.length).toBeGreaterThan(0);
+    expect(screen.findAllByType("Switch")).toEqual([]);
+
+    for (const answer of unanswered.splice(0)) {
+      answer();
+    }
+    await settle();
+    await screen.rerender();
+    expect(screen.text()).toContain(EMAIL_SCREEN);
+    expect(renderedScreens.slice(rendersBefore).some((text) => text.includes(SIGNED_IN_SCREEN))).toBe(false);
   });
 
   it("lock screen sign-out uses the same handler: flag cleared at the tap, server sign-out sent, sign-in screen, no lock next launch", async () => {

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Share } from "react-native";
 import { type MockInstance, vi } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
-import type { BiometricCheck } from "../auth/biometricUnlock";
+import type { BiometricCheck, BiometricSetting } from "../auth/biometricUnlock";
 import { SignedInScreen } from "../screens/SignedInScreen";
 import { renderScreen } from "./screenHarness";
 
@@ -33,6 +33,8 @@ export function createSignedInScreenHarness() {
     adultResult: Promise.resolve<AgeConfirmationResult>({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } }),
     shareSpy: undefined as unknown as MockInstance<typeof Share.share>,
     biometricChangeResult: Promise.resolve<BiometricCheck>({ ok: true }),
+    biometricChanges: [] as boolean[],
+    biometricSetting: { available: true, on: false, kind: "biometrics" } as BiometricSetting,
   };
   state.shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
   vi.mocked(AccessibilityInfo.sendAccessibilityEvent).mockClear();
@@ -62,8 +64,11 @@ export function createSignedInScreenHarness() {
           state.adultConfirmations += 1;
           return state.adultResult;
         },
-        onReadBiometricSetting: () => Promise.resolve({ available: true, on: false, kind: "biometrics" } as const),
-        onChangeBiometricUnlock: () => state.biometricChangeResult,
+        onReadBiometricSetting: () => Promise.resolve(state.biometricSetting),
+        onChangeBiometricUnlock: (on: boolean) => {
+          state.biometricChanges.push(on);
+          return state.biometricChangeResult;
+        },
       }),
     );
 
