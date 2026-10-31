@@ -1,3 +1,4 @@
+import type * as BetterAuth from "better-auth";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { MAX_VERIFIES_PER_IP_PER_WINDOW } from "../auth/authLimits.js";
 import { authIpRateLimitCustomRules } from "../auth/authRateLimits.js";
@@ -11,7 +12,7 @@ const RAISED_GLOBAL_MAX = 1000;
 // Our global limit and the /callback/* rule are both 20 per 15 minutes, so the real app cannot tell them apart.
 // Here the global limit is raised (Better Auth's options only, nothing else changes) to prove the callback rule is applied.
 vi.mock("better-auth", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("better-auth")>();
+  const actual = await importOriginal<typeof BetterAuth>();
   return {
     ...actual,
     betterAuth: ((options: Parameters<typeof actual.betterAuth>[0]) =>

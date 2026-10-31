@@ -23,4 +23,5 @@ Short rules for every change to this repo. Setup and checks: [README.md](README.
 ## Conventions
 
 - Code style follows CONVENTIONS.v2, summarised in [`.github/coderabbit.md`](.github/coderabbit.md).
+- TS types (lint errors): `interface` for object shapes, `type` only for unions, intersections, tuples, mapped/conditional types and primitive aliases; `import type` for type-only imports; no `any` (use `unknown` and narrow); `declare global` only in a package's `globals.d.ts`.
 - Architecture and tooling decisions live in [`DECISIONS.md`](DECISIONS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
