@@ -1,10 +1,3 @@
-"""Tracker runner settings (HEN-318, DECISIONS.md A7), read from `tracker_config.json` next to this module.
-
-Frames are sampled at `frames_per_second`. Videos are tracked in chunks of `chunk_seconds` that overlap by
-`chunk_overlap_seconds`; once a chunk's peak RSS goes over `peak_rss_limit_bytes`, the following chunks use
-`fallback_chunk_seconds`.
-"""
-
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path

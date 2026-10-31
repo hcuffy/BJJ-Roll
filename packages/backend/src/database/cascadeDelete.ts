@@ -8,13 +8,6 @@ export interface AccountDeletionCascadeStep {
   description: string;
 }
 
-/**
- * Explicit account deletion cascade map aligned with ARCHITECTURE.md §5.
- * Every user-data table in `public` is accounted for when a user deletes their account.
- * `public.rate_limits` is deliberately not in the map: the per-email send counter (key `email:<email_hash>`, hash only) stays
- * until its 15-minute window expires, so deleting the account and signing up again cannot reset the send limit (HEN-65).
- * The DELETE /account try counters (`account-delete:user:<id>`, `account-delete:ip:<ip>`) age out the same way.
- */
 export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = [
   {
     table: "verifications",
@@ -55,10 +48,6 @@ export function verificationIdentifiersForEmailHash(emailHash: string): readonly
   return [emailHash, `email-otp-${emailHash}`, `sign-in-otp-${emailHash}`, `email-verification-otp-${emailHash}`, `forget-password-otp-${emailHash}`];
 }
 
-/**
- * Deletes the authenticated user's account inside their RLS context (`app.user_id = userId`)
- * and returns the count of rows removed across `users`, `sessions`, `accounts`, and `verifications`.
- */
 export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: string): Promise<CascadeDeleteAccountResult> {
   return withUserContext(db, userId, async (transaction) => {
     const existingUser = await transaction.selectFrom("users").select(["id", "emailHash"]).where("id", "=", userId).executeTakeFirst();

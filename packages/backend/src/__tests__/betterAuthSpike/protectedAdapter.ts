@@ -1,10 +1,6 @@
 import type { DBAdapter, DBTransactionAdapter, Where } from "better-auth/adapters";
 import type { EmailProtection } from "./emailProtection.js";
 
-// HEN-47 spike only. Wraps Better Auth's Kysely adapter so Postgres never holds a plaintext email:
-// - user.email is written as the HMAC (column email_hash) plus AES-GCM ciphertext (column email_ciphertext);
-// - a user lookup by email goes through the SECURITY DEFINER lookup function, then reads the row by id;
-// - verification.value (the magic-link payload carries the email) is stored encrypted.
 type AdapterRow = Record<string, unknown>;
 export type LookupUserIdByEmailHash = (emailHash: string) => Promise<string | null>;
 

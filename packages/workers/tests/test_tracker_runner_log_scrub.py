@@ -1,6 +1,3 @@
-"""HEN-318: tracker logs carry the job ID, timings and peak RSS only: no video bytes, signed URLs, filenames, emails,
-credentials, video IDs, taps or drift reasons. Synthetic values only."""
-
 import json
 import stat
 from pathlib import Path

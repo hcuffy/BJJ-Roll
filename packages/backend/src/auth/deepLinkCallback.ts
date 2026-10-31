@@ -1,6 +1,5 @@
 import { DEEP_LINK_CALLBACK_URL, DEEP_LINK_SCHEME } from "./authLimits.js";
 
-/** Magic-link parameters that Better Auth turns into a 302 Location. Each must be an app deep link. */
 export const MAGIC_LINK_REDIRECT_PARAMETERS = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
 
 const DEEP_LINK_HOST = new URL(DEEP_LINK_CALLBACK_URL).host;
@@ -23,10 +22,6 @@ function isAllowedDeepLinkForm(candidate: string): boolean {
   }
 }
 
-/**
- * True only for `bjjroll://auth[/...]` with no credentials, checked both as given and URL-decoded
- * (Better Auth decodes these parameters before redirecting). Anything else could become an open redirect.
- */
 export function isAllowedDeepLinkCallbackUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length === 0 || value.length > MAX_CALLBACK_URL_LENGTH) {
     return false;
@@ -40,7 +35,6 @@ export function isAllowedDeepLinkCallbackUrl(value: unknown): value is string {
   return isAllowedDeepLinkForm(value) && isAllowedDeepLinkForm(decoded);
 }
 
-/** Names of redirect parameters present in `source` that are not allowed deep links. */
 export function findInvalidRedirectParameters(source: (name: string) => unknown): string[] {
   return MAGIC_LINK_REDIRECT_PARAMETERS.filter((name) => {
     const value = source(name);

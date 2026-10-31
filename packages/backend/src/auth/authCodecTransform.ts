@@ -71,10 +71,6 @@ export function extractEmailFromVerificationValue(rawValue: string): string | nu
 
 const DROPPED_ACCOUNT_TOKEN_FIELDS = ["accessToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope"] as const;
 
-/**
- * HEN-239: provider tokens are not stored. The one exception is Apple's refresh token, kept encrypted so account deletion can
- * revoke it. Anything else (or a refresh token on a write that does not say it is Apple's) is dropped.
- */
 function encodeAccountTokens(encoded: Record<string, unknown>, codec: AuthCryptoCodec): void {
   for (const field of DROPPED_ACCOUNT_TOKEN_FIELDS) {
     delete encoded[field];

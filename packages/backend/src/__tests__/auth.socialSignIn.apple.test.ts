@@ -43,7 +43,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     return result.rows[0]?.count ?? 0;
   };
 
-  // The app's raw nonce goes to the backend; Apple only ever sees (and signs) its SHA-256. Each sign-in gets a fresh one.
   const identityToken = (subject: string, email: string, rawNonce: string): string =>
     signer.signIdentityToken({
       iss: "https://appleid.apple.com",
@@ -155,7 +154,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
     { name: "no age answer", additionalData: undefined, refusal: ageRefusal },
     { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true }, refusal: ageRefusal },
     { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true }, refusal: ageRefusal },
-    // HEN-183: 16+ ticked is not enough; the current attestation text version is needed too.
     { name: "16+ but no attestation", additionalData: ticked16, refusal: attestationRefusal },
     {
       name: "16+ but an old attestation version",

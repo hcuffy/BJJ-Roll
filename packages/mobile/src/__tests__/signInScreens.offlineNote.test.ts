@@ -11,7 +11,6 @@ import { flattenStyle, renderScreen } from "./screenHarness";
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
-/** HEN-287: every sign-in screen says "can't reach the server" the same calm way, and keeps red for real errors. */
 describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let client: ReturnType<typeof createMobileAuthClient>;

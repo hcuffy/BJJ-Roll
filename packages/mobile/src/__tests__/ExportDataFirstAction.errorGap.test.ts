@@ -1,5 +1,3 @@
-// Vera (HEN-308): 16 between "Export my data first" and its own error, inside the export row (ab46d10 moved that gap into
-// the ExportDataFirstAction wrapper). The design test only checks the 24 below the row.
 import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";

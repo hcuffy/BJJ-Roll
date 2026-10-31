@@ -3,7 +3,6 @@ import { EMAIL_QUEUE_RETRY_DELAY_SECONDS, EmailSendError, FakeEmailSender, type 
 import { isPostgresTestEnvironmentAvailable, startMigratedTestDatabase, type MigratedTestDatabase } from "./databaseTestHarness.js";
 import { createTestEmailQueue, createTestKeyring, waitUntil } from "./emailQueueTestSupport.js";
 
-/** Fails the first `failures` tries with `error`, then sends. Records every try, the idempotency key it carried and when it started. */
 class FlakyEmailSender extends FakeEmailSender {
   readonly tries: (string | undefined)[] = [];
   readonly triedAt: number[] = [];
@@ -25,7 +24,6 @@ class FlakyEmailSender extends FakeEmailSender {
   }
 }
 
-/** Like the real provider with an idempotency key: delivers once per key. The first try is accepted, then the client times out. */
 class SlowAcceptingProvider extends FakeEmailSender {
   readonly tries: (string | undefined)[] = [];
   readonly #deliveredKeys = new Set<string | undefined>();
@@ -42,7 +40,6 @@ class SlowAcceptingProvider extends FakeEmailSender {
   }
 }
 
-/** Holds every send for `holdMilliseconds` before it finishes. */
 class SlowEmailSender extends FakeEmailSender {
   tries = 0;
 
@@ -103,9 +100,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
       expect(emailSender.triedAt).toHaveLength(3);
       const [first = 0, second = 0, third = 0] = emailSender.triedAt;
       const baseDelayMilliseconds = EMAIL_QUEUE_RETRY_DELAY_SECONDS * 1000;
-      // Without any retry delay the next try follows within one poll (0.5 s); with a fixed delay both gaps are about 1 s.
-      // pg-boss backoff makes the first gap 1-2 s and the second 2-4 s (plus up to one poll), so only real backoff passes both.
-      // 100 ms of slack covers timer rounding between the database clock and this process.
       expect(second - first).toBeGreaterThanOrEqual(baseDelayMilliseconds - 100);
       expect(third - second).toBeGreaterThanOrEqual(2 * baseDelayMilliseconds - 100);
     } finally {
@@ -226,7 +220,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
 
   it("a payload that cannot be opened is dead-lettered at once with an unknown template, and its row is deleted", async () => {
     const emailSender = new FlakyEmailSender(0);
-    // Stored under one key, worked under another: the worker cannot decrypt the job.
     const storer = createTestEmailQueue({ connectionString: connectionString(), emailSender, keyring: createTestKeyring() });
     const worker = createTestEmailQueue({ connectionString: connectionString(), emailSender, keyring: createTestKeyring() });
     await storer.queue.start({ worker: false });

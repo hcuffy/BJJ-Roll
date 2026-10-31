@@ -1,6 +1,3 @@
-"""HEN-318: partner and bystander masks are tracked in memory only and never persisted (D6); every video needs its own tap and
-nothing about an athlete is carried from one video to the next (D15). Fake model, synthetic clips only."""
-
 import json
 import stat
 from pathlib import Path

@@ -28,13 +28,8 @@ const GOOD_LINK = "bjjroll://auth?code=one-time-exchange-code";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
 const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
 
-/**
- * HEN-288 merged with main 66c8eb1 (#83 timeouts, #84 link results): the lock decision lives in the link's success branch,
- * after the timed exchange. A failed or timed-out link changes nothing for a locked app, and a timeout never locks.
- */
 describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-288, HEN-303, HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let exchangeHangs: boolean;
   let renderedScreens: string[] = [];
@@ -57,7 +52,6 @@ describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-2
     renderedScreens = [];
     return await renderScreen(createElement(App), (text) => renderedScreens.push(text));
   };
-  /** Signs in by code with biometric unlock turned on at the offer, as a member did before this launch. */
   const signInWithBiometricOn = async () => {
     const screen = await launchApp();
     await screen.pressRole("checkbox");
@@ -86,7 +80,6 @@ describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-2
   it("failed link while locked stays locked: a rejected link at launch and a timed-out link on the lock change nothing", async () => {
     await signInWithBiometricOn();
 
-    // Cold start from a rejected link: the startup lock shows, never the signed-in screen or the link card.
     deepLinkState.url = REJECTED_LINK;
     localAuthenticationFake.answers.push("user_cancel");
     const locked = await launchApp();
@@ -94,7 +87,6 @@ describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-2
     expect(locked.text()).not.toContain(EXPIRED_MESSAGE);
     expect(everRendered(SIGNED_IN_SCREEN)).toBe(false);
 
-    // While still locked, a second link never answers and times out: the app stays on the lock.
     vi.useFakeTimers();
     exchangeHangs = true;
     deepLinkState.url = `${GOOD_LINK}&n=2`;

@@ -5,11 +5,8 @@ import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 import { getAuthPath, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { createFakeSocialProviderConfig } from "./socialSignInTestDoubles.js";
 
-/** Far above the /callback/* rule, so a 429 at the rule's max + 1 can only come from the rule itself. */
 const RAISED_GLOBAL_MAX = 1000;
 
-// Our global limit and the /callback/* rule are both 20 per 15 minutes, so the real app cannot tell them apart.
-// Here the global limit is raised (Better Auth's options only, nothing else changes) to prove the callback rule is applied.
 vi.mock("better-auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("better-auth")>();
   return {

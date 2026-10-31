@@ -17,7 +17,6 @@ describe("age confirmation gate", () => {
     expect(canContinue({ email: "", age16Confirmed: true })).toBe(false);
     expect(canContinue({ email: "not-an-email", age16Confirmed: true })).toBe(false);
     expect(canContinue({ email: " member@example.test ", age16Confirmed: true })).toBe(true);
-    // The 18+ box is optional and never stands in for the required 16+ one.
     expect(canContinue({ email: "member@example.test", age16Confirmed: false, age18Confirmed: true })).toBe(false);
   });
 

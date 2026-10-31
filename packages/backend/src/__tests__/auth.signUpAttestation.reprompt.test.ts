@@ -37,7 +37,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
     return result.rows.map((row) => row.text_version_id);
   };
 
-  /** A returning user signs in with no attestation in the request: sign-in itself is never refused for an existing account. */
   const signInAgainWithoutAttestation = async (user: SignedInUser): Promise<SignedInUser> => {
     expect((await postAuthJson(current().app, otpSendPath, { body: { email: user.email, type: "sign-in" }, ipAddress: user.ipAddress })).status).toBe(
       200,
@@ -62,7 +61,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
 
   it("an existing account with no attestation record is prompted, and stays prompted until it accepts the current version", async () => {
     const user = await signUpWithOtp("attested.legacy@example.com", "198.51.100.231", { age16Confirmed: true });
-    // Accounts made before HEN-183 have no attestation record.
     await current().pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [user.userId]);
 
     const returning = await signInAgainWithoutAttestation(user);
@@ -86,7 +84,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
 
   it("a new text version forces re-acceptance on the next sign-in; the old record stays and a new one is added", async () => {
     const user = await signUpWithOtp("attested.old.version@example.com", "198.51.100.232", { age16Confirmed: true });
-    // The user accepted an earlier version; the shipped version has since moved on.
     await current().pool.query("UPDATE public.consent_records SET text_version_id = $2 WHERE user_id = $1 AND consent_type = 'attestation_signup'", [
       user.userId,
       oldVersionId,
@@ -108,7 +105,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
     const exported = accountExportSchema.parse(await exportResponse.json());
     const attestations = exported.consentRecords.filter((record) => record.consentType === "attestation_signup");
     expect(attestations).toHaveLength(1);
-    // The record is exactly the shared consent record shape: no wording, age, IP, device or free text.
     expect(Object.keys(consentRecordSchema.parse(attestations[0])).sort()).toEqual([
       "acceptedAt",
       "consentType",

@@ -1,7 +1,6 @@
 import type { Hono } from "hono";
 import { spikeBaseUrl } from "./spikeAuth.js";
 
-// Each test passes its own client IP so Better Auth's per-IP limits do not leak between tests.
 export function postJson(app: Hono, path: string, request: { body: Record<string, unknown>; ipAddress: string }): Promise<Response> {
   return Promise.resolve(
     app.request(`${spikeBaseUrl}/api/auth${path}`, {

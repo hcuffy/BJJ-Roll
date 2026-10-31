@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
-import { handleMaximumLength, handleMinimumLength, reservedHandles } from "@bjj-roll/shared";
+import { handleMaximumLengthPlaceholder, handleMinimumLengthPlaceholder, reservedHandles } from "@bjj-roll/shared";
 import type { BjjRollDatabase } from "../database/schema.js";
 import { createHandleRoutes, isUniqueHandleConflict, mountHandleRoutes } from "../handleRoutes.js";
 
@@ -106,7 +106,15 @@ describe("handleRoutes validation and boundary rules (HEN-64)", () => {
 
   it("rejects invalid handle formats and boundary violations using limits constants", async () => {
     const testApp = createValidationTestApp();
-    const invalidHandles = ["a".repeat(handleMinimumLength - 1), "a".repeat(handleMaximumLength + 1), "a-b", "a.b", "a b", "äbc", "élan"];
+    const invalidHandles = [
+      "a".repeat(handleMinimumLengthPlaceholder - 1),
+      "a".repeat(handleMaximumLengthPlaceholder + 1),
+      "a-b",
+      "a.b",
+      "a b",
+      "äbc",
+      "élan",
+    ];
 
     for (const candidate of invalidHandles) {
       const availabilityResponse = await testApp.request(`/handles/availability?handle=${encodeURIComponent(candidate)}`);

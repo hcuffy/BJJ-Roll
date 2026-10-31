@@ -19,10 +19,6 @@ interface FailedLink {
 const EMAIL = "member@example.test";
 const CARD = FAILURE_MESSAGES.invalidLink;
 
-/**
- * HEN-311 (Vera, HEN-304 fix 1): one red message at a time. App sets a failed link's card and bumps linkAttempt in one
- * (batched) render, so the screen must hide its own older red error in that render, before any effect clears it.
- */
 describe("sign-in screens hide stale red errors while the link-error card is shown (HEN-311)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let link: FailedLink;
@@ -53,7 +49,6 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
       .findAllByType("Text")
       .filter((text) => flattenStyle(text.props.style).color === colours.danger)
       .map((text) => String(text.props.children));
-  /** Past the resend cooldown, the next request is refused (429, or 400 with `code`); returns the red error it left. */
   const actRefused = async (screen: Screen, act: () => Promise<unknown>, code?: string) => {
     await vi.advanceTimersByTimeAsync(30_000).then(() => screen.rerender());
     backend.fetchImplementation.mockResolvedValueOnce(Response.json({ code, message: "Refused" }, { status: code ? 400 : 429 }));
@@ -62,7 +57,6 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
     expect(stale).not.toBe("");
     return stale;
   };
-  /** A failed link arrives as App sends it: the card and a new attempt in the same render. */
   const linkFails = async (screen: Screen, card: string) => {
     frames = [];
     link = { linkError: CARD, linkAttempt: link.linkAttempt + 1 };
@@ -122,7 +116,6 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
     const stale = await actRefused(screen, () => screen.changeText("6-digit code", "123456"), "INVALID_OTP");
 
     expectNoFrameWith(await linkFails(screen, CODE_SCREEN_INVALID_LINK), CODE_SCREEN_INVALID_LINK, stale);
-    // The next submit dismisses the card; its own new error shows.
     expect(await actRefused(screen, () => screen.changeText("6-digit code", "654321"), "INVALID_OTP")).toBe(stale);
     expect(screen.text()).not.toContain(CODE_SCREEN_INVALID_LINK);
   });

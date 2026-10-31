@@ -7,7 +7,6 @@ import { createDatabase, runDatabaseMigrations, withUserContext, type BjjRollDat
 
 const postgresImage = "postgres:18.6";
 
-/** Container shutdown delivers 57P01 while a client is still ending. A listener keeps that from failing the Vitest run. */
 export function ignoreAdminShutdownError(pool: Pool): void {
   pool.on("error", (error: Error) => {
     if ("code" in error && error.code === "57P01") {
@@ -19,7 +18,6 @@ export function ignoreAdminShutdownError(pool: Pool): void {
 
 export interface MigratedTestDatabase {
   pool: Pool;
-  /** Admin connection string of this suite's database. */
   connectionString: string;
   db: Kysely<BjjRollDatabase>;
   stop: () => Promise<void>;
@@ -58,7 +56,6 @@ export const userBravo: SeededUserFixture = {
   verificationByEmailHashId: "verif-bravo-hmac-002",
 };
 
-// Same rule as database.containerRoundTrip.test.ts: always runs in CI, skipped locally without Docker unless TEST_POSTGRES_URL is set.
 export function isPostgresTestEnvironmentAvailable(): boolean {
   const configuredUrl = process.env.TEST_POSTGRES_URL ?? process.env.DATABASE_URL;
   if (configuredUrl && configuredUrl.trim().length > 0) {
@@ -120,10 +117,6 @@ export interface AppRoleLoginPool {
   stop: () => Promise<void>;
 }
 
-/**
- * A LOGIN role that is NOSUPERUSER NOBYPASSRLS and only a member of bjj_app, like the production app login.
- * Code under test that connects with it cannot bypass RLS even if it forgets SET ROLE.
- */
 export async function createAppRoleLoginPool(harness: MigratedTestDatabase): Promise<AppRoleLoginPool> {
   const roleName = `bjj_test_app_${randomBytes(6).toString("hex")}`;
   const password = randomBytes(24).toString("hex");

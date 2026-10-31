@@ -37,7 +37,6 @@ async function signedInConfirm(): Promise<Screen> {
   return screen;
 }
 
-// Vera (HEN-308): 24 between Export my data first and the delete buttons below it, on both delete confirms.
 describe("Export my data first spacing on the delete confirm", () => {
   it.each([
     ["the attestation gate", gateConfirm],

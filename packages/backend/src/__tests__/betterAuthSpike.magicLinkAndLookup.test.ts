@@ -9,7 +9,6 @@ import {
 } from "./betterAuthSpike/spikeDatabase.js";
 import { getWithCookie, postJson, sessionCookieFrom } from "./betterAuthSpike/spikeRequests.js";
 
-// HEN-47 spike: magic link sign-in with a bjjroll:// callback, and the pre-session lookup under RLS.
 describe.skipIf(!runSpikeDatabaseTests)("Better Auth spike: magic link and pre-session lookup", () => {
   let database: SpikeDatabase | undefined;
   let spike: SpikeAuth | undefined;
@@ -58,7 +57,6 @@ describe.skipIf(!runSpikeDatabaseTests)("Better Auth spike: magic link and pre-s
     const secondUse = await getWithCookie(app, link, { ipAddress });
     expect(sessionCookieFrom(secondUse)).toBe("");
     expect(secondUse.headers.get("location") ?? "").toContain("error");
-    // The Expo plugin hands the session cookie to the app inside this bjjroll:// redirect, so never log the location itself.
     console.warn(`[HEN-47 spike] magic link ok: first use ${firstUse.status} to bjjroll://, second use refused`);
   });
 

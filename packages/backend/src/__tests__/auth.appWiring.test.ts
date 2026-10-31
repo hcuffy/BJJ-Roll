@@ -64,7 +64,6 @@ describe("HEN-71 startup config check", () => {
       [AUTH_TRUSTED_PROXY_IP_HEADERS_ENV, { [AUTH_TRUSTED_PROXY_IP_HEADERS_ENV]: "x-evil-header-value" }],
       [GOOGLE_CLIENT_ID_ENV, { [GOOGLE_CLIENT_ID_ENV]: undefined }],
       [GOOGLE_CLIENT_SECRET_ENV, { [GOOGLE_CLIENT_SECRET_ENV]: "" }],
-      // Apple is off until every Apple variable is set; a half-set Apple config fails fast instead of signing in half-configured.
       [APPLE_SERVICE_ID_ENV, { [APPLE_KEY_ID_ENV]: "TESTKEY001" }],
     ];
     for (const [expectedName, override] of cases) {

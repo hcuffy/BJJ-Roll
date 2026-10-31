@@ -8,7 +8,6 @@ import { cookieHeaderFrom, createFakeSocialProviderConfig, fakeGoogleConfig, stu
 interface FakeGoogleUser {
   readonly subject: string;
   readonly email: string;
-  /** undefined: the id token has no email_verified claim at all. */
   readonly emailVerified: boolean | undefined;
 }
 
@@ -75,7 +74,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
     return await googleRedirectBack(started, stateQuery(started));
   };
 
-  /** The whole refusal as the app sees it: status, redirect and body. */
   const googleRefusal = async (googleUser: FakeGoogleUser): Promise<{ status: number; location: string | null; body: string }> => {
     const started = await startGoogleSignIn(true);
     nextGoogleUser = googleUser;
@@ -205,7 +203,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
   });
 });
 
-/** The neutral refusal: back to the app with account_not_linked and nothing else that differs between attempts. */
 function expectAccountNotLinked(location: URL): void {
   expect(`${location.protocol}//${location.host}${location.pathname}`).toBe(DEEP_LINK_CALLBACK_URL);
   expect(location.searchParams.get("error")).toBe("account_not_linked");

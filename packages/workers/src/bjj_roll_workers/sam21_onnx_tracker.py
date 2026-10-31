@@ -1,14 +1,3 @@
-"""Local CPU tracker backend: SAM 2.1 small (Hiera-S) ONNX export on onnxruntime's CPU provider (HEN-318).
-
-`weights_folder` holds `vision_encoder.onnx` and `prompt_encoder_mask_decoder.onnx` (onnx-community image export). Weights
-are not shipped, downloaded or read by tests. numpy and onnxruntime are imported lazily on the first `track` call and are not
-CI dependencies (onnxruntime has no Python 3.15 wheel); a real run uses its own venv (see DECISIONS.md A7).
-
-The image export has no memory modules, so the first frame is prompted with the tap point or the prompt mask's box, and every
-later frame with the box of that athlete's previous mask. Graph input and output names are the export's documented names and
-are unverified until the first local smoke run.
-"""
-
 import importlib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -37,8 +26,6 @@ type BoxOrPoint = Box | TapPoint
 
 
 class Sam21OnnxTracker:
-    """`tracker.Tracker` backend. Sessions load on first use; nothing about a video is kept between `track` calls."""
-
     def __init__(self, weights_folder: Path) -> None:
         self._weights_folder = weights_folder
         self._sessions: tuple[Any, Any] | None = None

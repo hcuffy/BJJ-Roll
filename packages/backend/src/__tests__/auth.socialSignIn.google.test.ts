@@ -36,14 +36,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
       refresh_token: string | null;
     }>("SELECT provider_id, access_token, id_token, refresh_token FROM public.accounts WHERE user_id = $1", [userId]);
     expect(accounts.rows).toEqual([{ provider_id: "google", access_token: null, id_token: null, refresh_token: null }]);
-    // HEN-263: the same consent record as an email sign-up, with the 18+ answer sent by the app.
     const consent = await current().pool.query(
       "SELECT consent_type, text_version_id, age16_confirmed, age18_confirmed FROM public.consent_records WHERE user_id = $1 ORDER BY consent_type",
       [userId],
     );
     expect(consent.rows).toEqual([
       { consent_type: "age_confirmation", text_version_id: AGE_CONFIRMATION_TEXT_VERSION_ID, age16_confirmed: true, age18_confirmed: true },
-      // HEN-183: and the sign-up attestation, with the text version the app showed.
       { consent_type: "attestation_signup", text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id, age16_confirmed: null, age18_confirmed: null },
     ]);
   });
@@ -55,7 +53,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     { name: "16+ unticked but 18+ ticked", additionalData: { age16Confirmed: false, age18Confirmed: true }, refusal: ageRefusal },
     { name: "16+ as a string", additionalData: { age16Confirmed: "true" }, refusal: ageRefusal },
     { name: "only the old ageConfirmed field", additionalData: { ageConfirmed: true }, refusal: ageRefusal },
-    // HEN-183: 16+ ticked is not enough; the current attestation text version is needed too.
     { name: "16+ but no attestation", additionalData: { age16Confirmed: true }, refusal: attestationRefusal },
     {
       name: "16+ but an old attestation version",
@@ -94,7 +91,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     const { userId } = await exchangeForSession(
       (await signInWithGoogle(googleUser, { additionalData: ticked })).location.searchParams.get("code") ?? "",
     );
-    // An account made before HEN-183 has no attestation record.
     await current().pool.query("DELETE FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'", [userId]);
 
     const again = await signInWithGoogle(googleUser, { additionalData: ticked });
@@ -164,7 +160,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect(response.status).toBe(400);
   });
 
-  /** Sends `max + 2` requests from one IP; returns the 1-based number of the first 429 (or null). */
   const firstLimitedRequest = async (send: () => Promise<Response>, max: number): Promise<number | null> => {
     for (let request = 1; request <= max + 2; request += 1) {
       if ((await send()).status === 429) {
@@ -174,7 +169,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     return null;
   };
 
-  // Better Auth 1.7.7's built-in rule for every /sign-in* path is 3 requests per 10 seconds; ours must replace it.
   const BETTER_AUTH_DEFAULT_SIGN_IN_MAX = 3;
 
   it("rate limits sign-in starts per IP with our rule (not Better Auth's 3 per 10 s default): the first 429 is request max + 1", async () => {
@@ -196,7 +190,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     const callback = () => getAuthPath(current().app, "/callback/google?code=replayed-code&state=not-a-real-state", { ipAddress: "198.51.100.205" });
 
     expect(await firstLimitedRequest(callback, rule?.max ?? 0)).toBe((rule?.max ?? 0) + 1);
-    // Another IP still gets through: the limit is per IP.
     const otherIp = await getAuthPath(current().app, "/callback/google?code=replayed-code&state=not-a-real-state", { ipAddress: "198.51.100.206" });
     expect(otherIp.status).not.toBe(429);
   });

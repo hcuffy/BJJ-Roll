@@ -5,22 +5,13 @@ import { colours, radius, sizes, spacing, typeScale } from "../theme/tokens";
 export interface AuthButtonProps {
   readonly title: string;
   readonly onPress: () => void;
-  /**
-   * primary: the one lime pill per screen. secondary: surface-2 pill. tertiary: text-only, still 48dp tall.
-   * danger: red-orange pill with a dark text label, only for the confirm step of a destructive action (deletes or loses data).
-   * dangerText: tertiary with a red-orange label, the entry point to a destructive action.
-   */
   readonly variant?: "primary" | "secondary" | "tertiary" | "danger" | "dangerText";
   readonly disabled?: boolean;
-  /** Looks disabled but stays pressable (and is announced as enabled), so a tap can explain what is missing. */
   readonly looksDisabled?: boolean;
-  /** Shows a spinner and `loadingTitle` in the same-size pill, and blocks presses. */
   readonly loading?: boolean;
   readonly loadingTitle?: string;
   readonly accessibilityHint?: string;
-  /** 56 tall like the primary pill: for a choice that must weigh the same as the primary one (an opt-in's decline). */
   readonly large?: boolean;
-  /** For moving screen-reader focus to the button. */
   readonly ref?: Ref<View>;
 }
 
@@ -41,7 +32,6 @@ const styles = StyleSheet.create({
   danger: { minHeight: sizes.buttonHeight, backgroundColor: colours.danger },
   dangerText: {},
   dimmed: { backgroundColor: colours.surfaceRaised },
-  // A blocked secondary pill (e.g. "Resend in 0:30") drops its fill, so it reads as "not yet" next to an active one.
   blockedSecondary: { backgroundColor: "transparent" },
   pressed: { transform: [{ scale: 0.98 }] },
   label: { ...typeScale.body, fontWeight: "600", textAlign: "center", color: colours.textPrimary },
@@ -63,9 +53,7 @@ export function AuthButton({
   ref,
 }: AuthButtonProps) {
   const blocked = disabled || loading;
-  // While loading the pill keeps its fill; otherwise disabled is shown by fill and label colour, not opacity.
   const dimmed = !loading && (disabled || looksDisabled);
-  // Primary (lime) and danger (red-orange) fills both take the dark label.
   const onPrimary = (variant === "primary" || variant === "danger") && !dimmed;
   return (
     <Pressable

@@ -21,14 +21,12 @@ import {
 export interface CreateEncryptedRlsAuthAdapterOptions {
   readonly pool: Pool;
   readonly codec: AuthCryptoCodec;
-  /** Runs in the same transaction as the user insert; throwing rolls the user row back. */
   readonly onUserCreated?: (transaction: AuthTransaction, user: { id: string; email: string }) => Promise<void>;
 }
 
 type RunInTransaction = <TResult>(work: (transaction: AuthTransaction) => Promise<TResult>) => Promise<TResult>;
 type RowRecord = Record<string, unknown>;
 
-/** Runs operations one at a time on a shared transaction, so one operation's settings never apply to another's query. */
 function serializeOnTransaction(transaction: AuthTransaction): RunInTransaction {
   let tail: Promise<unknown> = Promise.resolve();
   return <TResult>(work: (transactionDb: AuthTransaction) => Promise<TResult>): Promise<TResult> => {
@@ -38,10 +36,6 @@ function serializeOnTransaction(transaction: AuthTransaction): RunInTransaction 
   };
 }
 
-/**
- * Better Auth adapter over Postgres. Every operation runs in a transaction as bjj_app (NOBYPASSRLS) with
- * transaction-local settings for RLS; emails are encrypted/HMACed, identifiers and session tokens hashed.
- */
 export function createEncryptedRlsAuthAdapter(
   adapterContext: CreateEncryptedRlsAuthAdapterOptions,
 ): (options: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
@@ -110,7 +104,6 @@ export function createEncryptedRlsAuthAdapter(
             } else if (modelKey === "verification") {
               settings.verificationIdentifier = typeof encoded.identifier === "string" ? encoded.identifier : null;
               if (emailHmac !== null) {
-                // Set even when null, so a code for an unknown email writes the same columns as one for a known email.
                 const userId = await lookupUserIdByEmailHmacInTransaction(transaction, emailHmac);
                 encoded.userId = userId;
                 settings.userId = userId;

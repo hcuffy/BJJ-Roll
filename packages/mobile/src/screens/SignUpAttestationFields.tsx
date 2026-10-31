@@ -6,7 +6,6 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 const styles = StyleSheet.create({
-  // One surface card (Vera #74 item 4). The screen layout gap is 16, so the 8 margin makes 24 above the card.
   card: {
     backgroundColor: colours.surface,
     borderRadius: radius.card,
@@ -22,19 +21,16 @@ const styles = StyleSheet.create({
 export interface SignUpAttestationFieldsProps {
   readonly accepted: boolean;
   readonly error: string | null;
-  /** False when another error from the same submit is the one announced. */
   readonly announceError?: boolean;
   readonly onPress: () => void;
 }
 
-/** The three sign-up duties, the text version they belong to, and the required accept box, in one card (HEN-183). */
 export function SignUpAttestationFields({ accepted, error, announceError = true, onPress }: SignUpAttestationFieldsProps) {
   return (
     <View style={styles.card}>
       <Text style={styles.lead}>{ATTESTATION_LEAD}</Text>
       {SIGN_UP_ATTESTATION_DUTIES.map((duty) => (
         <View key={duty} style={styles.duty}>
-          {/* The bullet is decoration: screen readers read the duty alone (Vera #74 item 5). */}
           <Text style={textStyles.body} accessibilityElementsHidden importantForAccessibility="no">
             •
           </Text>

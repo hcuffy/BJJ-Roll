@@ -10,12 +10,11 @@ import {
 } from "./common.js";
 import { handleSchema } from "./handle.js";
 
-// ARCHITECTURE.md §2.2: core entities (user, video, timeline, correction).
 export const userSchema = z.object({
   id: identifierSchema,
-  handle: handleSchema.nullable(), // D19. Null until chosen (HEN-64); length limits: OPEN (Henry), see limits.ts
+  handle: handleSchema.nullable(),
   createdAt: timestampSchema,
-}); // The email never leaves the backend: email_ciphertext and email_hash are DB columns only (D18).
+});
 
 export const videoProcessingStatusSchema = z.enum(["uploading", "queued", "processing", "needs_user", "ready", "failed"]);
 
@@ -26,7 +25,7 @@ export const videoSchema = z.object({
   visibility: visibilitySchema.default("private"),
   processingStatus: videoProcessingStatusSchema,
   durationMilliseconds: z.int().positive().optional(),
-  sharesRestrictedAt: timestampSchema.nullable(), // set by a "minor visible" report (M6-17, HEN-200)
+  sharesRestrictedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
 });
 
@@ -37,7 +36,7 @@ export const timelineSegmentSchema = z.object({
   endMilliseconds: videoTimestampMillisecondsSchema,
   position: positionLabelSchema,
   role: roleSchema,
-  confidence: z.enum(["high", "medium", "low"]), // semantic categories, not raw percentages (Lydia's UI research)
+  confidence: z.enum(["high", "medium", "low"]),
   source: z.enum(["gemini_v0", "computer_vision_v1", "user_correction"]),
 });
 
@@ -47,8 +46,8 @@ export const correctionSchema = z.object({
   userId: identifierSchema,
   startMilliseconds: videoTimestampMillisecondsSchema,
   endMilliseconds: videoTimestampMillisecondsSchema,
-  label: positionLabelSchema, // PLAN M4 task 7: (video_id, t0, t1, label, user_id)
-  levelTwoDetail: z.string().optional(), // HEN-44 level 2 pick list id
+  label: positionLabelSchema,
+  levelTwoDetail: z.string().optional(),
   createdAt: timestampSchema,
 });
 

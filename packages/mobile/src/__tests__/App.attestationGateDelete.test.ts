@@ -21,20 +21,17 @@ vi.mock("../auth/appAuthClient", () => ({
 
 const { App } = await import("../App");
 
-// Stamp's store check on #74 (Apple 5.1.1(v), Play account deletion): an account held at the re-accept gate can delete itself.
 describe("App: delete account from the sign-up attestation gate (HEN-183)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
 
   beforeEach(() => {
-    // The account has no attestation record, so the server keeps it on the gate after sign-in.
     backend = createFakeBackend({ signUpAttestationAcceptedVersion: null });
     secureStore = createMemorySecureStore();
     deepLinkState.url = null;
     resetBackListeners();
   });
 
-  /** Signs in with the fake backend; this account has no record, so it lands on the gate. */
   async function signInToGate(
     fetchImplementation: (input: string | URL | Request, init?: RequestInit) => Promise<Response> = backend.fetchImplementation,
   ) {
@@ -73,7 +70,6 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
     expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
   });
 
-  // HEN-308 (Sara Q3): export is not attestation-gated, so the gate's confirm exports first; that records no acceptance.
   it("a gated account exports its data from the confirm without accepting, then still deletes with the emailed code", async () => {
     const shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
     const screen = await signInToGate();
@@ -96,7 +92,6 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
     ]);
   });
 
-  // Vera #74 round 5: Android back is ignored while the DELETE is in flight, like the disabled Cancel.
   it("Android back during a pending DELETE stays on the code step, then the deletion completes", async () => {
     const release = deferred<undefined>();
     const screen = await signInToGate(async (input, init) => {

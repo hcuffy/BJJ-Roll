@@ -1,5 +1,3 @@
-// Vera (HEN-308): one message at a time on the delete confirm. A second "Email me a code" clears the first one's red error,
-// so the red code error and the grey offline note never show together.
 import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Text } from "react-native";

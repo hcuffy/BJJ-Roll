@@ -2,8 +2,6 @@ import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { vi } from "vitest";
 import type { AppleProviderConfig, SocialProviderConfig } from "../auth/index.js";
 
-// Fake provider config and endpoints for HEN-239 tests. Every value here is made up for the test run; nothing is a real credential.
-
 export const fakeGoogleConfig = { clientId: "test-google-client.apps.example.test", clientSecret: `test-google-${randomUUID()}` };
 
 export function createFakeAppleConfig(): AppleProviderConfig {
@@ -23,7 +21,6 @@ export function createFakeSocialProviderConfig(): SocialProviderConfig {
 
 const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
 
-/** A Google-style id token. The browser flow only decodes it (it came over TLS from the token endpoint), so it is unsigned here. */
 export function unsignedIdToken(claims: Record<string, unknown>): string {
   return `${encode({ alg: "none", typ: "JWT" })}.${encode(claims)}.`;
 }
@@ -33,7 +30,6 @@ export interface FakeAppleIdentityTokenSigner {
   readonly signIdentityToken: (claims: Record<string, unknown>) => string;
 }
 
-/** An RS256 key pair standing in for Apple's identity token key; its public half is served as the fake JWKS. */
 export function createFakeAppleIdentityTokenSigner(): FakeAppleIdentityTokenSigner {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const kid = "test-apple-kid";
@@ -68,7 +64,6 @@ function formBodyOf(rawBody: RequestInit["body"]): string {
   return rawBody instanceof URLSearchParams ? rawBody.toString() : "";
 }
 
-/** Stubs fetch for provider hosts only (oauth2.googleapis.com, appleid.apple.com); everything else goes to the real fetch. */
 export function stubProviderFetch(responder: FakeProviderResponder): { requests: RecordedProviderRequest[]; restore: () => void } {
   const originalFetch = globalThis.fetch;
   const requests: RecordedProviderRequest[] = [];
@@ -84,7 +79,6 @@ export function stubProviderFetch(responder: FakeProviderResponder): { requests:
   return { requests, restore: () => spy.mockRestore() };
 }
 
-/** Name=value pairs from every set-cookie header, for replaying the browser's cookie jar. */
 export function cookieHeaderFrom(response: Response): string {
   return response.headers
     .getSetCookie()

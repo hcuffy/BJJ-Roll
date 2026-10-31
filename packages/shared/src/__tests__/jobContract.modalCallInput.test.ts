@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { modalCallInputSchema } from "../index.js";
 import { otherId, videoId } from "./sampleValues.js";
 
-// HEN-227: Modal receives a job ID and a server-built object key, nothing else. Synthetic values only.
 const validInput = { jobId: otherId, inputObjectKey: `videos/${videoId}/source.mp4` };
 const syntheticEmail = ["athlete", "example.invalid"].join("@");
 const presignedQuery = ["X-Amz-Expires=300", "X-Amz-Signature=synthetic"].join("&");

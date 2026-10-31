@@ -16,10 +16,6 @@ export interface EmailHashAdapterConfig {
   codec: EmailPrivacyCodec;
 }
 
-/**
- * Shared Better Auth telemetry disable flag so every Better Auth configuration
- * touched in `@bjj-roll/backend` explicitly disables telemetry (`DECISIONS.md` A4).
- */
 export const betterAuthTelemetryDisabledConfig = {
   enabled: false,
 } as const;
@@ -113,13 +109,6 @@ function wrapTransactionMethods(inner: DBTransactionAdapter, config: EmailHashAd
   };
 }
 
-/**
- * Production-ready Better Auth adapter wrapper (`DECISIONS.md` A4) that:
- * 1. Strips `name` and `image` before writing `user` rows (no real-name column on `users`).
- * 2. Stores `email_ciphertext`, `email_hash` (HMAC-SHA256), and `key_version` on `users`.
- * 3. Resolves pre-session `WHERE email = ?` queries via `public.app_user_id_by_email_hmac(email_hmac)`
- *    owned by `bjj_auth_lookup` (`NOLOGIN`, `NOBYPASSRLS`) and executable only by `bjj_app`.
- */
 export function createEmailHashAdapter(inner: DBAdapter, config: EmailHashAdapterConfig): DBAdapter {
   return {
     ...wrapTransactionMethods(inner, config),

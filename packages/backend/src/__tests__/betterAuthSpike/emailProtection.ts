@@ -1,7 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 
-// HEN-47 spike only. A throwaway stand-in for the HEN-63 crypto module, so this spike shares no files with it.
-// Keys are generated per test run; nothing here reads a real secret.
 const initializationVectorLength = 12;
 const authenticationTagLength = 16;
 

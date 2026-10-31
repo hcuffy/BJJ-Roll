@@ -27,28 +27,19 @@ export interface SignUpAttestationGateProps {
   readonly onReadStatus: () => Promise<SignUpAttestationResult>;
   readonly onAccept: () => Promise<SignUpAttestationResult>;
   readonly onSignOut: () => void;
-  /** Delete account stays reachable while gated (Apple 5.1.1(v), Play): the same confirm and code steps as the signed-in screen. */
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
   readonly onAccountDeleted: () => void;
-  /**
-   * HEN-308: "Export my data first" on the delete confirm, as on the signed-in screen. Offered because GET /account/export is not
-   * attestation-gated (backend accountRoutes.exportWithoutAttestation.test.ts); without it the confirm shows no export.
-   */
   readonly onExportData?: () => Promise<AccountExportResult>;
-  /** The signed-in app, shown only once the account accepted the current text version. */
   readonly children?: ReactNode;
 }
 
-/** Shown when the status read fails for a reason other than the network (Vera #74 item 1). */
 export const GATE_READ_ERROR = "Couldn't check your account. Try again.";
 export const TRY_AGAIN = "Try again";
 
-/** "readFailed": the status is unknown, so neither the app nor the duties are shown; only a retry or sign-out. */
 type GateState = "checking" | "readFailed" | "prompt" | "accepted";
 type DeleteStep = "none" | "confirm" | "code";
 
-// The actions' 16 gap + 8 = 24 between Sign out and the destructive Delete account (Vera #74 round 4).
 const styles = StyleSheet.create({ deleteEntry: { marginTop: spacing.small } });
 
 function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {
@@ -59,16 +50,10 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
 
 const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
 
-/** True only for a status the server confirmed: anything else keeps the gate closed. */
 function isAccepted(result: SignUpAttestationResult): boolean {
   return result.ok && !result.status.required;
 }
 
-/**
- * HEN-183: after sign-in, an account with no attestation record or an older text version must accept the current
- * duties before it reaches the app. The duties show only when the server says acceptance is needed; a failed read is an
- * error state with a retry. The only ways past are the server's "not required", accepting, or signing out.
- */
 export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   const { onReadStatus, onAccept, onSignOut, onRequestDeleteCode, onDeleteAccount, onAccountDeleted, onExportData, children } = props;
   const [state, setState] = useState<GateState>("checking");
@@ -82,17 +67,12 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
   const [sendingCode, setSendingCode] = useState(false);
   const [deleteCodeError, setDeleteCodeError] = useState<string | null>(null);
   const [deleteOffline, setDeleteOffline] = useState(false);
-  // A ref, not state: two taps in the same tick both run before a re-render, and only the first may send a code.
-  // The code step's DELETE and "Send a new code" and the export set it too, so Android back is ignored while they run.
   const codeInFlight = useRef(false);
-  // Starting either action clears every confirm message, as Cancel does (Vera, HEN-308).
   const exportFirst = useExportDataFirst(codeInFlight, onExportData, { onStart: () => clearConfirmMessages(), setOffline: setDeleteOffline });
   const confirmHeading = useRef<ComponentRef<typeof Text>>(null);
   const deleteEntryButton = useRef<ComponentRef<typeof View>>(null);
   const returnFocusToDeleteEntry = useRef(false);
-  // Each "Try again" bumps this to read again.
   const [attempt, setAttempt] = useState(0);
-  // Read once per sign-in (plus explicit retries): the parent passes a fresh function on every render.
   const readStatus = useRef(onReadStatus);
 
   useEffect(() => {
@@ -116,7 +96,6 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     };
   }, [attempt]);
 
-  // Like the signed-in screen: focus moves into the confirm, and back to Delete account when the delete is cancelled.
   useEffect(() => {
     if (deleteStep === "confirm") {
       moveScreenReaderFocus(confirmHeading.current);
@@ -138,7 +117,6 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     setDeleteStep("none");
   };
 
-  // Android back on a delete step acts like its Cancel (Vera #74 round 4 item 4); ignored while a request is in flight.
   useEffect(() => {
     if (deleteStep === "none") {
       return undefined;

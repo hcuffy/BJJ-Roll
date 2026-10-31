@@ -1,5 +1,3 @@
-// Sign-out when SecureStore writes fail (HEN-314): the 3 writes are the pending-sign-out marker and the two session keys.
-// Sara's rule: the server is told within a deadline, the phone always ends up signed out, and nothing sensitive is logged.
 import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { inspect } from "node:util";
 import { createElement } from "react";
@@ -30,7 +28,6 @@ const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-va
 const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
 const SESSION = "session-token-1";
 
-/** A server that keeps sessions, as Better Auth does: `/sign-out` ends the session whose cookie the request presents. */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Set<string>();
@@ -51,7 +48,6 @@ function createSessionServer() {
     }
     if (pathname.endsWith("/sign-out")) {
       if (state.signOutHangs) {
-        // React Native's fetch only ends a request to a host that never answers when the app aborts it.
         return await new Promise((_resolve, reject) =>
           init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
         );
@@ -103,7 +99,6 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     await settle();
   };
-  /** Signed in, then taps Sign out with the given SecureStore keys broken. Returns the screens shown from the tap on. */
   const signOutWithBrokenKeys = async (keys: readonly string[]) => {
     const screen = await launchApp();
     await signIn(screen);
@@ -144,7 +139,6 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     const shown = await signOutWithBrokenKeys(SIGN_OUT_WRITES);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
-    // The session cookie is still on the phone, but the server no longer accepts it.
     expect(secureStore.items.get("bjjroll_cookie")).toContain(SESSION);
     expect(server.liveSessions.has(SESSION)).toBe(false);
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
@@ -191,7 +185,6 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(renderedScreens.slice(shownBefore).filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
     expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain(SESSION);
-    // The server was not told: the marker stays, so the next launch retries.
     expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toContain(SESSION);
   });
 });

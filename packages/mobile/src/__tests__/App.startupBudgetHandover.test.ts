@@ -27,9 +27,7 @@ const TRY_AGAIN = "Try again";
 describe("Fresh 10 s after startup, and Try again keeps a newer screen (HEN-310 gate)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Paths (by ending) whose requests get no answer until the app aborts them, or until released. */
   let hangingPaths: Set<string>;
-  /** Held requests by path ending; releasing one delivers the real backend answer. */
   let held: Map<string, (() => void)[]>;
   let holdInsteadOfHang: boolean;
   let unreachablePaths: Set<string>;
@@ -96,7 +94,6 @@ describe("Fresh 10 s after startup, and Try again keeps a newer screen (HEN-310 
   it("a sign-in after the startup budget ran out gets its own 10 s for the gate read", async () => {
     const screen = await launchApp();
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
-    // Startup finished long ago; its 10 s are spent.
     await advance(STARTUP_REQUEST_TIMEOUT_MS + 1000);
     await signIn(screen);
     expect(noteCount(screen)).toBe(0);

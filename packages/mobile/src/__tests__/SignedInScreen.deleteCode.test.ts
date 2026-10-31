@@ -38,7 +38,6 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
     expect(state.deletedCodes).toEqual([]);
 
     await screen.changeText("6-digit code", "654321");
-    // A destructive action: the 6th digit does not submit by itself.
     expect(state.deletedCodes).toEqual([]);
     expect(screen.isDisabled("Delete my account")).toBe(false);
     await screen.press("Delete my account");

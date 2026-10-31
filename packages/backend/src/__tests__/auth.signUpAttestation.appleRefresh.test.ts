@@ -8,7 +8,6 @@ import { createFakeAppleIdentityTokenSigner, createFakeSocialProviderConfig, stu
 const socialProviders = createFakeSocialProviderConfig();
 const signer = createFakeAppleIdentityTokenSigner();
 
-// HEN-183 (Sara, 27 Oct): native Apple sign-in sends the duties tick in the request body; a returning account gets the record too.
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the Apple sign-in tick refreshes the attestation for existing accounts", () => {
   let environment: StartedAuthTestEnvironment | undefined;
   let providerFetch: ReturnType<typeof stubProviderFetch> | undefined;

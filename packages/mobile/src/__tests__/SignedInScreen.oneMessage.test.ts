@@ -1,5 +1,3 @@
-// HEN-305, one message at a time (Sara via Vera): an offline export on the delete confirm clears an earlier red code error,
-// so the grey note never shows next to red (Bill's gate probe, Q1).
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, AgeConfirmationResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";
@@ -19,7 +17,6 @@ function alerts(screen: Screen) {
   return screen.findAllByType("Text").filter((node) => node.props.accessibilityRole === "alert");
 }
 
-/** Opens the 18+ confirm and answers Yes; the harness's adultResult decides the outcome. */
 async function confirmAdult(screen: Screen) {
   await screen.press("Confirm I am 18 or older");
   await screen.press("Yes, I am 18 or older");

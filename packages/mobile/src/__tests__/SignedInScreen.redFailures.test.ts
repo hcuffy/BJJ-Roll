@@ -1,5 +1,3 @@
-// HEN-305 AC: each of the five account actions keeps its red message for a server error (500) and a rate limit (429).
-// Only a network failure gets the grey offline note (SignedInScreen.offlineNote.test.ts).
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";

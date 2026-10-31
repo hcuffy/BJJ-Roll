@@ -1,4 +1,3 @@
-// HEN-311 after #93: an offline export shows only the grey note, and Delete account stays startable after any export outcome.
 import { Platform, Share } from "react-native";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AccountExportResult } from "../auth/accountActions";

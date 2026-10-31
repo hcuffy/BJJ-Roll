@@ -42,7 +42,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
   };
 
   beforeAll(async () => {
-    // Better Auth's own logger on at debug level, so the zero-PII log test sees everything it would print.
     environment = await startAuthTestEnvironment({ logger: { disabled: false, level: "debug" } });
   }, 60_000);
 
@@ -93,7 +92,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
   it("enforces PostgreSQL rate limits: 3 sends/email/15m, 10 sends/IP/15m, and 20 verifies/IP/15m", async () => {
     const { app } = current();
 
-    // 1. 3 sends per email per 15 minutes across distinct IPs
     const rateEmail = "per.email.limit@example.com";
     for (let attempt = 1; attempt <= MAX_SENDS_PER_EMAIL_PER_WINDOW; attempt += 1) {
       const okResponse = await postAuthJson(app, "/email-otp/send-verification-otp", {
@@ -108,10 +106,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
       ipAddress: "198.51.100.39",
     });
     expect(fourthEmailSend.status).toBe(429);
-    // AC 6: a rate-limited send sends no email
     expect(current().emailSender.sentMessages.length).toBe(sentBeforeEmailOverflow);
 
-    // 2. 10 sends per IP per 15 minutes across distinct emails
     const sharedSendIp = "198.51.100.50";
     for (let count = 1; count <= MAX_SENDS_PER_IP_PER_WINDOW; count += 1) {
       const okResponse = await postAuthJson(app, "/email-otp/send-verification-otp", {
@@ -128,7 +124,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     expect(eleventhIpSend.status).toBe(429);
     expect(current().emailSender.sentMessages.length).toBe(sentBeforeIpOverflow);
 
-    // 3. 20 verification attempts per IP per 15 minutes
     const sharedVerifyIp = "198.51.100.60";
     for (let count = 1; count <= MAX_VERIFIES_PER_IP_PER_WINDOW; count += 1) {
       const verifyAttempt = await postAuthJson(app, "/sign-in/email-otp", {
@@ -161,7 +156,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
     const ipAddress = "198.51.100.80";
 
     try {
-      // Run OTP flow for Alpha
       await postAuthJson(app, "/email-otp/send-verification-otp", {
         body: { email: emailAlpha, type: "sign-in", age16Confirmed: true, ...currentSignUpAttestation },
         ipAddress,
@@ -176,7 +170,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
         user: { id: string };
       };
 
-      // Run Magic Link + Exchange flow for Bravo
       await postAuthJson(app, "/sign-in/magic-link", {
         body: { email: emailBravo, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation },
         ipAddress,
@@ -194,7 +187,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
         user: { id: string };
       };
 
-      // Trigger failure paths too
       await postAuthJson(app, "/sign-in/email-otp", {
         body: { email: emailAlpha, otp: "999999" },
         ipAddress,
@@ -204,7 +196,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
         ipAddress,
       });
 
-      // Verify RLS isolation as bjj_app
       await withAppRoleUnscoped(database.db, async (transaction) => {
         const visibleUsers = await transaction.selectFrom("users").selectAll().execute();
         expect(visibleUsers).toHaveLength(0);

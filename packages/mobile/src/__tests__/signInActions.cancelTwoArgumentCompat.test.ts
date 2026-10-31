@@ -1,5 +1,3 @@
-// Gate draft (HEN-315): the lock-screen and sign-in paths call cancelPendingSignOut with exactly two arguments
-// (client, secureStore). The abort signal must stay optional; `tsc -b` type-checks this file, so a required signal fails CI.
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
 import { addPendingSignOut, PENDING_SIGN_OUT_KEY } from "../auth/pendingSignOuts";
@@ -33,7 +31,6 @@ describe("cancelPendingSignOut with two arguments", () => {
     await addPendingSignOut(secureStore, cookieOf("ended"));
     await addPendingSignOut(secureStore, cookieOf("refused"));
 
-    // Exactly two arguments, as App.tsx calls it.
     await cancelPendingSignOut(client, secureStore);
 
     expect(presented).toEqual(["ended", "refused"]);

@@ -3,7 +3,6 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Needs Docker. In CI the test always runs (and fails if Docker is missing); locally it is skipped without Docker.
 const dockerAvailable = existsSync("/var/run/docker.sock") || Boolean(process.env.DOCKER_HOST);
 const runDatabaseTests = dockerAvailable || process.env.CI === "true";
 

@@ -2,24 +2,18 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import unicorn from "eslint-plugin-unicorn";
+import noProseComments from "./eslint/noProseComments.js";
+
+const unlintedFiles = ["**/vitest.config.ts", "**/vite.config.ts", "**/scripts/**", "**/babel.config.js", "**/metro.config.js"];
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/dist/**",
-      "**/node_modules/**",
-      "**/coverage/**",
-      "**/.expo/**",
-      "**/vitest.config.ts",
-      "**/vite.config.ts",
-      "**/scripts/**",
-      "**/babel.config.js",
-      "**/metro.config.js",
-    ],
+    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/.expo/**"],
   },
-  js.configs.recommended,
+  { ...js.configs.recommended, ignores: unlintedFiles },
   {
     files: ["**/*.ts", "**/*.tsx"],
+    ignores: unlintedFiles,
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
     plugins: { unicorn },
@@ -36,7 +30,6 @@ export default tseslint.config(
         { selector: ["objectLiteralProperty", "typeProperty"], format: null },
         { selector: "import", format: null },
       ],
-      // Full names: no abbreviations (silly-rabbit allowList) + no 1–2 char identifiers
       "unicorn/name-replacements": [
         "error",
         { replacements: { db: false }, allowList: { env: true, deps: true, Deps: true, props: true, Props: true }, ignore: ["e2e"] },
@@ -63,7 +56,6 @@ export default tseslint.config(
     rules: { "@typescript-eslint/naming-convention": "off" },
   },
   {
-    // HEN-63: the encryption module uses `node:crypto` and holds key handling; it must never reach a client bundle.
     files: ["packages/mobile/**/*.{ts,tsx}", "packages/frontend/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
@@ -81,13 +73,17 @@ export default tseslint.config(
     },
   },
   eslintConfigPrettier,
-  // eslint-config-prettier turns off `curly` and `max-len`; CONVENTIONS.v2 wants both as errors.
-  // Both are safe with Prettier here (`curly: all`, and `max-len` matches `printWidth: 150`).
   {
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
       curly: ["error", "all"],
       "max-len": ["error", { code: 150 }],
     },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,jsx,ts,tsx}"],
+    languageOptions: { parser: tseslint.parser },
+    plugins: { local: { rules: { "no-prose-comments": noProseComments } } },
+    rules: { "local/no-prose-comments": "error" },
   },
 );

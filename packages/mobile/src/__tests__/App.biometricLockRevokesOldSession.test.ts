@@ -27,11 +27,6 @@ const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
 
-/**
- * A server that keeps sessions, as Better Auth `/sign-out` does: every sign-in starts a new one with its own signed cookie
- * (`<token>.<signature>`); `/sign-out` deletes the session whose cookie the request presents and answers success even when
- * it presents none. Requests from a live session reach the shared fake backend as signed in; others reach it signed out.
- */
 function createSessionServer() {
   const backend = createFakeBackend();
   const liveSessions = new Map<string, string>();
@@ -127,7 +122,6 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
 
   it("old session left pending, biometric unlock on, magic link opens: lock shows and only the old cookie is sent to sign-out", async () => {
     const screen = await launchApp();
-    // Session 1, then a sign-out that cannot reach the server.
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", MEMBER_EMAIL);
@@ -138,7 +132,6 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
     await screen.press("Sign out");
     expect(marker()).toContain(OLD_SESSION);
 
-    // Session 2 by code while the server errors on sign-out: the marker stays. Biometric unlock is turned on at the offer.
     server.state.signOutEndpointDown = false;
     server.state.signOutEndpointErrors = true;
     setUpEnrolledPhone();
@@ -154,10 +147,8 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
     expect(marker()).toContain(OLD_SESSION);
     expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
 
-    // Server healthy again; a magic link opens in the running app.
     server.state.signOutEndpointErrors = false;
     const signOutsBefore = server.signOutRequests.length;
-    // The lock screen opens the OS prompt at once; the user cancels it so the lock stays up.
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     await screen.rerender();

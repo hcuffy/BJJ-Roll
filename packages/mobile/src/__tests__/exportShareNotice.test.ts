@@ -15,7 +15,6 @@ interface ShareResult {
   readonly action: "sharedAction" | "dismissedAction";
 }
 
-/** A gated account on its delete confirm, so "Export my data first" shows. */
 async function renderGateConfirm(): Promise<Screen> {
   const prompt: SignUpAttestationResult = {
     ok: true,
@@ -53,7 +52,6 @@ const places = [
   ["the attestation gate's delete confirm", gateConfirm],
 ] as const;
 
-/** HEN-311 (Vera, HEN-308 review): after the share sheet closes, say so only when iOS reports the share completed. */
 describe("export share confirmation (HEN-311)", () => {
   const exportWith = async (open: () => Promise<readonly [Screen, string]>, platform: "ios" | "android", share: ShareResult) => {
     Platform.OS = platform;
@@ -87,7 +85,6 @@ describe("export share confirmation (HEN-311)", () => {
     expect(screen.text()).not.toContain(SHARED);
   });
 
-  // Android reports sharedAction even on cancel, so after any closed sheet it says only what the app knows (Vera, HEN-311 review).
   it.each(places)("on %s: Android shows the grey created line after the sheet closes, never 'shared'", async (_place, open) => {
     const screen = await exportWith(open, "android", { action: "dismissedAction" });
 

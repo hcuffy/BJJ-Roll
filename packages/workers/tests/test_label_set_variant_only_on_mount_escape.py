@@ -1,5 +1,3 @@
-"""HEN-316: the `variant` key (a value or null) is allowed only on mount_escape events; any other event carrying it is rejected."""
-
 import json
 from pathlib import Path
 

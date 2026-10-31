@@ -11,7 +11,6 @@ import {
 } from "./emailSender.js";
 
 export interface FakeSentOneTimeCodeMessage {
-  /** The provider idempotency key the queue passed, when there was one. */
   idempotencyKey?: string;
   kind: "one_time_code";
   to: string;
@@ -23,7 +22,6 @@ export interface FakeSentOneTimeCodeMessage {
 }
 
 export interface FakeSentMagicLinkMessage {
-  /** The provider idempotency key the queue passed, when there was one. */
   idempotencyKey?: string;
   kind: "magic_link";
   to: string;
@@ -34,7 +32,6 @@ export interface FakeSentMagicLinkMessage {
 }
 
 export interface FakeSentAccountDeletedMessage {
-  /** The provider idempotency key the queue passed, when there was one. */
   idempotencyKey?: string;
   kind: "account_deleted";
   to: string;
@@ -44,10 +41,6 @@ export interface FakeSentAccountDeletedMessage {
 
 export type FakeSentEmailMessage = FakeSentOneTimeCodeMessage | FakeSentMagicLinkMessage | FakeSentAccountDeletedMessage;
 
-/**
- * In-memory email sender for tests and local development without external network calls.
- * Stores sent messages only in memory; nothing is written to disk or logged.
- */
 export class FakeEmailSender implements EmailSender {
   readonly #sentMessages: FakeSentEmailMessage[] = [];
 

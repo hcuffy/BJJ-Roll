@@ -1,19 +1,14 @@
 import type { BiometricFailure, BiometricKind } from "../auth/biometricUnlock";
 
-/** The words for each platform (Vera round 2, fix 2): iPhones say Face ID / Touch ID and passcode, Android says screen lock. */
 export interface BiometricCopy {
   readonly offerTitle: string;
   readonly offerBody: string;
-  /** Fix 7: the data never leaves the phone. */
   readonly offerPrivacy: string;
-  /** Visible and spoken name of the Account toggle. */
   readonly toggleLabel: string;
   readonly toggleHint: string;
-  /** Under the disabled toggle, and its screen-reader hint, when nothing is enrolled. */
   readonly setUpNote: string;
   readonly lockLine: string;
   readonly lockoutError: string;
-  /** Lock screen: biometrics or the device passcode were removed, so Unlock cannot work. */
   readonly notSetUpError: string;
 }
 
@@ -41,13 +36,10 @@ const androidCopy: BiometricCopy = {
   notSetUpError: "No fingerprint, face or screen lock is set up on this phone. Sign out, then sign in with your email.",
 };
 
-/** Fix 7: what turning it on is for, the same on every platform. */
 export const BIOMETRIC_OFFER_BENEFIT = "Keeps anyone else using this phone out of your BJJ Roll account.";
 
-/** Fix 3: under the lock screen's actions, so Sign out does not read as losing the account. */
 export const BIOMETRIC_SIGN_OUT_NOTE = "Signing out keeps your account. You can sign back in with your email.";
 
-/** Errors from a failed check on the offer and the toggle; cancelled shows none. */
 export function biometricCheckError(failure: Exclude<BiometricFailure, "cancelled">, copy: BiometricCopy, failedMessage: string): string {
   if (failure === "lockout") {
     return copy.lockoutError;

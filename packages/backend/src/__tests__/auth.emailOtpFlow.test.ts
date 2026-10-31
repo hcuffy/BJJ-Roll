@@ -54,7 +54,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     const otpCode = latestOtpFor(email);
     expect(otpCode).toMatch(/^\d{6}$/);
 
-    // Verify stored OTP row has 10-minute expiry and keyed HMAC hash at rest
     const expectedIdentifier = `sign-in-otp-${codec.computeEmailHmac(email)}`;
     const verificationRow = await pool.query<{ value: string; lifetime: number }>(
       "SELECT value, extract(epoch FROM expires_at - created_at)::int AS lifetime FROM public.verifications WHERE identifier = $1",
@@ -78,7 +77,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     expect(signInPayload.user.email).toBe("otp.user@example.com");
     expect(signInPayload.user.emailVerified).toBe(true);
 
-    // Pre-session lookup function resolves the created user by email_hash
     const lookupRow = await pool.query<{ user_id: string | null }>("SELECT public.app_user_id_by_email_hmac($1) AS user_id", [
       codec.computeEmailHmac(email),
     ]);
@@ -97,7 +95,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
     const expiresDelta = (Date.parse(sessionPayload.session.expiresAt) - Date.now()) / 1000;
     expect(Math.abs(expiresDelta - SESSION_SLIDING_EXPIRY_SECONDS)).toBeLessThan(60);
 
-    // Raw database dump never contains plaintext email or OTP code
     const rawDump = await dumpRawAuthTables(pool);
     expect(rawDump.toLowerCase()).not.toContain("otp.user@example.com");
     expect(rawDump).not.toContain(otpCode);
@@ -177,7 +174,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth email
       expect(badResponse.status).toBeGreaterThanOrEqual(400);
     }
 
-    // Even the right code is now rejected because max attempts (5) was reached
     const afterBurnResponse = await postAuthJson(app, "/sign-in/email-otp", {
       body: { email, otp: otpCode },
       ipAddress,

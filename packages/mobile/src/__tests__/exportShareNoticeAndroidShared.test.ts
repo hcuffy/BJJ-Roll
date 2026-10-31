@@ -1,7 +1,3 @@
-// Bill gate draft (HEN-311 @ 670b6c2). Kills 3 surviving plants in shareAccountExport:
-//  P1 drop the iOS check (Android sharedAction -> "shared"), A3 Android line only on dismissedAction,
-//  A5 the "created" line shown on iOS too. Real Android reports sharedAction even on cancel, so it must be tested.
-// Drop into packages/mobile/src/__tests__/ (or merge the two it.each into exportShareNotice.test.ts).
 import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Platform, Share, Text } from "react-native";

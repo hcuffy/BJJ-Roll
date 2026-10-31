@@ -111,7 +111,6 @@ describe.each(platformCases)("biometric unlock wording on $name (Vera round 2, f
     await screen.press("Turn on");
 
     expect(screen.queryByText(platform.toggleLabel)).not.toBeNull();
-    // The spoken name is the visible one (WCAG 2.5.3).
     expect(screen.getByRole("switch").props.accessibilityLabel).toBe(platform.toggleLabel);
     localAuthenticationFake.answers.push("user_cancel");
     expect((await launchApp()).text()).toContain(platform.lockLine);

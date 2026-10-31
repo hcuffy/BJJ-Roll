@@ -1,16 +1,10 @@
 import { z } from "zod";
 import { identifierSchema, timestampSchema } from "./common.js";
 
-// ARCHITECTURE.md §2.3: access grant.
 export const accessGrantKindSchema = z.enum(["gym_mate", "reviewer"]);
-export const accessGrantScopeSchema = z.enum(["view", "note"]); // "note" includes "view"
+export const accessGrantScopeSchema = z.enum(["view", "note"]);
 
-export const accessGrantRevocationReasonSchema = z.enum([
-  "owner_revoked",
-  "user_blocked", // M6-16, HEN-199
-  "review_delivered", // M10-10, HEN-212
-  "account_deleted",
-]);
+export const accessGrantRevocationReasonSchema = z.enum(["owner_revoked", "user_blocked", "review_delivered", "account_deleted"]);
 
 export const accessGrantSchema = z.object({
   id: identifierSchema,
@@ -19,9 +13,9 @@ export const accessGrantSchema = z.object({
   granteeId: identifierSchema,
   kind: accessGrantKindSchema,
   scope: accessGrantScopeSchema,
-  reviewRequestId: identifierSchema.nullable(), // set for kind "reviewer"
+  reviewRequestId: identifierSchema.nullable(),
   createdAt: timestampSchema,
-  expiresAt: timestampSchema.nullable(), // null only if Henry decides gym-mate shares last until revoked (HEN-192)
+  expiresAt: timestampSchema.nullable(),
   revokedAt: timestampSchema.nullable(),
   revocationReason: accessGrantRevocationReasonSchema.nullable(),
 });

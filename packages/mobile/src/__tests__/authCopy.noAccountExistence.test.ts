@@ -37,7 +37,6 @@ describe("HEN-239 sign-in copy never says whether an email has an account", () =
   it("has no account-existence wording anywhere in app or shared source (copy or comments)", () => {
     const files = sourceDirectories.flatMap(listSourceFiles);
     expect(files.some((filePath) => filePath.endsWith("signInActions.ts"))).toBe(true);
-    // The one exception: the fixed 18+ note (Henry Q3) is the same for every email, so it tells nothing about one.
     expect(AGE_ADULT_CONFIRMATION_NOTE).toBe("Only needed to buy things later. Already have an account? Confirm in Account.");
     for (const filePath of files) {
       expect(readFileSync(filePath, "utf8").replaceAll(AGE_ADULT_CONFIRMATION_NOTE, ""), filePath).not.toMatch(ACCOUNT_EXISTENCE_WORDING);

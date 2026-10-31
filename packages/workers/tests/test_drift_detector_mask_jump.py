@@ -1,9 +1,7 @@
-"""HEN-318: the drift rule flags a synthetic mask jump and a lost mask, and nothing on a stable track. Synthetic masks only."""
-
 from bjj_roll_workers.drift_detector import (
-    MAX_AREA_CHANGE_RATIO,
-    MAX_CENTRE_JUMP_IN_BOX_DIAGONALS,
-    MIN_TRACK_SCORE,
+    MAX_AREA_CHANGE_RATIO_UNTUNED,
+    MAX_CENTRE_JUMP_IN_BOX_DIAGONALS_UNTUNED,
+    MIN_TRACK_SCORE_UNTUNED,
     REASON_MASK_JUMP,
     REASON_MASK_LOST,
     REASON_MASK_SIZE_JUMP,
@@ -31,7 +29,7 @@ def _lost(frame_index: int) -> TrackedFrame:
 
 
 def test_drift_detector_rule_constants_are_named() -> None:
-    assert (MIN_TRACK_SCORE, MAX_CENTRE_JUMP_IN_BOX_DIAGONALS, MAX_AREA_CHANGE_RATIO) == (0.5, 0.5, 2.0)
+    assert (MIN_TRACK_SCORE_UNTUNED, MAX_CENTRE_JUMP_IN_BOX_DIAGONALS_UNTUNED, MAX_AREA_CHANGE_RATIO_UNTUNED) == (0.5, 0.5, 2.0)
 
 
 def test_drift_detector_stable_track_has_no_drift() -> None:
@@ -53,14 +51,14 @@ def test_drift_detector_flags_a_size_jump() -> None:
 
 
 def test_drift_detector_flags_a_lost_mask_once_per_loss() -> None:
-    track = [_square(0, 20.0, 30.0), _lost(1), _lost(2), _square(3, 20.0, 30.0, score=MIN_TRACK_SCORE - 0.01), _square(4, 20.0, 30.0)]
+    track = [_square(0, 20.0, 30.0), _lost(1), _lost(2), _square(3, 20.0, 30.0, score=MIN_TRACK_SCORE_UNTUNED - 0.01), _square(4, 20.0, 30.0)]
 
     assert detect_drift(track) == (DriftEvent(frame_index=1, reason=REASON_MASK_LOST),)
 
 
 def test_drift_detector_just_under_the_jump_limit_is_stable() -> None:
     diagonal = (10.0**2 + 10.0**2) ** 0.5
-    step = diagonal * MAX_CENTRE_JUMP_IN_BOX_DIAGONALS * 0.99
+    step = diagonal * MAX_CENTRE_JUMP_IN_BOX_DIAGONALS_UNTUNED * 0.99
 
     assert detect_drift([_square(0, 20.0, 30.0), _square(1, 20.0 + step, 30.0)]) == ()
 
@@ -72,8 +70,8 @@ def test_drift_detector_flags_a_shrink_past_the_area_ratio() -> None:
 
 
 def test_drift_detector_min_track_score_is_the_lowest_good_score() -> None:
-    at_limit = [_square(0, 20.0, 30.0), _square(1, 20.0, 30.0, score=MIN_TRACK_SCORE)]
-    under_limit = [_square(0, 20.0, 30.0), _square(1, 20.0, 30.0, score=MIN_TRACK_SCORE - 0.01)]
+    at_limit = [_square(0, 20.0, 30.0), _square(1, 20.0, 30.0, score=MIN_TRACK_SCORE_UNTUNED)]
+    under_limit = [_square(0, 20.0, 30.0), _square(1, 20.0, 30.0, score=MIN_TRACK_SCORE_UNTUNED - 0.01)]
 
     assert detect_drift(at_limit) == ()
     assert detect_drift(under_limit) == (DriftEvent(frame_index=1, reason=REASON_MASK_LOST),)

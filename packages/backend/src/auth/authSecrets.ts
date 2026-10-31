@@ -47,7 +47,6 @@ export interface AuthCryptoCodec {
   hashMagicLinkToken(token: string): string;
   hashExchangeCode(code: string): string;
   hashSessionToken(token: string): string;
-  /** Keyed id for an email queue job, so the same request maps to the same job without the job id revealing what it is for (HEN-284). */
   hashEmailQueueJobKey(jobKey: string): string;
 }
 

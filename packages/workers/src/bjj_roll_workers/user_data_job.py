@@ -1,5 +1,3 @@
-"""Runs one user-data job inside a Modal function and keeps user data out of logs and errors (HEN-227)."""
-
 import time
 from collections.abc import Callable
 
@@ -10,10 +8,6 @@ type JobHandler = Callable[[ModalCallInput], dict[str, object]]
 
 
 def run_user_data_job(job_id: object, input_object_key: object, handler: JobHandler) -> dict[str, object]:
-    """Validate the call input, run the handler and return a job result (ARCHITECTURE §3.5).
-
-    An exception is logged as the job ID and its class name only; the message, traceback and inputs are dropped.
-    """
     try:
         job = parse_modal_call_input(job_id, input_object_key)
     except InvalidModalCallInputError:

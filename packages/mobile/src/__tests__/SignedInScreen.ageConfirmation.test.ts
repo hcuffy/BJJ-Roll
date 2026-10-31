@@ -29,7 +29,6 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     });
     const text = screen.text();
     expect(text.indexOf(CANT_UNDO)).toBeGreaterThan(text.indexOf(CONFIRM));
-    // Henry Q3: the sign-up note stays on sign-up; the Account box keeps its own copy.
     expect(text).not.toContain(AGE_ADULT_CONFIRMATION_NOTE);
     expect(flattenStyle(screen.queryByText(CANT_UNDO)?.props.style).color).toBe(colours.textSecondary);
 
@@ -110,7 +109,6 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
   });
 
   it("a failed save shows a plain message and keeps the button for a retry; a failed read still shows the button", async () => {
-    // A network failure gets the grey note instead (HEN-311, SignedInScreen.adultOfflineNote.test.ts).
     harness.state.adultResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     const screen = await harness.render();
     await screen.press(CONFIRM);
@@ -135,7 +133,6 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     await screen.press(CONFIRM);
     await screen.press(DIALOG_YES);
     const focusEvents = vi.mocked(AccessibilityInfo.sendAccessibilityEvent);
-    // Like Cancel, focus returns to the 18+ slot's button (by then it reads Saving…) instead of being lost with the dialog.
     const [slotTarget, slotEvent] = focusEvents.mock.calls.at(-1) ?? [];
     expect(slotEvent).toBe("focus");
     expect((slotTarget as unknown as { props: Record<string, unknown> }).props.accessibilityHint).toBe(
@@ -146,7 +143,6 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
     await screen.rerender();
     const row = screen.findAllByType("View").find((view) => textOf(view) === `✓${CONFIRMED}`);
     expect(row?.props.accessible).toBe(true);
-    // No live region and no iOS announcement on top of the focus move, so the row is read once (no double read).
     expect(row?.props.accessibilityLiveRegion).toBeUndefined();
     expect(focusEvents.mock.calls.at(-1)).toEqual([row, "focus"]);
     await screen.rerender();

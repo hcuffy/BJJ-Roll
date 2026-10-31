@@ -28,11 +28,6 @@ const EMAIL = "member@example.test";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
 const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
 
-/**
- * HEN-303 x HEN-304 (Bill, gate @ 75a9014): a link opened in the running app whose exchange never answers times out into
- * App's link .catch. That catch was unreachable before #83 (completeMagicLink never rejects); now it is the timeout path.
- * It must show the grey note only: an older card or red form error on the view goes, as for a network failure.
- */
 describe("App: a link opened in the running app that times out replaces the last result (HEN-303, HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let exchangeHangs: boolean;

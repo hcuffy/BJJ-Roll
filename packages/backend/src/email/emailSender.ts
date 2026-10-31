@@ -1,7 +1,5 @@
-/** What a one-time code is for. Default sign_in; account_deletion is the fresh code DELETE /account needs (HEN-65). */
 export type OneTimeCodePurpose = "sign_in" | "account_deletion";
 
-/** Set by the email queue to its job id: the provider sends once per key, so a retry after a timeout is not a second email (HEN-284). */
 export interface EmailIdempotency {
   idempotencyKey?: string;
 }
@@ -13,7 +11,6 @@ export interface SendOneTimeCodeInput extends EmailIdempotency {
   purpose?: OneTimeCodePurpose;
 }
 
-/** The address is captured before the account is purged (HEN-65). */
 export interface SendAccountDeletedNoticeInput extends EmailIdempotency {
   to: string;
 }
@@ -32,11 +29,6 @@ export interface EmailSender {
 
 export type EmailSendFailureReason = "configuration" | "http_status" | "network" | "timeout";
 
-/**
- * Typed error thrown when an email send fails.
- * By construction, its message and properties never contain the recipient address,
- * one-time code, magic-link URL, or provider API key.
- */
 export class EmailSendError extends Error {
   readonly reason: EmailSendFailureReason;
   readonly statusCode: number | undefined;

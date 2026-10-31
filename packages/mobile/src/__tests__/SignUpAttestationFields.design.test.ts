@@ -6,7 +6,6 @@ import { SignUpAttestationFields } from "../screens/SignUpAttestationFields";
 import { colours, radius, spacing, typeScale } from "../theme/tokens";
 import { flattenStyle, renderScreen, textOf } from "./screenHarness";
 
-// Vera's design review of #74 (27 Oct), items 4-6: one card for the duties, a lead line, quiet bullets and a small version note.
 describe("SignUpAttestationFields design (HEN-183)", () => {
   const render = async () => await renderScreen(createElement(SignUpAttestationFields, { accepted: false, error: null, onPress: () => undefined }));
 

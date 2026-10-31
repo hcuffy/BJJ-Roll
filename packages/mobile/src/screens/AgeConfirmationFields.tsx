@@ -9,13 +9,11 @@ export interface AgeConfirmationFieldsProps {
   readonly age16Confirmed: boolean;
   readonly age18Confirmed: boolean;
   readonly ageError: string | null;
-  /** False when a new email error from the same submit is the one announced (Vera items 8 and delta 6). */
   readonly announceAgeError: boolean;
   readonly onPress16: () => void;
   readonly onPress18: () => void;
 }
 
-/** The required 16+ box with its error, and the optional 18+ box, which stays disabled until 16+ is ticked (HEN-263). */
 export function AgeConfirmationFields({
   age16Confirmed,
   age18Confirmed,
@@ -28,7 +26,6 @@ export function AgeConfirmationFields({
     <View style={authStyles.ageGroup}>
       <View>
         <AgeCheckbox label={AGE_CONFIRMATION_LABEL} checked={age16Confirmed} hint={ageError ?? undefined} onPress={onPress16} />
-        {/* After an empty submit the new email error is read first; this one stays visible but is not announced over it. */}
         <StatusText message={ageError} style={authStyles.fieldError} announce={announceAgeError ? "alert" : "quiet"} />
       </View>
       <View style={authStyles.ageOptional}>

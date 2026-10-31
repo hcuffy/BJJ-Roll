@@ -29,7 +29,6 @@ interface AppleClaims {
   readonly omit?: readonly string[];
 }
 
-/** An identity token as Apple signs it for a native sign-in started with SHA-256(rawNonce). */
 function identityToken({ subject, email, overrides = {}, omit = [] }: AppleClaims, rawNonce: string): string {
   const now = Math.floor(Date.now() / 1000);
   const claims: Record<string, unknown> = {

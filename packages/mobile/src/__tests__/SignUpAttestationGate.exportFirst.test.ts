@@ -30,7 +30,6 @@ const gateScreens = [
   ["the status-read error screen", readError],
 ] as const;
 
-/** A gated account whose export and code request take the next queued result (then succeed); counts accepts, exports and code requests. */
 async function renderGate(read: SignUpAttestationResult, exportResults: Promise<AccountExportResult>[] = [], codeResults: AccountCodeResult[] = []) {
   const calls = { accepts: 0, exports: 0, deleteCodes: 0 };
   const screen = await renderScreen(
@@ -56,7 +55,6 @@ async function renderGate(read: SignUpAttestationResult, exportResults: Promise<
   return { calls, screen };
 }
 
-// HEN-308 (Sara Q3): GET /account/export is not attestation-gated, so the gate's confirm offers export like the signed-in flow.
 describe("SignUpAttestationGate: Export my data first on the delete confirm", () => {
   let shareSpy: MockInstance<typeof Share.share>;
 
@@ -126,7 +124,6 @@ describe("SignUpAttestationGate: Export my data first on the delete confirm", ()
     expect(shareSpy).toHaveBeenCalledTimes(1);
   });
 
-  // Vera (HEN-308): offline is not an export error; it gets the same grey note as an offline code send.
   it("an export that fails offline shows the grey can't-reach-the-server note, not red Export failed", async () => {
     const { screen } = await renderGate(prompt, [Promise.resolve(offlineExport)]);
     await screen.press(EXPORT_FIRST);
@@ -139,7 +136,6 @@ describe("SignUpAttestationGate: Export my data first on the delete confirm", ()
     expect(screen.text()).toContain(CONFIRM_TITLE);
   });
 
-  // Vera (HEN-308): starting either action clears the other's message, like Cancel.
   it("Email me a code clears the export error", async () => {
     const { calls, screen } = await renderGate(prompt, [Promise.resolve(rateLimitedExport)], [rateLimitedCode]);
     await screen.press(EXPORT_FIRST);
@@ -170,7 +166,6 @@ describe("SignUpAttestationGate: Export my data first on the delete confirm", ()
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);
   });
 
-  // Bill's gap (HEN-308): the same double-tap guard as the signed-in export.
   it("a fast double tap on Export my data first starts one export", async () => {
     const pending = deferred<AccountExportResult>();
     const { calls, screen } = await renderGate(prompt, [pending.promise]);

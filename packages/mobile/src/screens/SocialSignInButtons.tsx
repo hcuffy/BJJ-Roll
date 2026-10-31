@@ -9,7 +9,6 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 const SOCIAL_LOADING_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
-/** After the browser or Apple's sheet returns, while the backend makes the session (Vera interim item 5). */
 export const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
 const BRAND_BUTTONS = { apple: AppleSignInButton, google: GoogleSignInButton } as const;
 
@@ -22,22 +21,13 @@ const styles = StyleSheet.create({
 export interface SocialSignInButtonsProps {
   readonly providers: readonly SocialProvider[];
   readonly age16Confirmed: boolean;
-  /** The sign-up duties box is ticked (HEN-183); until then the muted line says so. */
   readonly attestationAccepted?: boolean;
-  /** What the screen is sending right now; the other buttons are disabled meanwhile. */
   readonly sending: string | null;
   readonly onPress: (provider: SocialProvider) => void;
-  /** While a provider runs: "opening" until the browser or sheet returns, then "signingIn". */
   readonly progress?: "opening" | "signingIn";
-  /** The last social attempt's error, shown under the buttons (Vera interim item 6). */
   readonly error?: string | null;
 }
 
-/**
- * Apple and Google sign-in (HEN-239) in each brand's own style, after an "or" row so the email sign-in above stays first.
- * Order: "or", the 16+ line, the buttons, progress, then a social error. Brand buttons are never dimmed: until the 16+ box
- * is ticked a muted line says why (screen readers get the same words as the buttons' hint) and a tap explains instead of signing in.
- */
 export function SocialSignInButtons({
   providers,
   age16Confirmed,

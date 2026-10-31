@@ -6,7 +6,6 @@ import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELE
 import { colours } from "../theme/tokens";
 import { deepLinkState, flattenStyle, type HostNode, renderScreen, textOf } from "./screenHarness";
 
-// The app's real client reads Expo config and SecureStore; here it talks to a fake backend and an in-memory store.
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
 vi.mock("../auth/appAuthClient", () => ({
   get appAuthClient() {
@@ -34,7 +33,6 @@ describe("App sign-in flow (Android, fake backend)", () => {
     });
     return await renderScreen(createElement(App));
   };
-  // better-auth refetches get-session after each sign-in, and the signed-in screen reads the 18+ status; only the sign-in requests matter here.
   const signInPaths = () =>
     backend.requests
       .map((request) => new URL(request.url).pathname)
@@ -57,7 +55,6 @@ describe("App sign-in flow (Android, fake backend)", () => {
     await screen.press("Continue with email");
     expect(screen.text()).toContain("Enter your code");
 
-    // The 6th digit submits on its own.
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain("You are signed in");
     expect(signInPaths()).toEqual(["/api/auth/email-otp/send-verification-otp", "/api/auth/sign-in/email-otp"]);
@@ -165,7 +162,6 @@ describe("App sign-in flow (Android, fake backend)", () => {
     const card = screen.findAllByType("View").find((node) => node.children.includes(notice as HostNode));
     expect(flattenStyle(card?.props.style)).toMatchObject({ backgroundColor: colours.surface, borderRadius: 16, padding: 16 });
     expect(flattenStyle(card?.props.style).borderColor).toBeUndefined();
-    // Above the title, like the link error card.
     expect(screen.text().indexOf(DELETED_NOTICE)).toBeLessThan(screen.text().indexOf("Sign in to BJJ Roll"));
 
     await screen.changeText("Email", "someone@example.test");
@@ -227,7 +223,6 @@ describe("App sign-in flow (Android, fake backend)", () => {
 
     expect(screen.text()).toContain("Loading");
     const [spinner] = screen.findAllByType("ActivityIndicator");
-    // Muted, not lime (lime is reserved for the primary action), and "Loading" is read once: the spinner is hidden.
     expect(spinner?.props.color).toBe(colours.textSecondary);
     expect(spinner?.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });
     expect(spinner?.props.accessibilityLabel).toBeUndefined();

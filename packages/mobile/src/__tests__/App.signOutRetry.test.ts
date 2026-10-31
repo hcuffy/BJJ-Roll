@@ -25,18 +25,15 @@ const SIGNED_IN_SCREEN = "You are signed in";
 
 describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let serverDown: boolean;
   let signOutEndpointDown: boolean;
   let signOutEndpointErrors: boolean;
   const unhandledRejections: unknown[] = [];
   const recordUnhandled = (reason: unknown) => unhandledRejections.push(reason);
-  /** Text of every screen rendered since the last launch. */
   let renderedScreens: string[] = [];
   let consoleSpies: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }[] = [];
 
-  /** A fresh app process on the same phone: new auth client, same SecureStore. */
   const launchApp = async () => {
     appClient.store = secureStore;
     appClient.current = createMobileAuthClient({
@@ -67,7 +64,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   const repairSecureStore = () => secureStore.failingKeys.clear();
   const signOutRequestCount = () => backend.requests.filter((request) => request.url.endsWith("/sign-out")).length;
 
-  /** Signed in, then sign-out fails everywhere: SecureStore cannot remove the session and the server cannot be reached. */
   const failedSignOut = async () => {
     const screen = await launchApp();
     await signIn(screen);
@@ -86,7 +82,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     deepLinkState.url = null;
     unhandledRejections.length = 0;
     process.on("unhandledRejection", recordUnhandled);
-    // Silenced but recorded: Better Auth logs its own SecureStore errors; they must not carry the session or the email.
     consoleSpies = (["log", "info", "warn", "error"] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => undefined));
   });
   afterEach(async () => {
@@ -106,7 +101,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   it("next launch: stays signed out although the session is still on the phone and the retry fails again", async () => {
     await failedSignOut();
 
-    // Server answers again, except sign-out, and SecureStore still cannot delete: the stale session would be valid.
     serverDown = false;
     signOutEndpointDown = true;
     const nextLaunch = await launchApp();
@@ -123,14 +117,12 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
 
-    // Phone and server healthy again: this launch finishes the sign-out.
     repairSecureStore();
     signOutEndpointDown = false;
     const healedLaunch = await launchApp();
     expect(healedLaunch.text()).toContain(SIGN_IN_SCREEN);
     expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain("signed-session-value");
 
-    // The finished sign-out is not repeated: the user signs in again and stays signed in on the next launch.
     await signIn(healedLaunch);
     expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
   });
@@ -148,7 +140,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
 
     expect(nextLaunch.text()).toContain(SIGN_IN_SCREEN);
     expect(signOutRequestCount()).toBe(signOutsBefore + 1);
-    // Done now: the launch after that does not sign out again.
     expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
     expect(signOutRequestCount()).toBe(signOutsBefore + 1);
   });
@@ -190,7 +181,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
   });
 
   describe("signing in again cancels the unfinished sign-out (Henry, 2026-10-26)", () => {
-    /** Signed in, then sign-out cannot reach the server: the session is gone from the phone, the sign-out is left to finish. */
     const signOutLeftUnfinished = async () => {
       const screen = await launchApp();
       await signIn(screen);
@@ -229,7 +219,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     it("cold start from a sign-in link: the link waits for the unfinished sign-out, then the user stays signed in", async () => {
       await signOutLeftUnfinished();
 
-      // The app is closed; the user opens a sign-in link, which starts the app.
       deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
       const coldStart = await launchApp();
       deepLinkState.url = null;
@@ -241,7 +230,6 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
       expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
     });
 
-    /** Screens shown from launch until the first "You are signed in". */
     const screensBeforeSignedIn = () =>
       renderedScreens.slice(
         0,

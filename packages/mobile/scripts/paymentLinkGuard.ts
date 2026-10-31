@@ -1,7 +1,3 @@
-// Payment link guard for CI (HEN-278). Fails when mobile source, app config or assets contain an outside payment,
-// tip or donation link (Apple App Review 3.1.1, Google Play Payments policy).
-// Patterns: release/paymentLinkDenyList.txt. False positives: release/paymentLinkAllowList.txt. Docs: docs/release.md.
-// Run: `pnpm --filter @bjj-roll/mobile run payment-guard` (Node strips the types; only `node:` imports here).
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +22,6 @@ export interface PaymentLinkHit {
 
 const denyListPath = "release/paymentLinkDenyList.txt";
 const allowListPath = "release/paymentLinkAllowList.txt";
-// Not shipped in the app: dependencies, build output, generated native projects and tests (which hold deny-listed fixtures).
 const skippedDirectories = new Set(["node_modules", "dist", ".expo", "ios", "android", "__tests__"]);
 const skippedFiles = new Set([denyListPath, allowListPath]);
 
@@ -63,7 +58,6 @@ interface LineMatch {
   matchedText: string;
 }
 
-// Two patterns can match the same link (a PayPal donate page also matches the generic donate URL). Report the longest match once.
 function withoutNestedMatches(lineMatches: LineMatch[]): LineMatch[] {
   const longestFirst = [...lineMatches].sort((left, right) => left.start - right.start || right.end - left.end);
   const kept: LineMatch[] = [];
@@ -115,7 +109,6 @@ function listFiles(mobileRoot: string, relativeDirectory = ""): string[] {
 export function scanMobilePackage(mobileRoot: string): PaymentLinkHit[] {
   const denyPatterns = parseDenyList(readFileSync(path.join(mobileRoot, denyListPath), "utf8"));
   const allowList = parseAllowList(readFileSync(path.join(mobileRoot, allowListPath), "utf8"));
-  // Assets (images, fonts) are read as latin1 so any URL text inside them is still visible.
   const files = listFiles(mobileRoot).map((relativePath) => ({
     path: relativePath,
     text: readFileSync(path.join(mobileRoot, relativePath), "latin1"),

@@ -1,4 +1,3 @@
-/** Listeners registered through the mocked Keyboard.addListener; a test fires keyboard events with emitKeyboardEvent. */
 const keyboardListeners = new Map<string, Set<() => void>>();
 export function harnessKeyboardAddListener(event: string, listener: () => void): { remove: () => void } {
   const listeners = keyboardListeners.get(event) ?? new Set<() => void>();

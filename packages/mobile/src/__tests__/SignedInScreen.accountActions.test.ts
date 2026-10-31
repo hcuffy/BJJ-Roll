@@ -105,7 +105,6 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     expect(deleteEntryStyle.backgroundColor).toBeUndefined();
     expect(deleteEntryStyle.minHeight).toBe(48);
     expect(flattenStyle(screen.queryByText("Delete account")?.props.style)).toMatchObject({ color: colours.danger });
-    // The filled red pill is kept for the confirm step only.
     expect(screen.pressables().filter((node) => flattenStyle(node.props.style).backgroundColor === colours.danger)).toEqual([]);
   });
 

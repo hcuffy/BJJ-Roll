@@ -1,5 +1,3 @@
-// Bill gate @ 99e3841 (HEN-305), non-blocking: Cancel on the delete confirm drops the note and the export-first red
-// (Vera spec "When it clears" / "Cancel and screen changes"). Dropping clearMessages() from cancelDelete passes the PR suite today.
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountExportResult } from "../auth/accountActions";
 import { FAILURE_MESSAGES } from "../auth/signInActions";

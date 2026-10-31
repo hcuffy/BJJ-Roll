@@ -8,12 +8,9 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 export interface DeleteAccountConfirmStepProps {
-  /** The caller moves screen-reader focus here when the step opens (it acts as a dialog). */
   readonly headingRef: Ref<ComponentRef<typeof Text>>;
-  /** "Export my data first" and its error (ExportDataFirstAction); the gate offers it too, as export is not attestation-gated (HEN-308). */
   readonly exportAction?: ReactNode;
   readonly codeRequestError: string | null;
-  /** The grey "can't reach the server" note instead of a red error (the gate, Vera #74 round 4). */
   readonly offline?: boolean;
   readonly sendingCode: boolean;
   readonly emailCodeDisabled?: boolean;
@@ -22,10 +19,6 @@ export interface DeleteAccountConfirmStepProps {
   readonly onCancel: () => void;
 }
 
-/**
- * First step of delete account (HEN-65), shared by the signed-in screen and the sign-up attestation gate.
- * Nothing is sent until "Email me a code".
- */
 export function DeleteAccountConfirmStep(props: DeleteAccountConfirmStepProps) {
   return (
     <AuthScreenLayout>

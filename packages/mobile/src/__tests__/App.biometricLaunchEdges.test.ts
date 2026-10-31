@@ -26,9 +26,7 @@ const LOCKED_TITLE = "BJJ Roll is locked";
 
 describe("App biometric unlock at launch: read errors and magic links (HEN-288, Bill round 3)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Text of every screen rendered since the last launch. */
   let renderedScreens: string[] = [];
   const everRendered = (text: string) => renderedScreens.some((rendered) => rendered.includes(text));
 
@@ -78,7 +76,6 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
 
   it("locks only at app start: coming back from the background does not lock again", async () => {
     await firstSignIn("Turn on");
-    // The check at launch passes, so the app is unlocked.
     const nextLaunch = await launchApp();
     expect(everRendered(LOCKED_TITLE)).toBe(true);
     expect(nextLaunch.text()).toContain(SIGNED_IN_SCREEN);
@@ -95,7 +92,6 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
   it("magic link while locked: signs in AND lock screen still shows when biometric on", async () => {
     await firstSignIn("Turn on");
 
-    // Henry (28 Oct 08:38): a magic link signs in, but with the setting on the lock screen still shows first.
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     localAuthenticationFake.answers.push("user_cancel");
     const linkLaunch = await launchApp();

@@ -12,7 +12,6 @@ export interface FakeGoogleUser {
 export const fakeAccessToken = "fake-google-access-token-never-stored";
 export const fakeIdTokenMarker = "fake-google-id-token-marker";
 
-/** The HEN-239 Google browser flow against a fake Google: one auth environment per suite, started and stopped with it. */
 export function createGoogleSignInTestContext() {
   let environment: StartedAuthTestEnvironment | undefined;
   let nextGoogleUser: FakeGoogleUser | undefined;
@@ -31,7 +30,6 @@ export function createGoogleSignInTestContext() {
     return result.rows[0]?.count ?? 0;
   };
 
-  /** Starts sign-in as the app does (no redirect, URL handed to the in-app browser), then plays Google's redirect back. */
   const signInWithGoogle = async (
     googleUser: FakeGoogleUser,
     options: { additionalData?: Record<string, unknown>; ipAddress?: string },

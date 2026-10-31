@@ -85,7 +85,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     }
   };
 
-  // Vera #74 item 1 (blocking): a failed status read is an error with a retry, never the accept prompt.
   it("a status read that fails offline shows the grey note and Try again, not the duties; a retry that succeeds reaches the app", async () => {
     const gate = renderGate([offline, accepted], []);
     const screen = await gate.render();
@@ -118,7 +117,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(gate.calls.signOuts).toBe(1);
   });
 
-  // Vera #74 item 2: offline on Accept is the grey note, not red; the next tap clears it.
   it("an Accept that fails offline shows the grey note, not a red error, and the next tap clears it", async () => {
     const gate = renderGate([required(null)], [offline, accepted]);
     const screen = await gate.render();
@@ -132,7 +130,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(screen.text()).toContain("Account content");
   });
 
-  // Vera #74 item 3: the dimmed button says why while the box is unticked.
   it("Accept and continue has the tick hint only while the box is unticked", async () => {
     const screen = await renderGate([required(null)], []).render();
     expect(screen.getPressable(ACCEPT).props.accessibilityHint).toBe(ATTESTATION_NEEDED_HINT);
@@ -140,7 +137,6 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
     expect(screen.getPressable(ACCEPT).props.accessibilityHint).toBeUndefined();
   });
 
-  // Vera #74 item 8: the busy button says what is happening.
   it("Accept shows Saving… while the accept is in flight", async () => {
     const element = createElement(SignUpAttestationGate, {
       onReadStatus: () => Promise.resolve(required(null)),
@@ -173,6 +169,4 @@ describe("SignUpAttestationGate (HEN-183 re-prompt)", () => {
 
     expect(gate.calls.signOuts).toBe(1);
   });
-
-  // Delete account from the gate (Stamp 5.1.1(v), Vera round 4): SignUpAttestationGate.delete.test.ts.
 });

@@ -1,7 +1,6 @@
 import { loadAuthKeyringFromEnvironment, generateTestAuthSecrets } from "../auth/index.js";
 import { PgBossEmailQueue, type EmailQueueLogLine, type PgBossEmailQueueOptions } from "../email/index.js";
 
-/** Polls until `condition` holds, or fails after `timeoutMilliseconds`. */
 export async function waitUntil(condition: () => boolean | Promise<boolean>, timeoutMilliseconds = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMilliseconds;
   while (!(await condition())) {
@@ -16,7 +15,6 @@ export function createTestKeyring() {
   return loadAuthKeyringFromEnvironment(generateTestAuthSecrets());
 }
 
-/** A queue on the suite database with fast polling; `logLines` collects its dead-letter log. */
 export function createTestEmailQueue(
   options: Omit<PgBossEmailQueueOptions, "logEvent" | "pollingIntervalSeconds" | "keyring"> & Partial<PgBossEmailQueueOptions>,
 ) {

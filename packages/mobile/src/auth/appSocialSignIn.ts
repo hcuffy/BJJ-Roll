@@ -8,7 +8,6 @@ import { readSocialSignInConfig, visibleSocialProviders, type SocialSignInDepend
 
 const NONCE_BYTES = 32;
 
-/** Apple and Google buttons the app shows, from Expo config `extra.socialSignIn` (Apple is off by default). */
 export const appSocialProviders = visibleSocialProviders(readSocialSignInConfig(Constants.expoConfig), Platform.OS);
 
 export const appSocialSignIn: SocialSignInDependencies = {
@@ -17,10 +16,8 @@ export const appSocialSignIn: SocialSignInDependencies = {
   platform: Platform.OS,
   browser: WebBrowser,
   appleNative: {
-    // Email only: the backend stores no name (data minimisation, HEN-238).
     signInAsync: (hashedNonce) =>
       AppleAuthentication.signInAsync({ requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL], nonce: hashedNonce }),
-    // 32 random bytes from the OS (Hermes has no Web Crypto), as hex.
     createNonce: () => Array.from(Crypto.getRandomBytes(NONCE_BYTES), (byte) => byte.toString(16).padStart(2, "0")).join(""),
     sha256Hex: async (value) => await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
   },

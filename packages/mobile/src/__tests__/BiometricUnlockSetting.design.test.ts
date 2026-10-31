@@ -22,7 +22,6 @@ const renderToggle = async (setting: BiometricSetting) => {
   return { screen, onChangeBiometricUnlock };
 };
 
-/** WCAG relative-luminance contrast ratio of two #RRGGBB colours. */
 function contrast(first: string, second: string): number {
   const luminance = (hex: string) => {
     const linear = (start: number) => {
@@ -43,7 +42,6 @@ describe("BiometricUnlockSetting design (Vera round 2)", () => {
     expect(row.props.accessibilityLabel).toBe("Biometric unlock");
     expect(row.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
     expect(flattenStyle(row.props.style).minHeight).toBeGreaterThanOrEqual(sizes.minTapTarget);
-    // The inner label and Switch are not second stops for TalkBack or VoiceOver.
     const [innerSwitch] = screen.findAllByType("Switch");
     expect(innerSwitch?.props).toMatchObject({ importantForAccessibility: "no-hide-descendants", accessibilityElementsHidden: true });
     expect(screen.queryByText("Biometric unlock")?.props).toMatchObject({ importantForAccessibility: "no", accessibilityElementsHidden: true });

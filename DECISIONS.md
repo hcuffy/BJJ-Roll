@@ -164,8 +164,85 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **ONNX export:** We export SAM 2.1 small ourselves from Meta's Apache-2.0 checkpoint with `packages/workers/scripts/export_sam21_small_onnx.py`
   (see `packages/workers/scripts/README.md`). We never download the onnx-community export, because it carries no licence. The real export run
   happens in HEN-67, not in HEN-318.
-- **Drift thresholds (UNTUNED):** `MIN_TRACK_SCORE` 0.5, `MAX_CENTRE_JUMP_IN_BOX_DIAGONALS` 0.5 and `MAX_AREA_CHANGE_RATIO` 2.0 in `drift_detector.py`
+- **Drift thresholds (UNTUNED):** `MIN_TRACK_SCORE_UNTUNED` 0.5, `MAX_CENTRE_JUMP_IN_BOX_DIAGONALS_UNTUNED` 0.5 and `MAX_AREA_CHANGE_RATIO_UNTUNED` 2.0 in `drift_detector.py`
   are first guesses and are not tuned on real footage. HEN-67 tunes them.
 - **Date:** 2026-10-30
 - **Decided by:** Sara (her calls, 30 Oct 07:59 CET) (HEN-318)
 - **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
+
+## D27: Auth limits, codes and try budgets (moved from code comments)
+
+- **Decision:** 6-digit OTP, 10-minute OTP expiry, 5 tries per OTP, 15-minute magic link, 60 s deep-link exchange code. Rate-limit window 15 minutes:
+  3 sends per email, 10 sends per IP, 20 verification tries per IP. Sessions slide over 30 days (refreshed at most once a day), 90 days at most.
+- **Per-email send counter:** Better Auth's limiter keys on IP + path only, so we count sends per email in `public.rate_limits`, keyed by the email
+  HMAC (same as `users.email_hash`), as a fixed window from the first send, with one atomic upsert per request. Clients with no known IP share one
+  bucket (fails closed). `rate_limits` is not in the account deletion cascade map: its counters (hash or id only) age out with their window,
+  so deleting the account and signing up again cannot reset the send limit or the delete-code tries.
+- **Delete code:** reuses the email-OTP machinery (same CSPRNG code, keyed hash at rest, 10-minute expiry, send counter) and goes only to the
+  signed-in user's own address. DELETE /account has its own atomic try budget: per user, `OTP_MAX_ATTEMPTS` tries per code, reset only by a new code;
+  the 15-minute window outlives the 10-minute code. Per IP, the auth verify limit. Over HTTP, check-verification-otp only checks sign-in codes,
+  so it is not a guessing oracle outside that budget. Neither the delete code nor DELETE /account is ever gated on the sign-up attestation.
+- **Date:** 2026-10-31 (decided 2026-10-22 to 2026-10-25)
+- **Decided by:** Sara (HEN-71), Henry (25 Oct, HEN-65), Bill's gate (HEN-65)
+- **Consequences:** Values live in `authLimits.ts`; any change updates this entry.
+
+## D28: No answer reveals whether an account exists
+
+- **Decision:** Sign-in sends do the same work for every email (known, unknown, or refused by the age gate): one queued job, no wait on the
+  provider, and the same session-scope query on an id no row has. Social sign-in refusals are one neutral `account_not_linked` redirect with
+  nothing that differs between attempts; an Apple or Google email counts only with an explicit verified claim. App copy never says whether an email
+  is signed up.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-239, HEN-263)
+- **Consequences:** New auth responses and copy must keep this; tests in `auth.ageGate.sameWork*` and `authCopy.noAccountExistence` pin it.
+
+## D29: The only stored provider token is Apple's refresh token, for revoke on deletion
+
+- **Decision:** Provider tokens are dropped, except Apple's refresh token, stored encrypted (marked so it is never encrypted twice) so account
+  deletion can revoke it (App Store rule 5.1.1(v)). A failed code exchange never blocks sign-in and a failed revoke never blocks deletion; both
+  are logged by user id only.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-239)
+- **Consequences:** The account deletion notice is queued; a failure to queue it is logged and the deletion still succeeds.
+
+## D30: Email queue retries and idempotency
+
+- **Decision:** Every email sent after a request goes through a pg-boss queue (own `pgboss` schema), so no response waits on the provider.
+  3 tries in all, with a doubling, jittered backoff; a try counts as failed only well past the provider's 10 s timeout. 408, 409 and 429 are retried;
+  other 4xx answers, configuration errors and payloads that cannot be opened are not. The job id is also the provider idempotency key (Lettermint
+  sends once per key for 24 h), so the same request twice, or a retry after a timeout, sends one email. The final-failure log line holds only the
+  job id, template, a fixed error class and the try count.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-284)
+- **Consequences:** Tests use an inline queue double; the real queue is covered by `emailQueue.*` and `auth.ageGate.sameWork.queued`.
+
+## D31: Mobile startup budget and pending sign-out queue
+
+- **Decision:** All of startup (sign-out retry, session read, link exchange, the gate's first status read) shares one 10 s budget; a timeout counts
+  as an unreachable server. The lock and the biometric offer wait on the user, so the status read after them gets its own 10 s. A sign-out is
+  queued before it runs; each queued session is removed only on its own confirmed server sign-out, or once it is older than any server session can
+  live. A timed-out request leaves keys and queue as they are, so a late answer cannot touch a newer session. Queue writes never overlap. A sign-out
+  stops and awaits any running revoke from a sign-in or launch, so one session is never revoked twice at once. A failed revoke never blocks sign-in.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara's design, Bill's and Stamp's gates (HEN-299, HEN-303, HEN-310, HEN-314, HEN-315)
+- **Consequences:** The `App.*` startup and sign-out tests pin these rules.
+
+## D32: Modal jobs stay in the EU; encryption stays server-only
+
+- **Decision:** Node calls Modal user-data functions with `.remote()` only, and results stay under 2 MiB, so data never routes through Modal's
+  us-east storage. Every user-data function sets `region="eu"`, `routing_region="eu-west"` and `enable_memory_snapshot=False`, and uses no Volumes,
+  Dicts, Queues or bucket mounts; the video comes through a presigned URL. `@bjj-roll/shared/encryption` uses `node:crypto` and key handling, so it
+  is never re-exported from the shared index and ESLint blocks it in mobile and web code.
+- **Date:** 2026-10-31 (moved from code comments)
+- **Decided by:** Sara (HEN-48 option A, HEN-63, HEN-227)
+- **Consequences:** `checkModalResidency.sh` and the residency tests check this statically.
+
+## D33: No code comments; rationale lives here
+
+- **Decision:** TS/JS and Python source has no comments or docstrings. Only tool directives stay: `eslint-disable-next-line … -- reason`,
+  `@ts-expect-error reason`, `/// <reference …/>`, a licence header, shebangs, `# noqa: CODE - reason` and `# type: ignore[code]  # reason`.
+  Names carry meaning: unknown values end in `Placeholder` (Henry decides, ARCHITECTURE §2) or `_UNTUNED` (HEN-67 tunes them).
+  `eslint-config-prettier` turns off `curly` and `max-len`; both are turned back on, as they are safe with Prettier at width 150.
+- **Date:** 2026-10-31
+- **Decided by:** Henry, via Sara (HEN-333)
+- **Consequences:** `local/no-prose-comments` (ESLint) and `packages/workers/scripts/check_no_comments.py` fail CI on a new comment.

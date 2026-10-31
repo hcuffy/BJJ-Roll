@@ -1,5 +1,3 @@
-"""HEN-316: label set v1 (HEN-44) loads as one file; level 1 is the scoring set for gi and no-gi alike."""
-
 import json
 import re
 from pathlib import Path
@@ -10,7 +8,6 @@ from bjj_roll_workers.label_set import load_label_set, parse_label_set
 
 LABEL_SET_FILE = Path(__file__).parents[1] / "src" / "bjj_roll_workers" / "label_set_v1.json"
 
-# Level 1 ids exactly as in label set v1 (HEN-44, Henry 2026-10-17) and docs/ARCHITECTURE.md §2.1.
 POSITION_IDS = (
     "standing",
     "clinch",
@@ -33,7 +30,6 @@ POSITION_IDS = (
 )
 EVENT_IDS = ("takedown", "guard_pull", "guard_pass", "sweep", "back_take", "submission", "escape", "transition", "reset")
 
-# Every [Gi] detail in label set v1, per level 1 class.
 GI_ONLY_DETAILS = {
     "standing": {"sleeve_control"},
     "open_guard": {"spider", "lasso", "collar_sleeve", "worm", "squid", "lapel_guard_other"},

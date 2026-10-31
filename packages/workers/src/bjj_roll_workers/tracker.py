@@ -1,16 +1,3 @@
-"""Tracker interface (HEN-318): `track(frames, prompts)` -> one `{athlete_id: TrackedObject}` per frame.
-
-Backends sit behind `Tracker`: the local CPU SAM 2.1 small ONNX backend (`sam21_onnx_tracker`) now, a Modal backend later,
-and a fake model in tests. Callers (`tracker_runner`) never see which one runs. Coordinates follow `geometry`.
-
-Contract for `track`:
-- `frames` are consecutive frames of one video (sampled at the configured fps), in order, at least one.
-- every prompt sits on `frames[0]`: a `TapPoint` (the user's tap) or a `MaskPrompt` (a mask from the previous chunk).
-- the result has exactly one dict per frame, in order, with exactly the prompted athlete IDs as keys.
-- a `TrackedObject` has a mask the size of its frame, the mask's box (None when the mask is empty) and a score in [0, 1].
-- `track` keeps nothing between calls: every call starts only from its own prompts, so nothing crosses videos (D15).
-"""
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, Self
@@ -26,8 +13,6 @@ class TrackerContractError(RuntimeError):
 
 @dataclass(frozen=True)
 class Frame:
-    """One sampled frame: row-major RGB bytes, `RGB_CHANNELS` bytes per pixel."""
-
     frame_index: int
     size: FrameSize
     rgb: bytes
@@ -39,8 +24,6 @@ class Frame:
 
 @dataclass(frozen=True)
 class Mask:
-    """Binary mask as row-major run lengths, alternating background and foreground, starting with background (may be 0)."""
-
     size: FrameSize
     runs: tuple[int, ...]
 
@@ -96,13 +79,10 @@ type FrameTracks = dict[str, TrackedObject]
 
 
 class Tracker(Protocol):
-    def track(self, frames: Sequence[Frame], prompts: Mapping[str, Prompt]) -> list[FrameTracks]:
-        """Track every prompted athlete through `frames` (see the module contract)."""
-        ...
+    def track(self, frames: Sequence[Frame], prompts: Mapping[str, Prompt]) -> list[FrameTracks]: ...
 
 
 def check_track_output(frames: Sequence[Frame], prompts: Mapping[str, Prompt], output: Sequence[Mapping[str, TrackedObject]]) -> None:
-    """Enforce the `Tracker` contract on a backend's output at the boundary. Messages carry no values."""
     if len(output) != len(frames):
         raise TrackerContractError("tracker returned a different number of frames")
     for frame, tracks in zip(frames, output, strict=True):

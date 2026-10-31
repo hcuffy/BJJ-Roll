@@ -14,7 +14,6 @@ export function deferred<Value>() {
   return { promise, resolve };
 }
 
-/** SignedInScreen with recording callbacks; set the *Result fields before the step that uses them. */
 export function createSignedInScreenHarness() {
   const state = {
     exportCalls: 0,
@@ -68,7 +67,6 @@ export function createSignedInScreenHarness() {
       }),
     );
 
-  /** Delete account, then Email me a code: the screen is on the code step. */
   const renderAtCodeStep = async () => {
     const screen = await render();
     await screen.press("Delete account");

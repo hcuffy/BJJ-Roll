@@ -26,18 +26,14 @@ const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const SIGN_IN_LINK = "bjjroll://auth?code=one-time-exchange-code";
 
-/** How a request to a host that does not answer behaves: React Native's fetch only ends it when the app aborts it. */
 type HangMode = "untilAborted" | "answersLate";
 
 describe("Loading never hangs when the server host does not answer (HEN-303)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
-  /** Paths (by ending) whose requests get no answer. */
   let hangingPaths: Set<string>;
   let hangMode: HangMode;
-  /** Late answers held back in "answersLate" mode; releasing them delivers the real backend response. */
   let lateAnswers: (() => void)[];
-  /** Hanging requests the app aborted at its deadline. */
   let abortedRequests: number;
   let signOutEndpointDown: boolean;
   let renderedScreens: string[] = [];
@@ -84,7 +80,6 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
   };
-  /** Signed in, then sign-out cannot reach the server: the sign-out is left for the next launch (HEN-286). */
   const leaveSignOutPending = async () => {
     const screen = await launchApp();
     await signIn(screen);
@@ -98,7 +93,6 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
     await vi.advanceTimersByTimeAsync(milliseconds);
     await settle();
   };
-  /** Loading stays up until the timeout, and not a moment longer. */
   const expectLoadingEndsAtTimeout = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     expect(screen.text()).toContain("Loading");
     await advance(STARTUP_REQUEST_TIMEOUT_MS - 1);
@@ -156,10 +150,8 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
       await expectLoadingEndsAtTimeout(screen);
 
       expectCalmOfflineNote(screen);
-      // The retry presents the old session cookie (HEN-299) and that request is aborted at the deadline.
       expect(abortedRequests).toBe(1);
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(true);
-      // The next launch with a reachable server finishes it.
       hangingPaths.clear();
       expect((await launchApp()).text()).toContain(SIGN_IN_SCREEN);
       expect(signOutRequestCount()).toBe(signOutsBefore + 1);
@@ -190,7 +182,6 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
       hangingPaths.add("/sign-out");
       hangMode = "answersLate";
 
-      // The newer session is valid, so start does not wait for the old one's end (HEN-310).
       const screen = await launchApp();
       expect(screen.text()).toContain(SIGNED_IN_SCREEN);
       await advance(STARTUP_REQUEST_TIMEOUT_MS);
@@ -199,7 +190,6 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
 
       expect(screen.text()).toContain(SIGNED_IN_SCREEN);
       expect(secureStore.items.get(PENDING_SIGN_OUT_KEY)).toBe(olderSessionMarker);
-      // The stored session was never touched: a reachable launch ends the older one and keeps the user signed in.
       hangingPaths.clear();
       expect((await launchApp()).text()).toContain(SIGNED_IN_SCREEN);
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);

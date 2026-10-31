@@ -163,7 +163,6 @@ describe("CodeEntryScreen", () => {
     });
     const notice = "We sent a new code to member@example.test.";
     expect(screen.queryByText(notice)?.props.accessibilityLiveRegion).toBe("polite");
-    // A muted confirmation line, not plain white body text and not an error.
     expect(flattenStyle(screen.queryByText(notice)?.props.style).color).toBe(colours.textSecondary);
     expect(screen.getPressable("Resend in 0:30").props.disabled).toBe(true);
   });
@@ -203,7 +202,6 @@ describe("CodeEntryScreen", () => {
   it("sends one request when the 6th digit and the Done key arrive in the same tick (same render's handlers)", async () => {
     const screen = await renderCodeEntry();
     await screen.changeText("6-digit code", "12345");
-    // Both handlers come from one render, as when autofill delivers the last digit and Done fires before React re-renders.
     const { onChangeText, onSubmitEditing } = screen.getByLabelText("6-digit code").props as {
       onChangeText: (text: string) => void;
       onSubmitEditing: () => void;

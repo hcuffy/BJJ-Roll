@@ -7,7 +7,6 @@ export interface SignedInUser {
   readonly email: string;
   readonly cookie: string;
   readonly userId: string;
-  /** The client IP the user signed in from; their account requests come from it too. */
   readonly ipAddress: string;
 }
 
@@ -15,13 +14,11 @@ export interface AccountRequestOptions {
   cookie?: string;
   headers?: Record<string, string>;
   body?: unknown;
-  /** Socket address of the request. Default: the shared test address. */
   ipAddress?: string;
 }
 
 const defaultAccountClientIp = "198.51.100.99";
 
-/** Sign-in, delete-code and account requests shared by the HEN-65 Postgres suites. */
 export function createAccountTestFlow(current: () => StartedAuthTestEnvironment) {
   const latestCodeFor = (email: string, purpose: NonNullable<FakeSentOneTimeCodeMessage["purpose"]>): string => {
     const sent = current()
@@ -43,7 +40,6 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
       ipAddress,
     });
     expect(response.status).toBe(200);
-    // With the real queue (HEN-284) the code arrives a moment after the response.
     await vi.waitFor(() => expect(current().emailSender.sentMessages.length).toBeGreaterThan(sentBefore), { timeout: 15_000, interval: 50 });
   };
 
@@ -70,14 +66,12 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
     );
   };
 
-  /** POST /account/delete-code, then the code from the email it sent. */
   const requestDeleteCode = async (user: SignedInUser): Promise<string> => {
     const response = await accountRequest("POST", "/account/delete-code", { cookie: user.cookie, ipAddress: user.ipAddress });
     expect(response.status).toBe(200);
     return latestCodeFor(user.email, "account_deletion");
   };
 
-  /** The full fresh-code delete: request a code, then DELETE /account with it. */
   const deleteAccount = async (user: SignedInUser): Promise<Response> => {
     const code = await requestDeleteCode(user);
     return accountRequest("DELETE", "/account", { cookie: user.cookie, body: { code }, ipAddress: user.ipAddress });

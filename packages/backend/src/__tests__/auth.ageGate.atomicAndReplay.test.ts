@@ -34,7 +34,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       ipAddress,
     });
 
-  /** After a refusal: the email now has a ticked answer, so only a burned code or link can still fail. */
   const tickLater = (email: string): Promise<void> =>
     recordPendingAgeAnswers(current().appLogin.pool, current().codec, {
       email,

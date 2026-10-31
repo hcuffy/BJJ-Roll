@@ -26,16 +26,10 @@ const LOCKED_TITLE = "BJJ Roll is locked";
 const GATE_TITLE = "Accept the sign-up duties";
 const EMAIL_SCREEN = "Continue with email";
 
-/**
- * HEN-288 (Stamp, HEN-314 fix 2; Sara's #76 notes): the biometric flag is cleared at the sign-out tap, best effort, without
- * waiting for the server or a timeout, and on account delete, gate included. The lock screen signs out through the same handler.
- */
 describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HEN-308)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
-  // One phone: the same SecureStore survives every launch in a test.
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let signOutHangs: boolean;
-  /** Sign-out requests the server has not answered; calling one answers it. */
   let unanswered: (() => void)[];
   let renderedScreens: string[] = [];
 
@@ -48,7 +42,6 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
         if (!signOutHangs || !new Request(input, init).url.endsWith("/sign-out")) {
           return backend.fetchImplementation(input, init);
         }
-        // A server that never answers, and never aborts on its own.
         return new Promise<Response>((resolve) => unanswered.push(() => void backend.fetchImplementation(input, init).then(resolve)));
       }),
     });

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { colours, radius, sizes, spacing, typeScale } from "../theme/tokens";
 
-// WCAG 2.x relative luminance and contrast ratio.
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255);
   const [red, green, blue] = channels.map((value) => (value <= 0.040_45 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
@@ -37,7 +36,6 @@ describe("theme tokens (Vera's style guide v0)", () => {
     expect(contrast(colours.textPrimary, colours.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.danger, colours.background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.danger, colours.surface)).toBeGreaterThanOrEqual(4.5);
-    // Label on the filled danger pill (delete-account confirm, HEN-65).
     expect(contrast(colours.onPrimary, colours.danger)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colours.border, colours.background)).toBeGreaterThanOrEqual(3);
     expect(contrast(colours.border, colours.surfaceRaised)).toBeGreaterThanOrEqual(3);

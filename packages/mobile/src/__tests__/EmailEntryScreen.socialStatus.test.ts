@@ -14,7 +14,6 @@ interface BrowserResult {
 }
 const SIGNED_IN_URL = `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code`;
 
-/** A sign-in screen with Google whose network, browser and code exchange the test controls. */
 function setUp(options: { serverUnreachable?: boolean } = {}) {
   const backend = createFakeBackend();
   const control = { offline: false, holdExchange: null as Promise<void> | null };

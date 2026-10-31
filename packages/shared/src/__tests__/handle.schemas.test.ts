@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   handleAvailabilityResponseSchema,
-  handleMaximumLength,
-  handleMinimumLength,
+  handleMaximumLengthPlaceholder,
+  handleMinimumLengthPlaceholder,
   handleSchema,
   isReservedHandle,
   reservedHandles,
@@ -27,16 +27,16 @@ describe("handleSchema and reservedHandles (HEN-64)", () => {
     expect(handleSchema.parse("ABC")).toBe("abc");
     expect(handleSchema.parse("  Ab_1  ")).toBe("ab_1");
 
-    const minimumLengthCandidate = "a".repeat(handleMinimumLength);
-    const maximumLengthCandidate = "b".repeat(handleMaximumLength);
+    const minimumLengthCandidate = "a".repeat(handleMinimumLengthPlaceholder);
+    const maximumLengthCandidate = "b".repeat(handleMaximumLengthPlaceholder);
 
     expect(handleSchema.parse(minimumLengthCandidate)).toBe(minimumLengthCandidate);
     expect(handleSchema.parse(maximumLengthCandidate)).toBe(maximumLengthCandidate);
   });
 
   it("rejects too-short, too-long, punctuation, space, and non-ASCII handles using limits constants", () => {
-    const belowMinimumCandidate = "a".repeat(handleMinimumLength - 1);
-    const aboveMaximumCandidate = "a".repeat(handleMaximumLength + 1);
+    const belowMinimumCandidate = "a".repeat(handleMinimumLengthPlaceholder - 1);
+    const aboveMaximumCandidate = "a".repeat(handleMaximumLengthPlaceholder + 1);
     const paddedBelowMinimumCandidate = `  ${belowMinimumCandidate}  `;
 
     const invalidCandidates = [
@@ -70,13 +70,13 @@ describe("handleSchema and reservedHandles (HEN-64)", () => {
     }
   });
 
-  it("keeps the OPEN (Henry): placeholder marker on both handle constants in limits.ts", () => {
+  it("keeps the Placeholder suffix on both handle constants in limits.ts", () => {
     const currentDirectory = dirname(fileURLToPath(import.meta.url));
     const limitsPath = resolve(currentDirectory, "../schemas/limits.ts");
     const limitsSource = readFileSync(limitsPath, "utf8");
 
-    expect(limitsSource).toMatch(/\/\/ OPEN \(Henry\): placeholder\s*\nexport const handleMinimumLength = \d+;/);
-    expect(limitsSource).toMatch(/\/\/ OPEN \(Henry\): placeholder\s*\nexport const handleMaximumLength = \d+;/);
+    expect(limitsSource).toMatch(/^export const handleMinimumLengthPlaceholder = \d+;$/m);
+    expect(limitsSource).toMatch(/^export const handleMaximumLengthPlaceholder = \d+;$/m);
   });
 
   it("accepts null handle on userSchema until chosen and normalizes non-null handle to lowercase", () => {

@@ -51,10 +51,6 @@ export interface VerificationsTable {
   updatedAt: Generated<Date>;
 }
 
-/**
- * HEN-263 age confirmations and HEN-183 sign-up attestations: append-only for the app (SELECT and INSERT only); rows go
- * with the user via ON DELETE CASCADE. The age answers are set on age_confirmation rows and null on attestation_signup rows.
- */
 export interface ConsentRecordsTable {
   id: string;
   userId: string;

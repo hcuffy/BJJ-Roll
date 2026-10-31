@@ -17,7 +17,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
   };
 
   beforeAll(async () => {
-    // Better Auth's own logger on at debug level, so the log test sees everything the server would print.
     environment = await startAuthTestEnvironment({ logger: { disabled: false, level: "debug" } });
   }, 60_000);
 
@@ -36,7 +35,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     expect(response.status).toBe(200);
   };
 
-  /** Rows left for one user in each cascade-map table, read as the BYPASSRLS admin so RLS cannot hide any. */
   const remainingRowCounts = async (userId: string, emailHash: string): Promise<Record<UserDataTableName, number>> => {
     const { pool } = current();
     const countOf = async (query: string, parameters: unknown[]): Promise<number> => {
@@ -85,7 +83,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     const secondSession = await signIn("delete.alpha@example.com", ipAddress);
     expect(secondSession.userId).toBe(firstSession.userId);
     await setHandle(firstSession, "delete_alpha");
-    // The pending delete code is a verification row the cascade must remove too (two sign-ins + this code = 3 sends, the per-email limit).
     const deleteCode = await requestDeleteCode(firstSession);
     const bystander = await signIn("delete.bystander@example.com", ipAddress);
 
@@ -154,7 +151,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account a
     expect(exported.user.email).toBe("owner.bravo@example.com");
 
     const code = await requestDeleteCode(bravo);
-    // Naming a user in the body is refused outright; the body carries the code and nothing else.
     expect((await accountRequest("DELETE", "/account", { ...spoofed, body: { code, userId: alpha.userId } })).status).toBe(400);
     const deleteResponse = await accountRequest("DELETE", `/account?userId=${alpha.userId}`, { ...spoofed, body: { code } });
     expect(deleteResponse.status).toBe(200);

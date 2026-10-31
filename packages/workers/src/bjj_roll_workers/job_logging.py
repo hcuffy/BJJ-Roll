@@ -1,5 +1,3 @@
-"""Structured job logs for Modal functions: job IDs, timings, error classes and chunk counters only (HEN-227)."""
-
 import json
 import sys
 

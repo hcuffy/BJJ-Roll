@@ -1,10 +1,7 @@
 import { jobResultSchema, modalCallInputSchema, type JobQueue, type JobResult, type ModalCallInput } from "@bjj-roll/shared";
 
-// HEN-227, HEN-48 option A: the jobRunner claims a pg-boss job and calls the Modal `eu` function through the JS SDK with `.remote()` only.
-// Inputs routed outside `.remote()` go through Modal's us-east storage, so the Modal function type below exposes nothing else.
 export const modalAppName = "bjj-roll-workers";
 
-// Queues that run on Modal `eu` (ARCHITECTURE §3.2) and the user-data function in packages/workers each one calls.
 export const modalFunctionNames = {
   video_track: "track_video",
   video_classify: "classify_video",
@@ -17,7 +14,6 @@ export interface RemoteOnlyFunction {
   remote(positionalArguments: unknown[]): Promise<unknown>;
 }
 
-// `ModalClient["functions"]` from the `modal` SDK satisfies this (type test in `modalJobCaller.remoteOnly.test.ts`).
 export interface ModalFunctionLookup {
   fromName(appName: string, name: string): Promise<RemoteOnlyFunction>;
 }
@@ -27,7 +23,6 @@ export interface ModalJobRequest {
   input: ModalCallInput;
 }
 
-// Carries only the error class: the original message may hold a URL, query string or token, so it is never kept or chained.
 export class ModalJobCallError extends Error {
   readonly errorClass: string;
 
@@ -45,7 +40,6 @@ interface ModalCallLogEntry {
   errorClass?: string;
 }
 
-// Structured log: job IDs, timings and error classes only (HEN-227).
 function logModalCall(entry: ModalCallLogEntry): void {
   process.stdout.write(`${JSON.stringify(entry)}\n`);
 }

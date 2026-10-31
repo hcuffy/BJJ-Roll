@@ -134,7 +134,6 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
   it("delta 2 / round 4 item 1: a link refused for age stacks the next step under the refusal in one card body, in body text", async () => {
     const refused = await render(AGE_GATE_REFUSAL_MESSAGE, "ageRequired");
     const card = refused.findAllByType("View").find((view) => flattenStyle(view.props.style).borderColor === colours.danger);
-    // The card is a row (icon slot + body); both lines sit in one column body, like the "Check your email" card.
     const cardChildren = card?.children.filter((child) => typeof child !== "string") ?? [];
     expect(cardChildren).toHaveLength(1);
     const [body] = cardChildren as { props: Record<string, unknown> }[];

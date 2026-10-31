@@ -24,7 +24,6 @@ export interface CreateAppOptions {
         | "revokeAppleRefreshToken"
       >
     | CreateAuthOptions;
-  /** When set together with auth, mounts the handle and account routes with the auth session as the user resolver. */
   readonly database?: Kysely<BjjRollDatabase>;
 }
 
@@ -59,11 +58,9 @@ export interface ServerApp {
   readonly app: Hono;
   readonly config: ServerConfig;
   readonly pool: Pool;
-  /** Not started yet: the server starts it before it listens and stops it on shutdown. */
   readonly emailQueue: PgBossEmailQueue;
 }
 
-/** The production app: validates config (fails fast, never prints values), then mounts /health, /api/auth/*, handle routes and account routes. */
 export function createAppFromEnvironment(env: ServerEnvironment = process.env): ServerApp {
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });

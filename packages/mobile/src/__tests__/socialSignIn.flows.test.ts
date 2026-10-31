@@ -18,10 +18,8 @@ import appConfig from "../../app.json";
 const sha256Hex = (value: string): string => createHash("sha256").update(value).digest("hex");
 const NEUTRAL_GOOGLE_COPY = "We couldn't sign you in with Google. Sign in with your email instead.";
 const NEUTRAL_COPY = "We couldn't sign you in this way. Sign in with your email instead.";
-/** The same answers the email and code screens send (HEN-263): 16+ ticked, 18+ not. */
 const AGE_16 = { age16Confirmed: true, age18Confirmed: false, signUpAttestationAccepted: true } as const;
 
-/** A fake Apple sheet with a fixed raw nonce; hashing is real SHA-256 so the test sees what Apple would get. */
 function fakeAppleNative(signInAsync: AppleNativeSignIn["signInAsync"], rawNonce = "raw-nonce-0123456789abcdef") {
   return { signInAsync: vi.fn(signInAsync), createNonce: () => rawNonce, sha256Hex: (value: string) => Promise.resolve(sha256Hex(value)) };
 }

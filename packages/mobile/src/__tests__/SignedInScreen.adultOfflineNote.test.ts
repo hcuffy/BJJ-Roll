@@ -12,7 +12,6 @@ const DIALOG_YES = "Yes, I am 18 or older";
 const NOT_SAVED = "We could not save that.";
 const failed = (reason: "network" | "rateLimited" | "unknown"): AgeConfirmationResult => ({ ok: false, reason, message: FAILURE_MESSAGES[reason] });
 
-/** HEN-311 (Vera scope note (a)): a network failure of the 18+ save shows the grey note alone, in the 18+ error slot. */
 describe("SignedInScreen 18+ confirm offline note (HEN-311)", () => {
   let harness: ReturnType<typeof createSignedInScreenHarness>;
 

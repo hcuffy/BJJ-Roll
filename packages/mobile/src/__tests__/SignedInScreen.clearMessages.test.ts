@@ -47,7 +47,6 @@ const staleOnMain: [string, Stale][] = [
   ["a red 18+ error", adultWith("We could not save that.", "rateLimited")],
   ["the grey offline note", adultWith(SERVER_UNREACHABLE_NOTE, "network")],
 ];
-// The 18+ dialog covers the screen, so that action closes it again before the check.
 const mainActions: [string, string[]][] = [
   ["Export", ["Export my data"]],
   ["the 18+ tap", [CONFIRM, "Cancel"]],
@@ -55,7 +54,6 @@ const mainActions: [string, string[]][] = [
   ["Sign out", ["Sign out"]],
 ];
 
-/** HEN-311 (Vera fix 2): every signed-in action starts by clearing every message slot, so only one message shows at a time. */
 describe("SignedInScreen clears stale messages at the start of each action (HEN-311)", () => {
   let harness: Harness;
 

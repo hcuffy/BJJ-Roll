@@ -1,5 +1,3 @@
-// HEN-305 (Vera): when the server can't be reached, the five account actions show only the grey offline note, never a red
-// "No connection" message. Other failures keep their red messages. One message at a time; the next action clears the note.
 import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Text } from "react-native";
@@ -18,7 +16,6 @@ const rateLimited = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGE
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 
-/** The note alone: grey, polite (no alert role), and no red message or "No connection" anywhere. */
 function expectNoteAlone(screen: Screen) {
   const note = screen.queryByText(SERVER_UNREACHABLE_NOTE);
   expect(note).not.toBeNull();

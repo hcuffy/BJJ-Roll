@@ -27,7 +27,6 @@ const gateScreens = [
   ["the status-read error screen", readError, TRY_AGAIN],
 ] as const;
 
-/** A gated account (prompt or read error) with recording delete callbacks; each code request takes the next result. */
 async function renderGate(
   read: SignUpAttestationResult,
   codeResults: (AccountCodeResult | Promise<AccountCodeResult>)[] = [{ ok: true }],
@@ -142,7 +141,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(screen.text()).toContain(CONFIRM_TITLE);
   });
 
-  // Vera round 4 item 3: the destructive action sits a section gap (24) below Sign out.
   it.each(gateScreens)("on %s, Delete account sits 24 below Sign out", async (_case, read) => {
     const { screen } = await renderGate(read);
     const signOut = screen.getPressable("Sign out");
@@ -156,7 +154,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(gap + above).toBe(24);
   });
 
-  // Vera round 4 item 4: Android back on a delete step acts like its Cancel.
   it("Android back on the confirm and on the code step returns to the gate; on the gate it is not handled", async () => {
     const { calls, screen } = await renderGate(prompt);
     await screen.press(DELETE_ENTRY);
@@ -174,7 +171,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(pressHardwareBack()).toBe(false);
   });
 
-  // Vera #74 round 5: back never does more than the visible Cancel, which is disabled while a request is in flight.
   it("Android back while the first code is sending is ignored; the send then opens the code step", async () => {
     const send = deferred<AccountCodeResult>();
     const { screen } = await renderGate(prompt, [send.promise]);
@@ -224,7 +220,6 @@ describe("SignUpAttestationGate: delete account while gated (Stamp 5.1.1(v), Ver
     expect(flattenStyle(screen.queryByText(error)?.props.style).color).toBe(colours.danger);
     expect(screen.text()).toContain(CODE_TITLE);
     expect(calls.deleted).toBe(0);
-    // Once nothing is in flight, back is Cancel again.
     expect(pressHardwareBack()).toBe(true);
     await screen.rerender();
     expect(screen.text()).toContain(SIGN_UP_ATTESTATION_LABEL);

@@ -1,6 +1,3 @@
-"""HEN-318: the SAM 2.1 export script imports without torch or sam2, names Meta's Apache-2.0 checkpoint, and refuses a folder that is
-not mode 700 before loading anything. The script is never run here."""
-
 import importlib
 import importlib.util
 import stat

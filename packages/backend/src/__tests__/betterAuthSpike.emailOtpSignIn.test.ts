@@ -9,7 +9,6 @@ import {
 } from "./betterAuthSpike/spikeDatabase.js";
 import { getWithCookie, postJson, sessionCookieFrom } from "./betterAuthSpike/spikeRequests.js";
 
-// HEN-47 spike: email OTP sign-in end to end through Hono, Better Auth 1.7.7 and Postgres 18.6, with a fake sender.
 describe.skipIf(!runSpikeDatabaseTests)("Better Auth spike: email OTP sign-in", () => {
   let database: SpikeDatabase | undefined;
   let spike: SpikeAuth | undefined;

@@ -4,16 +4,13 @@ import type { AppleProviderConfig } from "./socialProviders.js";
 export const APPLE_TOKEN_ENDPOINT = "https://appleid.apple.com/auth/token";
 export const APPLE_REVOKE_ENDPOINT = "https://appleid.apple.com/auth/revoke";
 
-/** Marks an encrypted Apple refresh token in accounts.refresh_token, so the codec never encrypts it twice. */
 export const APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX = "apple-refresh:";
 
 interface AppleRefreshTokenPayload {
   readonly refreshToken: string;
-  /** The client the token was issued to (bundle id for native iOS). Null means the Services ID. */
   readonly clientId: string | null;
 }
 
-/** The only provider token kept: Apple's refresh token, encrypted, so account deletion can revoke it (App Store rule 5.1.1(v)). */
 export function sealAppleRefreshToken(codec: AuthCryptoCodec, payload: AppleRefreshTokenPayload): string {
   return `${APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX}${codec.encryptVerificationPayload(JSON.stringify(payload))}`;
 }
@@ -36,7 +33,6 @@ export interface AppleTokenClient {
   readonly clientSecretFor: (clientId: string) => string;
 }
 
-/** Exchanges a native iOS authorization code (client = bundle id) for the refresh token. Returns null when Apple gives none. */
 export async function exchangeNativeAppleAuthorizationCode(client: AppleTokenClient, authorizationCode: string): Promise<string | null> {
   const clientId = client.config.appBundleIdentifier;
   const response = await fetch(APPLE_TOKEN_ENDPOINT, {
@@ -56,7 +52,6 @@ export async function exchangeNativeAppleAuthorizationCode(client: AppleTokenCli
   return typeof body.refresh_token === "string" && body.refresh_token !== "" ? body.refresh_token : null;
 }
 
-/** Revokes the stored Apple refresh token with the client it was issued to. Throws on any non-200 answer. */
 export async function revokeAppleRefreshToken(client: AppleTokenClient, token: AppleRefreshTokenPayload): Promise<void> {
   const clientId = token.clientId ?? client.config.serviceId;
   const response = await fetch(APPLE_REVOKE_ENDPOINT, {

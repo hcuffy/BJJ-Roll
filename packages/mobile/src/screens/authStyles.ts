@@ -4,7 +4,6 @@ import { colours, radius, sizes, spacing, typeScale } from "../theme/tokens";
 export const authStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colours.background },
   keyboardAvoider: { flex: 1 },
-  // Top-aligned content: 16 screen padding, 24 above the first element, 16 between blocks.
   scrollContent: {
     flexGrow: 1,
     backgroundColor: colours.background,
@@ -27,7 +26,6 @@ export const authStyles = StyleSheet.create({
     borderColor: colours.border,
     color: colours.textPrimary,
   },
-  // The 2pt rings take 1pt more than the resting border, so padding shrinks by 1 and the text does not jump.
   inputFocused: { borderWidth: 2, borderColor: colours.primary, paddingHorizontal: spacing.medium - 1, paddingVertical: 11 },
   inputError: { borderWidth: 2, borderColor: colours.danger, paddingHorizontal: spacing.medium - 1, paddingVertical: 11 },
   checkboxRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: sizes.minTapTarget },
@@ -43,13 +41,11 @@ export const authStyles = StyleSheet.create({
   checkboxTicked: { backgroundColor: colours.primary, borderColor: colours.primary },
   checkboxDisabled: { borderColor: colours.border },
   checkboxLabelDisabled: { color: colours.textSecondary },
-  // The two age rows read as one group: 8 apart, and the optional 18+ row indented to line up with the 16+ label (24 box + 12 gap).
   ageGroup: { gap: spacing.small },
   ageOptional: { marginLeft: sizes.checkbox + 12 },
   checkmark: { ...typeScale.body, color: colours.onPrimary, fontWeight: "700" },
   checkboxLabel: { ...typeScale.body, color: colours.textPrimary, flexShrink: 1 },
   fieldError: { ...typeScale.label, color: colours.danger },
-  // A calm grey status line, e.g. the share confirmation (HEN-311).
   fieldNote: { ...typeScale.label, color: colours.textSecondary },
   notice: { ...typeScale.body, color: colours.textPrimary },
   card: { backgroundColor: colours.surface, borderRadius: radius.card, padding: spacing.medium, flexDirection: "row", gap: 12 },
@@ -57,6 +53,5 @@ export const authStyles = StyleSheet.create({
   cardIcon: { ...typeScale.title, color: colours.textPrimary },
   cardBody: { flex: 1, gap: spacing.small },
   cardError: { ...typeScale.body, color: colours.danger },
-  // gap 16 + 8 = 24 between the last field and the buttons.
   actions: { gap: spacing.medium, marginTop: spacing.small },
 });

@@ -3,7 +3,6 @@ import { createApp } from "../app.js";
 import { AUTH_REQUEST_BODY_LIMIT_BYTES, type AuthInstance } from "../auth/index.js";
 import { socketEnvironment, testBaseUrl } from "./authTestHelper.js";
 
-// Pinned on purpose: the test must fail if the limit drifts from 32 KiB (for example to 1 MiB).
 const expectedLimitBytes = 32 * 1024;
 
 function authBodyOfSize(byteLength: number): string {
@@ -12,7 +11,6 @@ function authBodyOfSize(byteLength: number): string {
 }
 
 describe("HEN-71 auth body limit", () => {
-  // No database is passed, so createApp mounts only /api/auth and uses only these two auth fields.
   const fakeAuth = {
     handler: () => Promise.resolve(new Response(null, { status: 200 })),
     resolveSessionUserId: () => Promise.resolve(null),

@@ -1,5 +1,3 @@
-"""HEN-318: peak RSS is logged per chunk; above the limit (3 GiB) the next chunks drop to 15 s. RSS is faked."""
-
 import json
 
 import pytest

@@ -1,7 +1,3 @@
-// Expo SDK version check for CI (HEN-272). Wraps `expo install --check --json`, which expo-doctor also runs.
-// Expo always expects the newest SDK patch, but new versions wait 14 days (pnpm `minimumReleaseAge`, Dependabot cooldown).
-// So a patch behind is a warning; a major or minor mismatch, a prerelease or an unreadable report fails.
-// Run: `pnpm --filter @bjj-roll/mobile run doctor` (Node strips the types; only `node:` imports here).
 import { spawnSync } from "node:child_process";
 
 export interface VersionMismatch {
