@@ -205,6 +205,7 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
   - Pose contract (`pose.py`): `estimate(frame, box)` gets the tracker's `Box` for that frame and returns exactly `COCO17_KEYPOINT_NAMES` in that
     order, each inside the frame in `geometry` pixels, with a score in [0, 1]. `estimate` keeps nothing between calls. Callers never see which
     backend runs (local RTMPose-m, a later Modal backend, or the test fake).
+  - `pose.py` validation errors are fixed strings that carry no input values (no coordinates, scores or keypoint names), so they are safe to log.
   - The pose runner estimates every tracked athlete with a box, so the bench can tell when the user's pose landed on the partner. Only the user's
     own pose is kept; partner and bystander poses never leave the runner (D6). A frame where the tracker had no box for the user has no pose.
   - Bench definitions: a frame where the user has no box is not tangled (that is a tracker loss, flagged by the drift detector). A tangled frame

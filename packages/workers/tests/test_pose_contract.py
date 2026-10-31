@@ -52,3 +52,17 @@ def test_pose_contract_keypoint_rejects_unknown_names_and_scores_outside_zero_to
         Keypoint(name="nose", x=1.0, y=1.0, score=1.5)
     with pytest.raises(ValueError):
         Keypoint(name="nose", x=-1.0, y=1.0, score=0.5)
+
+
+def test_pose_contract_error_messages_are_fixed_strings_without_input_values() -> None:
+    frame = draw_rectangles(0, [(SELF_LABEL, SELF_RECTANGLE)])
+    keypoints = LabelFakePose().estimate(frame, Box(2, 3, 8, 11))
+    outside_x = frame.size.width + 0.4375
+
+    with pytest.raises(PoseContractError) as outside:
+        check_pose_output(frame, (replace(keypoints[0], x=outside_x), *keypoints[1:]))
+    with pytest.raises(PoseContractError) as swapped:
+        check_pose_output(frame, (keypoints[1], keypoints[0], *keypoints[2:]))
+
+    assert str(outside_x) not in str(outside.value)
+    assert not any(name in str(swapped.value) for name in (keypoints[0].name, keypoints[1].name))
