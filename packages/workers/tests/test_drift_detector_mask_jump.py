@@ -1,5 +1,8 @@
 """HEN-318: the drift rule flags a synthetic mask jump and a lost mask, and nothing on a stable track. Synthetic masks only."""
 
+import json
+from pathlib import Path
+
 from bjj_roll_workers.drift_detector import (
     MAX_AREA_CHANGE_RATIO,
     MAX_CENTRE_JUMP_IN_BOX_DIAGONALS,
@@ -14,6 +17,7 @@ from bjj_roll_workers.re_prompt_flow import DriftEvent
 from bjj_roll_workers.tracker import Mask, TrackedFrame, TrackedObject
 
 FRAME_SIZE = FrameSize(width=100, height=100)
+DRIFT_FIXTURE = Path(__file__).parent / "fixtures" / "drift_tracks.json"
 
 
 def _square(frame_index: int, left: float, top: float, side: float = 10.0, score: float = 0.9) -> TrackedFrame:
@@ -77,3 +81,15 @@ def test_drift_detector_min_track_score_is_the_lowest_good_score() -> None:
 
     assert detect_drift(at_limit) == ()
     assert detect_drift(under_limit) == (DriftEvent(frame_index=1, reason=REASON_MASK_LOST),)
+
+
+def test_drift_detector_flags_the_jump_fixture_and_not_the_stable_fixture() -> None:
+    fixture = json.loads(DRIFT_FIXTURE.read_text())
+    assert FrameSize(**fixture["frame_size"]) == FRAME_SIZE
+    tracks = {
+        name: [_square(index, left, top, fixture["square_side"]) for index, (left, top) in enumerate(squares)]
+        for name, squares in fixture["tracks"].items()
+    }
+
+    assert detect_drift(tracks["stable"]) == ()
+    assert detect_drift(tracks["jump"]) == (DriftEvent(frame_index=6, reason=REASON_MASK_JUMP),)

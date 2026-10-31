@@ -16,7 +16,7 @@ import {
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { type BiometricKind, changeBiometricUnlock, clearBiometricUnlock, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
-import { cancelPendingSignOut, completeMagicLink, FAILURE_MESSAGES, type FailureReason, signOut } from "./auth/signInActions";
+import { completeMagicLink, FAILURE_MESSAGES, type FailureReason, signOut } from "./auth/signInActions";
 import { checkStartup, readBiometricLock } from "./auth/startupCheck";
 import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
@@ -27,6 +27,7 @@ import { LoadingScreen } from "./screens/LoadingScreen";
 import { SignUpAttestationGate } from "./screens/SignUpAttestationGate";
 import { SignedInScreen } from "./screens/SignedInScreen";
 import { colours } from "./theme/tokens";
+import { useLeftoverRevoke } from "./useLeftoverRevoke";
 import { useStartupRetry } from "./useStartupRetry";
 
 type AuthScreen =
@@ -52,12 +53,7 @@ export function App() {
   // One 10 s budget for all of startup, the gate's first status read included; a sign-in in the running app drops it (HEN-310).
   const startupBudget = useRef<StartupBudget | null>(null);
   // The launch's or sign-in's revoke of queued old sessions; a sign-out stops it and waits for it before it starts (HEN-315).
-  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
-  const startLeftoverRevoke = (deadline?: AbortSignal) => {
-    const stop = new AbortController();
-    deadline?.addEventListener("abort", () => stop.abort());
-    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
-  };
+  const { start: startLeftoverRevoke, take: takeLeftoverRevoke } = useLeftoverRevoke();
   // Each startup check gets one 10 s budget for all its steps (HEN-303, HEN-310).
   const runStartupCheck = () => {
     const budget = createStartupBudget();
@@ -171,8 +167,7 @@ export function App() {
     setServerUnreachable(false);
     // A revoke still running from the sign-in is stopped (its sessions stay queued) and awaited, so the two never touch the
     // queue or the same session at once; signOut retries those sessions itself within the deadline.
-    const leftover = leftoverRevoke.current;
-    leftoverRevoke.current = null;
+    const leftover = takeLeftoverRevoke();
     leftover?.stop.abort();
     void withStartupTimeout(async (signal) => {
       await leftover?.done;
@@ -183,7 +178,7 @@ export function App() {
   };
 
   const handleAccountDeleted = () => {
-    void clearBiometricUnlock(appSecureStore).catch(() => undefined);
+    void clearBiometricUnlock(appSecureStore, { resetOffer: true }).catch(() => undefined);
     // A note from a link that failed while signed in must not sit next to the deleted card.
     setServerUnreachable(false);
     setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
