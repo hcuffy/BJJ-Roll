@@ -1,7 +1,8 @@
 """Re-prompt flow ("Was this you?") on tracker drift (HEN-317, code part of HEN-72).
 
 The flow talks to a tracker through `Tracker`: drift events come in (HEN-67 drift log shape: frame index + reason),
-anchors go out (a frame index and a tap point). The SAM 2.1 adapter from HEN-67 plugs in here later; tests use a fake.
+anchors go out (a frame index and a tap point in the HEN-318 pixel convention, checked against the video's frame size before
+they reach the tracker). The SAM 2.1 adapter from HEN-67 plugs in here later; tests use a fake.
 
 Each drift is shown once with its frame and answered once: "yes" keeps the track, a re-tap re-anchors the tracker at the
 drift frame and tracking continues from there. Counts and corrections live only in that video's result, and every call
@@ -14,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 
-from bjj_roll_workers.geometry import TapPoint
+from bjj_roll_workers.geometry import FrameSize, TapPoint, validate_point_in_frame
 from bjj_roll_workers.job_logging import log_job_event
 
 type Style = Literal["gi", "no-gi"]
@@ -68,10 +69,12 @@ class VideoRun:
     video_id: str
     style: Style
     first_tap: TapPoint
+    frame_size: FrameSize
 
     def __post_init__(self) -> None:
         if self.style not in _STYLES:
             raise ValueError("unknown style")
+        validate_point_in_frame(self.first_tap, self.frame_size)
 
 
 @dataclass(frozen=True)
@@ -106,6 +109,7 @@ def run_re_prompt_flow(job_id: str, video: VideoRun, tracker: Tracker, frame_sou
         answer = prompter.ask_was_this_you(drift, frame_source.frame_at(drift.frame_index))
         if isinstance(answer, ReTap):
             correction = TapPoint(frame_index=drift.frame_index, x=answer.x, y=answer.y)
+            validate_point_in_frame(correction, video.frame_size)
             corrections.append(correction)
             tracker.anchor(correction)
     log_job_event("re_prompt_flow_finished", job_id, duration_seconds=time.monotonic() - started_at)

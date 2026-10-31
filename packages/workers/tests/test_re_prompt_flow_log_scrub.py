@@ -4,8 +4,10 @@ import json
 
 import pytest
 
+from bjj_roll_workers.geometry import FrameSize
 from bjj_roll_workers.re_prompt_flow import DriftEvent, KeepTrack, PromptAnswer, ReTap, TapPoint, VideoRun, run_re_prompt_flow
 
+FRAME_SIZE = FrameSize(width=640, height=360)
 JOB_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 VIDEO_ID = "3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f"
 EXAMPLE_DOMAIN = "example.invalid"
@@ -48,7 +50,11 @@ class AlternatingPrompter:
 
 def test_re_prompt_flow_logs_no_filename_url_token_or_frame_bytes(capsys: pytest.CaptureFixture[str]) -> None:
     run_re_prompt_flow(
-        JOB_ID, VideoRun(VIDEO_ID, "gi", TapPoint(frame_index=0, x=0.4, y=0.5)), PoisonedTracker(), PoisonedFrameSource(), AlternatingPrompter()
+        JOB_ID,
+        VideoRun(VIDEO_ID, "gi", TapPoint(frame_index=0, x=0.4, y=0.5), FRAME_SIZE),
+        PoisonedTracker(),
+        PoisonedFrameSource(),
+        AlternatingPrompter(),
     )
 
     captured = capsys.readouterr()
