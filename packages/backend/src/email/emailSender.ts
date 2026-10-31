@@ -1,6 +1,6 @@
 export type OneTimeCodePurpose = "sign_in" | "account_deletion";
 
-export interface EmailIdempotency {
+interface EmailIdempotency {
   idempotencyKey?: string;
 }
 

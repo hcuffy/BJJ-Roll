@@ -9,7 +9,7 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
 const socialLoadingTitles: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
-export const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
+const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
 const brandButtons = { apple: AppleSignInButton, google: GoogleSignInButton } as const;
 
 const styles = StyleSheet.create({

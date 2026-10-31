@@ -1,7 +1,7 @@
-export const ACCOUNT_DELETION_OTP_TYPE = "email-verification";
+const ACCOUNT_DELETION_OTP_TYPE = "email-verification";
 
-export type AccountDeletionCodeSendResult = "sent" | "rate_limited";
-export type AccountDeletionCodeCheckResult = "valid" | "invalid";
+type AccountDeletionCodeSendResult = "sent" | "rate_limited";
+type AccountDeletionCodeCheckResult = "valid" | "invalid";
 
 export interface AccountDeletionCodes {
   send(email: string): Promise<AccountDeletionCodeSendResult>;

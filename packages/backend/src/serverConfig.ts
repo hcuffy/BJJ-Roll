@@ -8,7 +8,7 @@ export const AUTH_BASE_URL_ENV = "AUTH_BASE_URL";
 export const LETTERMINT_API_KEY_ENV = "LETTERMINT_API_KEY";
 export const EMAIL_FROM_ADDRESS_ENV = "EMAIL_FROM_ADDRESS";
 export const AUTH_TRUSTED_PROXY_IP_HEADERS_ENV = "AUTH_TRUSTED_PROXY_IP_HEADERS";
-export const PORT_ENV = "PORT";
+const PORT_ENV = "PORT";
 
 export type ServerEnvironment = AuthSecretEnvironment & Readonly<Record<string, string | undefined>>;
 

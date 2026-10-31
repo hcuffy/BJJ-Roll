@@ -16,6 +16,7 @@ import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 import { useSignedInMessages } from "./useSignedInMessages";
 import { moveScreenReaderFocus } from "./moveScreenReaderFocus";
+import type { DeleteStep } from "./types";
 
 export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onSignOut: () => void;
@@ -28,8 +29,6 @@ export interface SignedInScreenProps extends BiometricUnlockSettingProps {
 }
 
 type AccountTask = "export" | "code" | "adult";
-type DeleteStep = "none" | "confirm" | "code";
-
 const styles = StyleSheet.create({
   accountSection: { marginTop: spacing.medium, gap: spacing.small },
   accountItems: { gap: spacing.medium },

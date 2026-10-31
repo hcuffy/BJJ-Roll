@@ -20,7 +20,7 @@ const styles = StyleSheet.create({
   adultItem: { gap: spacing.small },
 });
 
-export const ADULT_CONFIRMED_TEXT = "18 or older: confirmed";
+const ADULT_CONFIRMED_TEXT = "18 or older: confirmed";
 
 export function AdultStatusItem(props: AdultStatusItemProps) {
   const { status, buttonRef, focusConfirmedRow, onConfirmedRowFocused, disabled, loading, onConfirmPress } = props;
