@@ -9,7 +9,7 @@ from bjj_roll_workers.re_prompt_flow import KeepTrack, VideoRun, run_re_prompt_f
 from bjj_roll_workers.tracker_config import load_tracker_config
 from bjj_roll_workers.tracker_runner import RePromptTrackerAdapter, track_video
 from bjj_roll_workers.tracking_output import write_tracking_result
-from tracker_fakes import PARTNER_LABEL, SELF_LABEL, LabelFakeTracker, drifting_self_layout, label_mask, make_clip, partner_tap, self_tap
+from tracker_fakes import PARTNER_LABEL, SELF_LABEL, LabelFakeTracker, TrackCall, drifting_self_layout, label_mask, make_clip, partner_tap, self_tap
 
 JOB_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 FIRST_VIDEO_ID = "3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f"
@@ -120,6 +120,7 @@ def test_tracker_runner_refuses_a_batch_run_without_a_tap_for_each_video() -> No
         VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None, frame_size=frames[0].size)  # type: ignore[arg-type]  # a wrong type on purpose
 
     assert first_result.video_id == FIRST_VIDEO_ID
+    assert fake.calls == [TrackCall(0, len(frames) - 1, {"self": self_tap(0)})]
     assert len(fake.calls) == first_video_calls
     with pytest.raises(RuntimeError):
         adapters[1].result()
