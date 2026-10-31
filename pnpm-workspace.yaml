@@ -4,6 +4,7 @@ packages:
 minimumReleaseAge: 20160
 # HEN-337: Henry approved 31 Oct; remove this exclusion on 10 Nov, when these releases pass the 14-day age.
 minimumReleaseAgeExclude:
+  - "@isaacs/nonrecursive-glob-match"
   - glob
   - minimatch
   - node-forge
@@ -20,3 +21,5 @@ overrides:
   # @expo/ui pulls vaul (web drawer); keep its react-dom peer on React 19.2.3 from Expo SDK 57 (HEN-46).
   vaul>react-dom: 19.2.3
   node-forge@<1.4.1: 1.4.1
+  glob@<14.0.2: 14.0.2
+  minimatch@<11.0.1: 11.0.1
