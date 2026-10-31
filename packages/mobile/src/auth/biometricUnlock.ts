@@ -108,6 +108,9 @@ export async function changeBiometricUnlock(secureStore: SessionKeyStore, on: bo
 }
 
 /** On sign-out and account delete. Never rejects. */
-export async function clearBiometricUnlock(secureStore: SessionKeyStore): Promise<void> {
+export async function clearBiometricUnlock(secureStore: SessionKeyStore, { resetOffer = false } = {}): Promise<void> {
   await secureStore.deleteItemAsync(BIOMETRIC_UNLOCK_KEY).catch(() => undefined);
+  if (resetOffer) {
+    await secureStore.deleteItemAsync(BIOMETRIC_OFFERED_KEY).catch(() => undefined);
+  }
 }

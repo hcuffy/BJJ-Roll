@@ -183,7 +183,7 @@ export function App() {
   };
 
   const handleAccountDeleted = () => {
-    void clearBiometricUnlock(appSecureStore).catch(() => undefined);
+    void clearBiometricUnlock(appSecureStore, { resetOffer: true }).catch(() => undefined);
     // A note from a link that failed while signed in must not sit next to the deleted card.
     setServerUnreachable(false);
     setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
