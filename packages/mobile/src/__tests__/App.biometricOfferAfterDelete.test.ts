@@ -39,7 +39,7 @@ describe("App: the biometric offer after account delete and after sign-out (HEN-
     await settle();
     return screen;
   };
-  const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>, email: string) => {
+  const signIn = async (screen: Awaited<ReturnType<typeof launchApp>>, email: string, landing = SIGNED_IN_SCREEN) => {
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
     await screen.changeText("Email", email);
@@ -50,19 +50,18 @@ describe("App: the biometric offer after account delete and after sign-out (HEN-
       offersSeen += 1;
       await screen.press("Not now");
     }
-    expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    expect(screen.text()).toContain(landing);
   };
   const signOut = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
     await screen.press("Sign out");
     await settle();
   };
-  const deleteAccount = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
+  const deleteAccount = async (screen: Awaited<ReturnType<typeof launchApp>>, code = TEST_DELETE_CODE) => {
     await screen.press("Delete account");
     await screen.press("Email me a code");
-    await screen.changeText("6-digit code", TEST_DELETE_CODE);
+    await screen.changeText("6-digit code", code);
     await screen.press("Delete my account");
     await settle();
-    expect(screen.text()).toContain("Your account was deleted.");
   };
 
   beforeEach(() => {
@@ -79,6 +78,7 @@ describe("App: the biometric offer after account delete and after sign-out (HEN-
     await signIn(screen, "member@example.test");
     expect(offersSeen).toBe(1);
     await deleteAccount(screen);
+    expect(screen.text()).toContain("Your account was deleted.");
 
     await signIn(screen, "newcomer@example.test");
     expect(offersSeen).toBe(2);
@@ -99,5 +99,42 @@ describe("App: the biometric offer after account delete and after sign-out (HEN-
     await signOut(screen);
     await signIn(screen, "other@example.test");
     expect(offersSeen).toBe(1);
+  });
+
+  // Vera polish (HEN-300): a delete that did not happen keeps the offer flag, so the same account is not offered again.
+  it("a delete refused by the server, then one that fails offline, keeps the flag: no offer after signing in again", async () => {
+    const screen = await launchApp();
+    await signIn(screen, "member@example.test");
+    expect(offersSeen).toBe(1);
+    await deleteAccount(screen, "000000");
+    expect(screen.text()).not.toContain("Your account was deleted.");
+    await screen.press("Cancel");
+    backend.fetchImplementation.mockImplementation(async (input, init) => {
+      if (new Request(input, init).method === "DELETE") {
+        throw new TypeError("Network request failed");
+      }
+      return await createFakeBackend().fetchImplementation(input, init);
+    });
+    await deleteAccount(screen);
+    expect(screen.text()).not.toContain("Your account was deleted.");
+    backend.fetchImplementation.mockReset();
+    backend = createFakeBackend();
+    secureStore.items.delete("bjjroll_cookie");
+
+    const nextLaunch = await launchApp();
+    await signIn(nextLaunch, "member@example.test");
+    expect(offersSeen).toBe(1);
+  });
+
+  it("a delete from the sign-up attestation gate offers biometric again on the next sign-in", async () => {
+    backend = createFakeBackend({ signUpAttestationAcceptedVersion: null });
+    const screen = await launchApp();
+    await signIn(screen, "member@example.test", "Accept the sign-up duties");
+    expect(offersSeen).toBe(1);
+    await deleteAccount(screen);
+    expect(screen.text()).toContain("Your account was deleted.");
+
+    await signIn(screen, "newcomer@example.test", "Accept the sign-up duties");
+    expect(offersSeen).toBe(2);
   });
 });
