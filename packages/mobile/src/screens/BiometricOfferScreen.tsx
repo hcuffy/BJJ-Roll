@@ -6,7 +6,7 @@ import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
-import { BIOMETRIC_COPY, BIOMETRIC_OFFER_BENEFIT, biometricCheckError } from "./biometricCopy";
+import { biometricCopy, BIOMETRIC_OFFER_BENEFIT, biometricCheckError } from "./biometricCopy";
 
 export interface BiometricOfferScreenProps {
   readonly kind: BiometricKind;
@@ -19,7 +19,7 @@ export const BIOMETRIC_CHECK_FAILED = "That didn't work. Try again, or choose No
 export function BiometricOfferScreen({ kind, onTurnOn, onDone }: BiometricOfferScreenProps) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const copy = BIOMETRIC_COPY[kind];
+  const copy = biometricCopy[kind];
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {

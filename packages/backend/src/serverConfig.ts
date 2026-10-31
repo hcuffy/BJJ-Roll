@@ -1,7 +1,7 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, type SignUpAttestationTextVersion } from "@bjj-roll/shared";
+import { signUpAttestationVersion, type SignUpAttestationTextVersion } from "@bjj-roll/shared";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { loadSocialProviderConfig, type SocialProviderConfig } from "./auth/socialProviders.js";
-import { loadAuthKeyringFromEnvironment, TRUSTABLE_PROXY_IP_HEADERS, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
+import { loadAuthKeyringFromEnvironment, trustableProxyIpHeaders, type AuthSecretEnvironment, type TrustableProxyIpHeader } from "./auth/index.js";
 
 export const DATABASE_URL_ENV = "DATABASE_URL";
 export const AUTH_BASE_URL_ENV = "AUTH_BASE_URL";
@@ -42,15 +42,15 @@ function parseTrustedProxyIpHeaders(raw: string | undefined): TrustableProxyIpHe
   }
   return raw.split(",").map((entry) => {
     const headerName = entry.trim().toLowerCase();
-    if (!(TRUSTABLE_PROXY_IP_HEADERS as readonly string[]).includes(headerName)) {
-      throw new Error(`${AUTH_TRUSTED_PROXY_IP_HEADERS_ENV} accepts only: ${TRUSTABLE_PROXY_IP_HEADERS.join(", ")}`);
+    if (!(trustableProxyIpHeaders as readonly string[]).includes(headerName)) {
+      throw new Error(`${AUTH_TRUSTED_PROXY_IP_HEADERS_ENV} accepts only: ${trustableProxyIpHeaders.join(", ")}`);
     }
     return headerName as TrustableProxyIpHeader;
   });
 }
 
 export function loadServerConfig(env: ServerEnvironment, options: LoadServerConfigOptions = {}): ServerConfig {
-  const signUpAttestationTextVersion = options.signUpAttestationTextVersion ?? SIGN_UP_ATTESTATION_TEXT_VERSION;
+  const signUpAttestationTextVersion = options.signUpAttestationTextVersion ?? signUpAttestationVersion;
   if (env.NODE_ENV === "production" && signUpAttestationTextVersion.isDraft) {
     throw new Error(`Sign-up attestation text version ${signUpAttestationTextVersion.id} is a draft; production needs a lawyer-reviewed version`);
   }

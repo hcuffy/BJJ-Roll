@@ -36,7 +36,7 @@ export { AUTH_REQUEST_BODY_LIMIT_BYTES, mountAuthRoutes } from "./authRoutes.js"
 export {
   createAuth,
   resolveClientIpAddress,
-  TRUSTABLE_PROXY_IP_HEADERS,
+  trustableProxyIpHeaders,
   type AuthConnectionInfo,
   type AuthEventLogger,
   type AuthEventName,
@@ -44,7 +44,7 @@ export {
   type CreateAuthOptions,
   type TrustableProxyIpHeader,
 } from "./createAuth.js";
-export { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl, MAGIC_LINK_REDIRECT_PARAMETERS } from "./deepLinkCallback.js";
+export { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl, magicLinkRedirectParameters } from "./deepLinkCallback.js";
 export {
   APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX,
   APPLE_REVOKE_ENDPOINT,
@@ -54,7 +54,7 @@ export {
 } from "./appleTokens.js";
 export {
   APPLE_APP_BUNDLE_IDENTIFIER_ENV,
-  APPLE_ENVIRONMENT_NAMES,
+  appleEnvironmentNames,
   APPLE_KEY_ID_ENV,
   APPLE_PRIVATE_KEY_ENV,
   APPLE_SERVICE_ID_ENV,
@@ -63,7 +63,7 @@ export {
   createAppleClientSecret,
   GOOGLE_CLIENT_ID_ENV,
   GOOGLE_CLIENT_SECRET_ENV,
-  GOOGLE_ENVIRONMENT_NAMES,
+  googleEnvironmentNames,
   loadSocialProviderConfig,
   type AppleProviderConfig,
   type GoogleProviderConfig,

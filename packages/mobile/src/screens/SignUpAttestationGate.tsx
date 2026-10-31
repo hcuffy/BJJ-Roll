@@ -1,7 +1,7 @@
 import { type ComponentRef, useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, BackHandler, StyleSheet, Text, View } from "react-native";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, SignUpAttestationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import {
   ATTESTATION_NEEDED_HINT,
   ATTESTATION_PROMPT_ACCEPT,
@@ -48,7 +48,7 @@ function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<
   }
 }
 
-const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+const unknownFailure = (): SignUpAttestationResult => ({ ok: false, reason: "unknown", message: failureMessages.unknown });
 
 function isAccepted(result: SignUpAttestationResult): boolean {
   return result.ok && !result.status.required;
@@ -153,7 +153,7 @@ export function SignUpAttestationGate(props: SignUpAttestationGateProps) {
     } else if (!result.ok && result.reason === "network") {
       setAcceptOffline(true);
     } else {
-      setFormError(result.ok ? FAILURE_MESSAGES.unknown : result.message);
+      setFormError(result.ok ? failureMessages.unknown : result.message);
     }
   };
 

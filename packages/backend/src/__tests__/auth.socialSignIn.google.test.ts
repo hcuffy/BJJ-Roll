@@ -2,7 +2,7 @@ import {
   AGE_CONFIRMATION_TEXT_VERSION_ID,
   AGE_GATE_REFUSAL_MESSAGE,
   SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationVersion,
 } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { RATE_LIMIT_WINDOW_SECONDS, MAX_VERIFIES_PER_IP_PER_WINDOW } from "../auth/authLimits.js";
@@ -42,7 +42,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     );
     expect(consent.rows).toEqual([
       { consent_type: "age_confirmation", text_version_id: AGE_CONFIRMATION_TEXT_VERSION_ID, age16_confirmed: true, age18_confirmed: true },
-      { consent_type: "attestation_signup", text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id, age16_confirmed: null, age18_confirmed: null },
+      { consent_type: "attestation_signup", text_version_id: signUpAttestationVersion.id, age16_confirmed: null, age18_confirmed: null },
     ]);
   });
 
@@ -99,7 +99,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
       "SELECT text_version_id FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'",
       [userId],
     );
-    expect(rows.rows).toEqual([{ text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id }]);
+    expect(rows.rows).toEqual([{ text_version_id: signUpAttestationVersion.id }]);
   });
 
   it("links Google to an existing email account when Google has verified the same address", async () => {
@@ -169,12 +169,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     return null;
   };
 
-  const BETTER_AUTH_DEFAULT_SIGN_IN_MAX = 3;
+  const betterAuthDefaultSignInMax = 3;
 
   it("rate limits sign-in starts per IP with our rule (not Better Auth's 3 per 10 s default): the first 429 is request max + 1", async () => {
     const rule = authIpRateLimitCustomRules["/sign-in/social"];
     expect(rule).toEqual({ window: RATE_LIMIT_WINDOW_SECONDS, max: MAX_VERIFIES_PER_IP_PER_WINDOW });
-    expect(rule?.max).not.toBe(BETTER_AUTH_DEFAULT_SIGN_IN_MAX);
+    expect(rule?.max).not.toBe(betterAuthDefaultSignInMax);
     const start = () =>
       postAuthJson(current().app, "/sign-in/social", {
         body: { provider: "google", callbackURL: DEEP_LINK_CALLBACK_URL, disableRedirect: true },

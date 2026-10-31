@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { expect, vi } from "vitest";
 import type { FakeSentOneTimeCodeMessage } from "../email/index.js";
 import { extractSessionCookie, postAuthJson, socketEnvironment, testBaseUrl, type StartedAuthTestEnvironment } from "./authTestHelper.js";
@@ -36,7 +36,7 @@ export function createAccountTestFlow(current: () => StartedAuthTestEnvironment)
   const sendOtp = async (email: string, ipAddress: string): Promise<void> => {
     const sentBefore = current().emailSender.sentMessages.length;
     const response = await postAuthJson(current().app, "/email-otp/send-verification-otp", {
-      body: { email, type: "sign-in", age16Confirmed: true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id },
+      body: { email, type: "sign-in", age16Confirmed: true, signUpAttestationTextVersionId: signUpAttestationVersion.id },
       ipAddress,
     });
     expect(response.status).toBe(200);

@@ -21,11 +21,11 @@ const { App } = await import("../App");
 const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 
 const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
-const SIGN_OUT_WRITES = [PENDING_SIGN_OUT_KEY, "bjjroll_cookie", "bjjroll_session_data"] as const;
+const signOutWrites = [PENDING_SIGN_OUT_KEY, "bjjroll_cookie", "bjjroll_session_data"] as const;
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const SESSION = "session-token-1";
 
 function createSessionServer() {
@@ -39,7 +39,7 @@ function createSessionServer() {
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp")) {
       signIns += 1;
       const token = `session-token-${String(signIns)}`;
@@ -136,7 +136,7 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
   });
 
   it("all 3 writes fail: signed out at once, the server session is ended, and the next launch stays signed out", async () => {
-    const shown = await signOutWithBrokenKeys(SIGN_OUT_WRITES);
+    const shown = await signOutWithBrokenKeys(signOutWrites);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
     expect(secureStore.items.get("bjjroll_cookie")).toContain(SESSION);
@@ -146,12 +146,12 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
 
   it("all 3 writes fail and the server cannot be reached: the app still shows signed out", async () => {
     server.state.signOutDown = true;
-    const shown = await signOutWithBrokenKeys(SIGN_OUT_WRITES);
+    const shown = await signOutWithBrokenKeys(signOutWrites);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);
   });
 
-  it.each(SIGN_OUT_WRITES)("1 of 3 writes fails (%s): the server session is ended and the next launch stays signed out", async (key) => {
+  it.each(signOutWrites)("1 of 3 writes fails (%s): the server session is ended and the next launch stays signed out", async (key) => {
     const shown = await signOutWithBrokenKeys([key]);
 
     expect(shown.filter((text) => text.includes(SIGNED_IN_SCREEN))).toEqual([]);

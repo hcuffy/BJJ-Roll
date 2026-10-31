@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, SignUpAttestationResult } from "../auth/accountActions";
@@ -17,7 +17,7 @@ async function gateConfirm(): Promise<Screen> {
       onReadStatus: () =>
         Promise.resolve<SignUpAttestationResult>({
           ok: true,
-          status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+          status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
         }),
       onAccept: () => Promise.reject(new Error("not used")),
       onSignOut: () => undefined,

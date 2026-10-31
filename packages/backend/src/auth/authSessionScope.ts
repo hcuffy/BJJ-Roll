@@ -6,7 +6,7 @@ import { SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS, 
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
 const REVOKE_UNPROVEN_ACCESS_PREFIX = "revoke-unproven-account-access:";
-const HASHED_SESSION_TOKEN_PATTERN = /^[0-9a-f]{64}$/u;
+const hashedSessionTokenPattern = /^[0-9a-f]{64}$/u;
 
 export type AuthTransaction = Transaction<Record<string, unknown>>;
 
@@ -39,7 +39,7 @@ export async function lookupUserIdByEmailHmacInTransaction(transaction: AuthTran
 }
 
 export function isHashedSessionToken(value: string): boolean {
-  return HASHED_SESSION_TOKEN_PATTERN.test(value);
+  return hashedSessionTokenPattern.test(value);
 }
 
 export function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): string {

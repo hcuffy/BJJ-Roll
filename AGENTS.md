@@ -53,6 +53,7 @@ Run from the repo root.
 - TS types (lint errors): `interface` for object shapes, `type` only for unions, intersections, tuples, mapped/conditional types and primitive aliases; `import type` for type-only imports; no `any` (use `unknown` and narrow); `declare global` only in a package's `globals.d.ts`.
 - Architecture and tooling decisions are recorded in [`DECISIONS.md`](DECISIONS.md).
 - No code comments or docstrings in TS/JS or Python (lint error: `pnpm test:comments` + `pnpm lint`, `scripts/check_no_comments.py`). Only directives stay: `eslint-disable-next-line … -- reason`, `@ts-expect-error reason`, `/// <reference …/>`, a licence header, shebangs, `# noqa: CODE - reason`, `# type: ignore[code]  # reason`. Rationale goes in DECISIONS.md (D33).
+- Names (lint errors): functions, variables, hooks (`useX`) and style objects camelCase; PascalCase only for React components in `.tsx` and for types, interfaces and enums; UPPER_CASE only for module-level `const` primitives (string, number, boolean). Python follows pep8-naming (ruff `N`).
 
 ## Commits
 

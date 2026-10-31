@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { failureMessages, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
 import { signInWithProvider, socialFailureMessage, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "../auth/signUpAttestation";
 import { AgeConfirmationFields } from "./AgeConfirmationFields";
@@ -15,7 +15,7 @@ import { SignInHeader } from "./SignInHeader";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
-import { EMAIL_INPUT_PROPS, TextField } from "./TextField";
+import { emailInputProps, TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
@@ -104,7 +104,7 @@ export function EmailEntryScreen({
 
   const validate = (): boolean => {
     const emailValid = isEmailAddress(email);
-    setEmailError(emailValid ? null : FAILURE_MESSAGES.invalidEmail);
+    setEmailError(emailValid ? null : failureMessages.invalidEmail);
     setAnnounceAgeError(emailValid || emailError !== null);
     setAgeError(age16Confirmed ? null : TICK_AGE_BOX_MESSAGE);
     setAttestationError(attestationAccepted ? null : SIGN_UP_ATTESTATION_REFUSAL_MESSAGE);
@@ -192,7 +192,7 @@ export function EmailEntryScreen({
         label="Email"
         focusKey={startup.focusEmailKey}
         error={emailError}
-        {...EMAIL_INPUT_PROPS}
+        {...emailInputProps}
         value={email}
         onChangeText={(text) => {
           setEmail(text);
@@ -202,7 +202,7 @@ export function EmailEntryScreen({
         }}
         onBlur={() => {
           if (email.trim() !== "" && !isEmailAddress(email)) {
-            setEmailError(FAILURE_MESSAGES.invalidEmail);
+            setEmailError(failureMessages.invalidEmail);
           }
         }}
         onSubmitEditing={() => void send("code")}

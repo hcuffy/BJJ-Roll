@@ -23,7 +23,7 @@ const PENDING_SIGN_OUT_KEY = "bjjroll_pending_sign_out";
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_COOKIE_PATTERN = /better-auth\.session_token=([^;]+)/u;
+const sessionCookiePattern = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
 
@@ -35,7 +35,7 @@ function createSessionServer() {
   let signIns = 0;
 
   const sessionOf = (request: Request): string | null => {
-    const signedValue = SESSION_COOKIE_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1];
+    const signedValue = sessionCookiePattern.exec(request.headers.get("cookie") ?? "")?.[1];
     if (!signedValue) {
       return null;
     }

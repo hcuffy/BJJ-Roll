@@ -17,7 +17,7 @@ vi.mock("../auth/appAuthClient", () => ({
 }));
 
 const { App } = await import("../App");
-const { PENDING_SIGN_OUT_KEY, SESSION_STORAGE_KEYS } = await import("../auth/signInActions");
+const { PENDING_SIGN_OUT_KEY, sessionStorageKeys } = await import("../auth/signInActions");
 const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 
@@ -253,7 +253,7 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
       hangingPaths.add("/sign-out");
 
       await screen.press("Sign out");
-      expect(SESSION_STORAGE_KEYS.some((key) => secureStore.items.has(key))).toBe(false);
+      expect(sessionStorageKeys.some((key) => secureStore.items.has(key))).toBe(false);
       await advance(STARTUP_REQUEST_TIMEOUT_MS - 1);
       expect(screen.text()).toContain("Loading");
       await advance(1);

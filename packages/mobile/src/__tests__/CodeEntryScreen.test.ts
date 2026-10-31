@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
@@ -159,7 +159,7 @@ describe("CodeEntryScreen", () => {
       type: "sign-in",
       age16Confirmed: true,
       age18Confirmed: false,
-      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      signUpAttestationTextVersionId: signUpAttestationVersion.id,
     });
     const notice = "We sent a new code to member@example.test.";
     expect(screen.queryByText(notice)?.props.accessibilityLiveRegion).toBe("polite");
@@ -181,7 +181,7 @@ describe("CodeEntryScreen", () => {
         type: "sign-in",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
     ]);
   });

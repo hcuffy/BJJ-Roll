@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { Share } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_ACCOUNT_EXPORT, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, testAccountExport, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 import { pressHardwareBack, resetBackListeners } from "./backHandlerHarness";
 import { deepLinkState, renderScreen } from "./screenHarness";
 import { deferred } from "./signedInScreenHarness";
@@ -76,7 +76,7 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
 
     await screen.press("Delete account");
     await screen.press("Export my data first");
-    expect(shareSpy).toHaveBeenCalledWith({ title: "BJJ Roll data export", message: JSON.stringify(TEST_ACCOUNT_EXPORT, null, 2) });
+    expect(shareSpy).toHaveBeenCalledWith({ title: "BJJ Roll data export", message: JSON.stringify(testAccountExport, null, 2) });
     expect(screen.text()).toContain("Delete your account?");
     await screen.press("Email me a code");
     await screen.changeText("6-digit code", TEST_DELETE_CODE);

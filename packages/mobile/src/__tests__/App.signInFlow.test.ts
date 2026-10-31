@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
@@ -181,7 +181,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
       callbackURL: "bjjroll://auth",
       age16Confirmed: true,
       age18Confirmed: false,
-      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      signUpAttestationTextVersionId: signUpAttestationVersion.id,
     });
 
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";

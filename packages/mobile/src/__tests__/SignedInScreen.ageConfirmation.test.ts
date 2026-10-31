@@ -2,7 +2,7 @@ import { AccessibilityInfo, Platform } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
 import { AGE_ADULT_CONFIRMATION_NOTE } from "../auth/ageConfirmation";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { flattenStyle, textOf } from "./screenHarness";
 import { createSignedInScreenHarness, deferred } from "./signedInScreenHarness";
@@ -109,14 +109,14 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
   });
 
   it("a failed save shows a plain message and keeps the button for a retry; a failed read still shows the button", async () => {
-    harness.state.adultResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    harness.state.adultResult = Promise.resolve({ ok: false, reason: "unknown", message: failureMessages.unknown });
     const screen = await harness.render();
     await screen.press(CONFIRM);
     await screen.press(DIALOG_YES);
-    expect(screen.text()).toContain(`We could not save that. ${FAILURE_MESSAGES.unknown}`);
+    expect(screen.text()).toContain(`We could not save that. ${failureMessages.unknown}`);
     expect(screen.getPressable(CONFIRM)).toBeDefined();
 
-    harness.state.ageStatusResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    harness.state.ageStatusResult = Promise.resolve({ ok: false, reason: "network", message: failureMessages.network });
     const unread = await harness.render();
     expect(unread.getPressable(CONFIRM)).toBeDefined();
     expect(unread.text()).toContain(CANT_UNDO);

@@ -35,11 +35,11 @@ describe("BiometricOfferScreen design (Vera round 2)", () => {
   it("fix 8: Android back on the offer is 'Not now', and stops listening once the offer is gone", async () => {
     const onDone = vi.fn();
     const shown = { offer: true };
-    const Host = () =>
+    const hostScreen = () =>
       shown.offer
         ? createElement(BiometricOfferScreen, { kind: "biometrics", onTurnOn: () => Promise.resolve({ ok: true } as const), onDone })
         : null;
-    const screen = await renderScreen(createElement(Host));
+    const screen = await renderScreen(createElement(hostScreen));
 
     expect(pressHardwareBack()).toBe(true);
     expect(onDone).toHaveBeenCalledTimes(1);

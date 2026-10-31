@@ -41,7 +41,7 @@ import {
   normalizeMagicLinkVerifyResponse,
   prepareMagicLinkRequest,
   resolveClientIpAddress,
-  TRUSTABLE_PROXY_IP_HEADERS,
+  trustableProxyIpHeaders,
   type TrustableProxyIpHeader,
 } from "./authRequestGuards.js";
 import { refuseUnsafeAppleIdToken, refuseUnverifiedProviderEmail } from "./socialSignInSafety.js";
@@ -56,7 +56,7 @@ import {
 
 export type { AuthEventLogger, AuthEventName } from "./socialSignInHooks.js";
 
-export { resolveClientIpAddress, TRUSTABLE_PROXY_IP_HEADERS, type TrustableProxyIpHeader } from "./authRequestGuards.js";
+export { resolveClientIpAddress, trustableProxyIpHeaders, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
 export interface CreateAuthOptions {
   readonly pool: Pool;
@@ -225,7 +225,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
       const headers = new Headers(rawRequest.headers);
       const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);
-      for (const headerName of [...TRUSTABLE_PROXY_IP_HEADERS, CLIENT_IP_HEADER]) {
+      for (const headerName of [...trustableProxyIpHeaders, CLIENT_IP_HEADER]) {
         headers.delete(headerName);
       }
       headers.set(CLIENT_IP_HEADER, clientIp);

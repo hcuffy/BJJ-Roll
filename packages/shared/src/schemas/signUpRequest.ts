@@ -7,8 +7,8 @@ export const AGE18_CONFIRMATION_LABEL = "I am 18 or older";
 export const AGE_CONFIRMATION_TEXT_VERSION_ID = "age-confirmation-v1";
 
 export const MAGIC_LINK_REASON_PARAM = "r";
-export const MAGIC_LINK_REASONS = { ageRefused: "age_refused", attestationRefused: "attestation_refused", linkInvalid: "link_invalid" } as const;
-export type MagicLinkReason = (typeof MAGIC_LINK_REASONS)[keyof typeof MAGIC_LINK_REASONS];
+export const magicLinkReasons = { ageRefused: "age_refused", attestationRefused: "attestation_refused", linkInvalid: "link_invalid" } as const;
+export type MagicLinkReason = (typeof magicLinkReasons)[keyof typeof magicLinkReasons];
 
 export const age16ConfirmedSchema = z.literal(true, { error: AGE_GATE_REFUSAL_MESSAGE });
 

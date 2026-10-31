@@ -1,6 +1,6 @@
 import {
   AGE_CONFIRMATION_TEXT_VERSION_ID,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationVersion,
   accountExportSchema,
   adultConfirmationRequestSchema,
   isCurrentSignUpAttestationTextVersion,
@@ -172,7 +172,7 @@ async function readSignUpAttestationStatus(transaction: Kysely<BjjRollDatabase>,
   const acceptedTextVersionId = latest?.textVersionId ?? null;
   return {
     required: !isCurrentSignUpAttestationTextVersion(acceptedTextVersionId),
-    currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+    currentTextVersionId: signUpAttestationVersion.id,
     acceptedTextVersionId,
   };
 }

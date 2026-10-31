@@ -3,13 +3,13 @@ import {
   accountDeletionResponseSchema,
   accountExportSchema,
   ageConfirmationStatusSchema,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationVersion,
   signUpAttestationStatusSchema,
   type AgeConfirmationStatus,
   type SignUpAttestationStatus,
 } from "@bjj-roll/shared";
 import type { MobileAuthClient } from "./authClient";
-import { FAILURE_MESSAGES, SESSION_STORAGE_KEYS, type SessionKeyStore } from "./signInActions";
+import { failureMessages, sessionStorageKeys, type SessionKeyStore } from "./signInActions";
 
 export interface AccountSession {
   readonly client: MobileAuthClient;
@@ -29,7 +29,7 @@ export type AgeConfirmationResult = { readonly ok: true; readonly status: AgeCon
 export type SignUpAttestationResult = { readonly ok: true; readonly status: SignUpAttestationStatus } | AccountFailure;
 
 function failure(reason: AccountFailure["reason"]): AccountFailure {
-  return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
+  return { ok: false, reason, message: failureMessages[reason] };
 }
 
 type AccountResponse = { readonly ok: true; readonly data: unknown } | AccountFailure;
@@ -104,7 +104,7 @@ export async function readSignUpAttestation(session: AccountSession, signal?: Ab
 }
 
 export async function acceptSignUpAttestation(session: AccountSession): Promise<SignUpAttestationResult> {
-  const body = { textVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+  const body = { textVersionId: signUpAttestationVersion.id };
   return parseAttestationStatus(await requestAccount(session, { method: "POST", path: "/account/signup-attestation", body }));
 }
 
@@ -124,6 +124,6 @@ export async function deleteAccount(session: AccountSession, code: string): Prom
   if (!accountDeletionResponseSchema.safeParse(response.data).success) {
     return failure("unknown");
   }
-  await Promise.all(SESSION_STORAGE_KEYS.map((key) => session.secureStore.deleteItemAsync(key)));
+  await Promise.all(sessionStorageKeys.map((key) => session.secureStore.deleteItemAsync(key)));
   return { ok: true };
 }

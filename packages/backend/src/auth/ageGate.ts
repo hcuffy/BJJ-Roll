@@ -5,7 +5,7 @@ import {
   age16ConfirmedSchema,
   isCurrentSignUpAttestationTextVersion,
   SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationVersion,
 } from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
 import { sql } from "kysely";
@@ -34,9 +34,7 @@ function readSignUpAnswers(source: unknown): PendingSignUpAnswers {
   return {
     age16Confirmed: age16ConfirmedSchema.safeParse(readRecordField(source, "age16Confirmed")).success,
     age18Confirmed: readRecordField(source, "age18Confirmed") === true,
-    signUpAttestationTextVersionId: isCurrentSignUpAttestationTextVersion(signUpAttestationTextVersionId)
-      ? SIGN_UP_ATTESTATION_TEXT_VERSION.id
-      : null,
+    signUpAttestationTextVersionId: isCurrentSignUpAttestationTextVersion(signUpAttestationTextVersionId) ? signUpAttestationVersion.id : null,
   };
 }
 
@@ -187,7 +185,7 @@ export async function assertSignUpAgeConfirmation(
   await recordPendingAgeAnswers(pool, codec, { email, ...requireAcceptedSignUpAnswers(social.answers) });
 }
 
-const EMAIL_SIGN_IN_PATHS: ReadonlySet<string> = new Set(["/sign-in/email-otp", "/magic-link/verify"]);
+const emailSignInPaths: ReadonlySet<string> = new Set(["/sign-in/email-otp", "/magic-link/verify"]);
 
 export interface FinishedSignIn {
   readonly path: string;
@@ -198,7 +196,7 @@ export interface FinishedSignIn {
 
 export async function refreshSignUpAttestationAfterSignIn(pool: Pool, codec: AuthCryptoCodec, signIn: FinishedSignIn): Promise<void> {
   const social = readSocialSignUpAgeAnswers(signIn.path, signIn.body, signIn.oauthState);
-  if (!social.social && !EMAIL_SIGN_IN_PATHS.has(signIn.path)) {
+  if (!social.social && !emailSignInPaths.has(signIn.path)) {
     return;
   }
   const identifier = pendingIdentifier(codec, signIn.user.email);

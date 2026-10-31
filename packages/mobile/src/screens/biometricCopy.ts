@@ -47,7 +47,7 @@ export function biometricCheckError(failure: Exclude<BiometricFailure, "cancelle
   return failure === "notSetUp" ? copy.setUpNote : failedMessage;
 }
 
-export const BIOMETRIC_COPY: Readonly<Record<BiometricKind, BiometricCopy>> = {
+export const biometricCopy: Readonly<Record<BiometricKind, BiometricCopy>> = {
   faceId: iosCopy("Face ID"),
   touchId: iosCopy("Touch ID"),
   biometrics: androidCopy,

@@ -1,12 +1,12 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed, isSignUpAttestationAccepted } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import type { ExpoConfigWithExtra } from "./authConfig";
 import {
   AGE_CONFIRMATION_REQUIRED_CODE,
-  ATTESTATION_REQUIRED,
+  attestationRequired,
   failure,
-  FAILURE_MESSAGES,
+  failureMessages,
   MAGIC_LINK_CALLBACK_URL,
   postAuth,
   SIGN_UP_ATTESTATION_REQUIRED_CODE,
@@ -51,7 +51,7 @@ export interface AppleNativeSignIn {
 }
 
 export function socialNotLinked(provider: SocialProvider | null): ActionResult {
-  return { ok: false, reason: "accountNotLinked", message: provider === "google" ? GOOGLE_NOT_LINKED_MESSAGE : FAILURE_MESSAGES.accountNotLinked };
+  return { ok: false, reason: "accountNotLinked", message: provider === "google" ? GOOGLE_NOT_LINKED_MESSAGE : failureMessages.accountNotLinked };
 }
 
 export interface SocialSignInDependencies {
@@ -63,10 +63,10 @@ export interface SocialSignInDependencies {
   readonly onReturned?: () => void;
 }
 
-const PROVIDER_NAMES: Readonly<Record<SocialProvider, string>> = { apple: "Apple", google: "Google" };
+const providerNames: Readonly<Record<SocialProvider, string>> = { apple: "Apple", google: "Google" };
 
 export function socialFailureMessage(provider: SocialProvider, result: { readonly reason: string; readonly message: string | null }): string | null {
-  return result.reason === "unknown" ? `Couldn't sign in with ${PROVIDER_NAMES[provider]}. Try again.` : result.message;
+  return result.reason === "unknown" ? `Couldn't sign in with ${providerNames[provider]}. Try again.` : result.message;
 }
 
 const ignored: ActionResult = { ok: false, reason: "ignored", message: null };
@@ -87,12 +87,12 @@ export async function signInWithProvider(
     return ageRequired;
   }
   if (!isSignUpAttestationAccepted(answers)) {
-    return ATTESTATION_REQUIRED;
+    return attestationRequired;
   }
   const ages: SocialAgeAnswers = {
     age16Confirmed: true,
     age18Confirmed: answers.age18Confirmed === true,
-    signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+    signUpAttestationTextVersionId: signUpAttestationVersion.id,
   };
   if (provider === "google") {
     return await signInWithGoogle(dependencies, ages);
@@ -176,7 +176,7 @@ export async function completeSocialSignIn(client: MobileAuthClient, url: string
     return ageRequired;
   }
   if (error === SIGN_UP_ATTESTATION_REQUIRED_CODE) {
-    return ATTESTATION_REQUIRED;
+    return attestationRequired;
   }
   if (error === ACCOUNT_NOT_LINKED_ERROR) {
     return socialNotLinked(provider);

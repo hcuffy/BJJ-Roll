@@ -5,7 +5,7 @@ import * as Linking from "expo-linking";
 export const DEEP_LINK_SCHEME = "bjjroll";
 export const SESSION_STORAGE_PREFIX = "bjjroll";
 
-export const SESSION_GONE_STATUSES: ReadonlySet<number> = new Set([401, 404, 410]);
+export const sessionGoneStatuses: ReadonlySet<number> = new Set([401, 404, 410]);
 
 type ExpoClientOptions = Parameters<typeof expoClient>[0];
 
@@ -33,7 +33,7 @@ function sessionCookieSignOut(options: MobileAuthClientOptions) {
           },
           body: "{}",
         });
-        return response.ok || SESSION_GONE_STATUSES.has(response.status);
+        return response.ok || sessionGoneStatuses.has(response.status);
       },
     }),
   } satisfies BetterAuthClientPlugin;

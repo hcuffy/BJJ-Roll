@@ -8,7 +8,7 @@ import { createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const cookieOf = (token: string) => `better-auth.session_token=${token}.signature`;
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 const NO_COOKIE = "no-cookie";
 
 type SignOutAnswer = number | "hang";
@@ -21,7 +21,7 @@ function createSignOutServer() {
     if (!new URL(request.url).pathname.endsWith("/sign-out")) {
       return Response.json({});
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? NO_COOKIE;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? NO_COOKIE;
     presented.push(session);
     const answer = answers.get(session) ?? 200;
     if (answer === "hang") {

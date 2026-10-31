@@ -19,7 +19,7 @@ vi.mock("../auth/appAuthClient", () => ({
 
 const { App } = await import("../App");
 
-const SESSION_KEYS = ["bjjroll_cookie", "bjjroll_session_data"];
+const sessionKeys = ["bjjroll_cookie", "bjjroll_session_data"];
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 
@@ -60,7 +60,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
     await screen.changeText("6-digit code", "123456");
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
   };
-  const breakSessionKeys = () => SESSION_KEYS.forEach((key) => secureStore.failingKeys.add(key));
+  const breakSessionKeys = () => sessionKeys.forEach((key) => secureStore.failingKeys.add(key));
   const repairSecureStore = () => secureStore.failingKeys.clear();
   const signOutRequestCount = () => backend.requests.filter((request) => request.url.endsWith("/sign-out")).length;
 

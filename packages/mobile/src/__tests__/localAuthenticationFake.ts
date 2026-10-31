@@ -1,6 +1,6 @@
 import type { LocalAuthenticationError, LocalAuthenticationResult } from "expo-local-authentication";
 
-export const AuthenticationType = { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 } as const;
+export const authenticationType = { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 } as const;
 
 export const localAuthenticationFake = {
   hasHardware: false,
@@ -10,7 +10,7 @@ export const localAuthenticationFake = {
   promptCount: 0,
 };
 
-export function setUpEnrolledPhone(supportedTypes: number[] = [AuthenticationType.FINGERPRINT, AuthenticationType.FACIAL_RECOGNITION]): void {
+export function setUpEnrolledPhone(supportedTypes: number[] = [authenticationType.FINGERPRINT, authenticationType.FACIAL_RECOGNITION]): void {
   Object.assign(localAuthenticationFake, { hasHardware: true, enrolled: true, supportedTypes, answers: [], promptCount: 0 });
 }
 
@@ -19,7 +19,7 @@ export function setUpPhoneWithoutBiometrics(supportedTypes: number[] = []): void
 }
 
 export const localAuthenticationModule = {
-  AuthenticationType,
+  AuthenticationType: authenticationType,
   supportedAuthenticationTypesAsync: () => Promise.resolve(localAuthenticationFake.supportedTypes),
   hasHardwareAsync: () => Promise.resolve(localAuthenticationFake.hasHardware),
   isEnrolledAsync: () => Promise.resolve(localAuthenticationFake.enrolled),

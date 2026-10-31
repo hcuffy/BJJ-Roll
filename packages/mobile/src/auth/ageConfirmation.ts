@@ -18,10 +18,10 @@ export interface EmailEntry extends AgeAnswers {
   readonly email: string;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 export function isEmailAddress(email: string): boolean {
-  return EMAIL_PATTERN.test(email.trim());
+  return emailPattern.test(email.trim());
 }
 
 export function isAgeConfirmed(entry: AgeAnswers): boolean {

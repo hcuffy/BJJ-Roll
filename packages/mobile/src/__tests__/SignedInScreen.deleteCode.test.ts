@@ -1,7 +1,7 @@
 import { AccessibilityInfo } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { flattenStyle, textOf } from "./screenHarness";
 import { createSignedInScreenHarness, deferred } from "./signedInScreenHarness";
@@ -74,19 +74,19 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
   });
 
   it("a wrong or expired code shows a field error, keeps the account, and a new code can be sent and used", async () => {
-    state.deleteResult = Promise.resolve({ ok: false, reason: "invalidCode", message: FAILURE_MESSAGES.invalidCode });
+    state.deleteResult = Promise.resolve({ ok: false, reason: "invalidCode", message: failureMessages.invalidCode });
     const screen = await harness.renderAtCodeStep();
     await screen.changeText("6-digit code", "000000");
     await screen.press("Delete my account");
 
     expect(state.deletedCalls).toBe(0);
-    expect(screen.getByLabelText("6-digit code").props.accessibilityHint).toBe(FAILURE_MESSAGES.invalidCode);
-    expect(screen.queryByText(FAILURE_MESSAGES.invalidCode)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.getByLabelText("6-digit code").props.accessibilityHint).toBe(failureMessages.invalidCode);
+    expect(screen.queryByText(failureMessages.invalidCode)?.props).toMatchObject({ accessibilityRole: "alert" });
 
     await screen.press("Send a new code");
     expect(state.codeRequests).toBe(2);
     expect(screen.text()).toContain("We sent a new code to your email.");
-    expect(screen.text()).not.toContain(FAILURE_MESSAGES.invalidCode);
+    expect(screen.text()).not.toContain(failureMessages.invalidCode);
 
     state.deleteResult = Promise.resolve({ ok: true });
     await screen.changeText("6-digit code", "111111");
@@ -96,23 +96,23 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
   });
 
   it("other failures (not the network) say the account was not deleted and stay on the code step", async () => {
-    state.deleteResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    state.deleteResult = Promise.resolve({ ok: false, reason: "unknown", message: failureMessages.unknown });
     const screen = await harness.renderAtCodeStep();
     await screen.changeText("6-digit code", "654321");
     await screen.press("Delete my account");
 
     expect(state.deletedCalls).toBe(0);
-    expect(screen.queryByText(`Your account was not deleted. ${FAILURE_MESSAGES.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`Your account was not deleted. ${failureMessages.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
     expect(screen.text()).toContain("Enter the code we emailed you");
   });
 
   it("a failed code request stays on the confirm step with a plain message, and retries", async () => {
-    state.codeResult = Promise.resolve<AccountCodeResult>({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    state.codeResult = Promise.resolve<AccountCodeResult>({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
     const screen = await harness.render();
     await screen.press("Delete account");
     await screen.press("Email me a code");
 
-    expect(screen.queryByText(`We could not send the code. ${FAILURE_MESSAGES.rateLimited}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`We could not send the code. ${failureMessages.rateLimited}`)?.props).toMatchObject({ accessibilityRole: "alert" });
     expect(screen.text()).toContain("Delete your account?");
     expect(screen.queryByText("Delete my account")).toBeNull();
 
@@ -127,12 +127,12 @@ describe("SignedInScreen delete with a fresh email code (HEN-65, Henry's decisio
     await screen.press("Send a new code");
     expect(screen.text()).toContain("We sent a new code to your email.");
 
-    state.codeResult = Promise.resolve<AccountCodeResult>({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    state.codeResult = Promise.resolve<AccountCodeResult>({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
     await screen.press("Send a new code");
 
     expect(state.codeRequests).toBe(3);
     expect(screen.text()).not.toContain("We sent a new code");
-    expect(screen.queryByText(`We could not send the code. ${FAILURE_MESSAGES.rateLimited}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`We could not send the code. ${failureMessages.rateLimited}`)?.props).toMatchObject({ accessibilityRole: "alert" });
     expect(screen.text()).toContain("Enter the code we emailed you");
     expect(state.deletedCalls).toBe(0);
   });

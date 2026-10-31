@@ -16,7 +16,7 @@ import {
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { type BiometricKind, changeBiometricUnlock, clearBiometricUnlock, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
-import { cancelPendingSignOut, completeMagicLink, FAILURE_MESSAGES, type FailureReason, signOut } from "./auth/signInActions";
+import { cancelPendingSignOut, completeMagicLink, failureMessages, type FailureReason, signOut } from "./auth/signInActions";
 import { checkStartup, readBiometricLock } from "./auth/startupCheck";
 import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
@@ -126,7 +126,7 @@ export function App() {
     startupBudget.current = null;
     return budget
       .run((signal) => readSignUpAttestation(accountSession(), signal))
-      .catch(() => ({ ok: false, reason: "network", message: FAILURE_MESSAGES.network }));
+      .catch(() => ({ ok: false, reason: "network", message: failureMessages.network }));
   };
 
   const handleSignedIn = (atStartup = false) => {

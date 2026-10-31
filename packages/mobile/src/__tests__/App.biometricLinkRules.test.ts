@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen } from "./screenHarness";
@@ -26,7 +26,7 @@ const SIGNED_IN_SCREEN = "You are signed in";
 const LOCKED_TITLE = "BJJ Roll is locked";
 const GOOD_LINK = "bjjroll://auth?code=one-time-exchange-code";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
-const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
+const EXPIRED_MESSAGE = failureMessages.invalidLink;
 
 describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-288, HEN-303, HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;

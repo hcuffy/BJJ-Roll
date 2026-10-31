@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import type { Hono } from "hono";
 import type { Pool } from "pg";
 import { createApp } from "../app.js";
@@ -20,7 +20,7 @@ export const testBaseUrl = "http://localhost:3000";
 
 export const defaultTestClientIp = "203.0.113.10";
 
-export const currentSignUpAttestation = { signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id } as const;
+export const currentSignUpAttestation = { signUpAttestationTextVersionId: signUpAttestationVersion.id } as const;
 
 export interface StartedAuthTestEnvironment {
   database: MigratedTestDatabase;

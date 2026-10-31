@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { ATTESTATION_LEAD, ATTESTATION_VERSION_NOTE, SIGN_UP_ATTESTATION_DUTIES, SIGN_UP_ATTESTATION_LABEL } from "../auth/signUpAttestation";
+import { ATTESTATION_LEAD, ATTESTATION_VERSION_NOTE, signUpAttestationDuties, SIGN_UP_ATTESTATION_LABEL } from "../auth/signUpAttestation";
 import { colours, radius, spacing, textStyles, typeScale } from "../theme/tokens";
 import { AgeCheckbox } from "./AgeCheckbox";
 import { StatusText } from "./StatusText";
@@ -29,7 +29,7 @@ export function SignUpAttestationFields({ accepted, error, announceError = true,
   return (
     <View style={styles.card}>
       <Text style={styles.lead}>{ATTESTATION_LEAD}</Text>
-      {SIGN_UP_ATTESTATION_DUTIES.map((duty) => (
+      {signUpAttestationDuties.map((duty) => (
         <View key={duty} style={styles.duty}>
           <Text style={textStyles.body} accessibilityElementsHidden importantForAccessibility="no">
             •

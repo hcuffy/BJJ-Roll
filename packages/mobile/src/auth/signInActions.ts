@@ -1,6 +1,6 @@
-import { MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { MAGIC_LINK_REASON_PARAM, magicLinkReasons, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, isSignUpAttestationAccepted, type EmailEntry } from "./ageConfirmation";
-import { DEEP_LINK_SCHEME, SESSION_GONE_STATUSES, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
+import { DEEP_LINK_SCHEME, sessionGoneStatuses, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 import {
   addPendingSignOut,
   dropPendingSignOut,
@@ -30,7 +30,7 @@ export const OTP_EXPIRY_MINUTES = 10;
 
 export const MAGIC_LINK_EXPIRY_MINUTES = 15;
 
-export const FAILURE_MESSAGES = {
+export const failureMessages = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
   invalidLink: "This sign-in link has expired or was already used. Send a new one.",
@@ -39,16 +39,16 @@ export const FAILURE_MESSAGES = {
   rateLimited: "Too many tries. Wait a minute and try again.",
   unknown: "Something went wrong. Please try again.",
 } as const;
-const INVALID_CODE_ERRORS = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]);
+const invalidCodeErrors = new Set(["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]);
 const OAUTH_LINK_ERROR_CODE = "OAUTH_LINK_ERROR";
 const HTTP_TOO_MANY_REQUESTS = 429;
 export const AGE_CONFIRMATION_REQUIRED_CODE = "AGE_CONFIRMATION_REQUIRED";
 export const SIGN_UP_ATTESTATION_REQUIRED_CODE = "SIGN_UP_ATTESTATION_REQUIRED";
-export const ATTESTATION_REQUIRED: ActionResult = { ok: false, reason: "attestationRequired", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE };
-const OTP_PATTERN = /^\d{6}$/u;
+export const attestationRequired: ActionResult = { ok: false, reason: "attestationRequired", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE };
+const otpPattern = /^\d{6}$/u;
 
 export function failure(reason: Exclude<FailureReason, "ageRequired" | "attestationRequired" | "ignored">): ActionResult {
-  return { ok: false, reason, message: FAILURE_MESSAGES[reason] };
+  return { ok: false, reason, message: failureMessages[reason] };
 }
 
 function checkEntry(entry: EmailEntry): ActionResult | null {
@@ -56,7 +56,7 @@ function checkEntry(entry: EmailEntry): ActionResult | null {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
   if (!isSignUpAttestationAccepted(entry)) {
-    return ATTESTATION_REQUIRED;
+    return attestationRequired;
   }
   if (!isEmailAddress(entry.email)) {
     return failure("invalidEmail");
@@ -87,7 +87,7 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
   if (error.code === SIGN_UP_ATTESTATION_REQUIRED_CODE) {
-    return ATTESTATION_REQUIRED;
+    return attestationRequired;
   }
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return failure("rateLimited");
@@ -95,7 +95,7 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
   if (error.code === OAUTH_LINK_ERROR_CODE) {
     return failure("accountNotLinked");
   }
-  if (clientErrorReason === "invalidCode" && typeof error.code === "string" && INVALID_CODE_ERRORS.has(error.code)) {
+  if (clientErrorReason === "invalidCode" && typeof error.code === "string" && invalidCodeErrors.has(error.code)) {
     return failure("invalidCode");
   }
   if (clientErrorReason === "invalidLink" && error.status >= 400 && error.status < 500) {
@@ -105,7 +105,7 @@ export async function postAuth(client: MobileAuthClient, { path, body, clientErr
 }
 
 function signUpAnswers(entry: EmailEntry) {
-  return { age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+  return { age16Confirmed: true, age18Confirmed: entry.age18Confirmed === true, signUpAttestationTextVersionId: signUpAttestationVersion.id };
 }
 
 export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
@@ -140,7 +140,7 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
     return refused;
   }
   const code = entry.code.trim();
-  if (!OTP_PATTERN.test(code)) {
+  if (!otpPattern.test(code)) {
     return { ok: false, reason: "invalidCode", message: "Enter the 6-digit code from the email." };
   }
   return await postAuth(client, {
@@ -163,13 +163,13 @@ export async function completeMagicLink(client: MobileAuthClient, url: string, s
     return { ok: false, reason: "ignored", message: null };
   }
   const reason = parsed.searchParams.get(MAGIC_LINK_REASON_PARAM);
-  if (reason === MAGIC_LINK_REASONS.ageRefused) {
+  if (reason === magicLinkReasons.ageRefused) {
     return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
   }
-  if (reason === MAGIC_LINK_REASONS.attestationRefused) {
-    return ATTESTATION_REQUIRED;
+  if (reason === magicLinkReasons.attestationRefused) {
+    return attestationRequired;
   }
-  if (reason === MAGIC_LINK_REASONS.linkInvalid) {
+  if (reason === magicLinkReasons.linkInvalid) {
     return failure("invalidLink");
   }
   if (reason !== null || parsed.searchParams.has("error")) {
@@ -187,7 +187,7 @@ export async function readSignedInUserId(client: MobileAuthClient, signal?: Abor
   return data?.user.id ?? null;
 }
 
-export const SESSION_STORAGE_KEYS = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESSION_STORAGE_PREFIX}_session_data`] as const;
+export const sessionStorageKeys = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESSION_STORAGE_PREFIX}_session_data`] as const;
 
 export { PENDING_SIGN_OUT_KEY, type SessionKeyStore } from "./pendingSignOuts";
 
@@ -210,7 +210,7 @@ async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, sig
       return await client.signOutSessionCookie(oldSessionCookie, signal);
     }
     const { error } = await client.signOut({ fetchOptions: { signal } });
-    return !error || SESSION_GONE_STATUSES.has(error.status);
+    return !error || sessionGoneStatuses.has(error.status);
   } catch {
     return false;
   }
@@ -221,7 +221,7 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
   if (attempt.signal?.aborted) {
     return;
   }
-  const deletes = await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+  const deletes = await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
   if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
     await dropPendingSignOut(secureStore, attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
   }
@@ -242,7 +242,7 @@ export async function signOut(client: MobileAuthClient, secureStore: SessionKeyS
   await endLeftoverSessions(client, secureStore, signal);
   const sessionCookie = await readSessionCookie(client);
   await addPendingSignOut(secureStore, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
-  await Promise.allSettled(SESSION_STORAGE_KEYS.map((key) => secureStore.deleteItemAsync(key)));
+  await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
   await finishSignOut(client, secureStore, { oldSessionCookie: sessionCookie, signal });
 }
 

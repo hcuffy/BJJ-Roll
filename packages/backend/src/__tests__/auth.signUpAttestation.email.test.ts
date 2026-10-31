@@ -1,16 +1,11 @@
-import {
-  AGE_GATE_REFUSAL_MESSAGE,
-  MAGIC_LINK_REASONS,
-  SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
-} from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, magicLinkReasons, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSignInPath } from "./ageGateTestContext.js";
 import { getAuthPath, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-const currentVersionId = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const currentVersionId = signUpAttestationVersion.id;
 
 interface AttestationRow {
   consent_type: string;
@@ -91,7 +86,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
     expect(sendResponse.status).toBe(200);
     const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.192" });
     const location = new URL(verifyResponse.headers.get("location") ?? "");
-    expect(location.searchParams.get("r")).toBe(MAGIC_LINK_REASONS.attestationRefused);
+    expect(location.searchParams.get("r")).toBe(magicLinkReasons.attestationRefused);
     expect(await countRows("users")).toBe(usersBefore);
   });
 

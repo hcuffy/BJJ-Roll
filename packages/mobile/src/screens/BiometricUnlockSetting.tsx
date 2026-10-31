@@ -4,7 +4,7 @@ import type { BiometricCheck, BiometricSetting } from "../auth/biometricUnlock";
 import { colours, sizes, spacing, textStyles } from "../theme/tokens";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
-import { BIOMETRIC_COPY, biometricCheckError } from "./biometricCopy";
+import { biometricCopy, biometricCheckError } from "./biometricCopy";
 
 export interface BiometricUnlockSettingProps {
   readonly onReadBiometricSetting: () => Promise<BiometricSetting>;
@@ -60,7 +60,7 @@ export function BiometricUnlockSetting({
 }: BiometricUnlockSettingViewProps) {
   const [saving, setSaving] = useState(false);
   const kind = setting?.kind ?? "biometrics";
-  const copy = BIOMETRIC_COPY[kind];
+  const copy = biometricCopy[kind];
 
   const change = async (on: boolean) => {
     onChangeStarted();

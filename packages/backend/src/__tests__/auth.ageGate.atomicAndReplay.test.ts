@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, MAGIC_LINK_REASON_PARAM, MAGIC_LINK_REASONS } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, MAGIC_LINK_REASON_PARAM, magicLinkReasons } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { recordPendingAgeAnswers } from "../auth/ageGate.js";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
@@ -94,13 +94,13 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       expect((await sendMagicLink(email, "198.51.100.192", {})).status).toBe(200);
       const link = latestMagicLinkFor(email);
       const refused = await getAuthPath(current().app, link, { ipAddress: "198.51.100.192" });
-      expect(new URL(refused.headers.get("location") ?? "").searchParams.get(MAGIC_LINK_REASON_PARAM)).toBe(MAGIC_LINK_REASONS.ageRefused);
+      expect(new URL(refused.headers.get("location") ?? "").searchParams.get(MAGIC_LINK_REASON_PARAM)).toBe(magicLinkReasons.ageRefused);
 
       await tickLater(email);
       const replay = await getAuthPath(current().app, link, { ipAddress: "198.51.100.192" });
 
       expect(replay.status).toBe(400);
-      expect(replay.headers.get("location")).toBe(`${DEEP_LINK_CALLBACK_URL}?${MAGIC_LINK_REASON_PARAM}=${MAGIC_LINK_REASONS.linkInvalid}`);
+      expect(replay.headers.get("location")).toBe(`${DEEP_LINK_CALLBACK_URL}?${MAGIC_LINK_REASON_PARAM}=${magicLinkReasons.linkInvalid}`);
       expect(await usersWithEmail(email)).toBe(0);
     });
   });
@@ -121,7 +121,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       expect((await sendMagicLink(email, "198.51.100.193", {})).status).toBe(200);
       const response = await getAuthPath(current().app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
       expect(response.status).toBe(400);
-      expectCodeOnlyLocation(response, MAGIC_LINK_REASONS.ageRefused);
+      expectCodeOnlyLocation(response, magicLinkReasons.ageRefused);
     });
 
     it("unknown or used token: Location is bjjroll://auth?r=link_invalid and nothing else", async () => {
@@ -131,7 +131,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       tampered.searchParams.set("token", "not-a-real-token");
       const response = await getAuthPath(current().app, tampered.toString(), { ipAddress: "198.51.100.194" });
       expect(response.status).toBe(400);
-      expectCodeOnlyLocation(response, MAGIC_LINK_REASONS.linkInvalid);
+      expectCodeOnlyLocation(response, magicLinkReasons.linkInvalid);
     });
   });
 });

@@ -1,7 +1,7 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 
-export { SIGN_UP_ATTESTATION_DUTIES, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "@bjj-roll/shared";
-export const ATTESTATION_VERSION_NOTE = `Text version: ${SIGN_UP_ATTESTATION_TEXT_VERSION.id}`;
+export { signUpAttestationDuties, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "@bjj-roll/shared";
+export const ATTESTATION_VERSION_NOTE = `Text version: ${signUpAttestationVersion.id}`;
 export const ATTESTATION_NEEDED_HINT = "Tick I accept these duties first.";
 export const ATTESTATION_LINK_REFUSAL_NEXT_STEP = "Tick I accept these duties and send a new link.";
 export const ATTESTATION_PROMPT_TITLE = "Accept the sign-up duties";

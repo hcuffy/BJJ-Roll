@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, APPLE_REVOKE_ENDPOINT, APPLE_TOKEN_ENDPOINT, openAppleRefreshToken } from "../auth/index.js";
 import { createAccountTestFlow, type SignedInUser } from "./accountTestFlow.js";
@@ -182,7 +182,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Sign in with App
       "SELECT text_version_id FROM public.consent_records WHERE user_id = $1 AND consent_type = 'attestation_signup'",
       [user.userId],
     );
-    expect(rows.rows).toEqual([{ text_version_id: SIGN_UP_ATTESTATION_TEXT_VERSION.id }]);
+    expect(rows.rows).toEqual([{ text_version_id: signUpAttestationVersion.id }]);
   });
 
   it("rejects an identity token not signed by Apple's key", async () => {

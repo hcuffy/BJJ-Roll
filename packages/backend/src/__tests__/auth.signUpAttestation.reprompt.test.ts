@@ -1,5 +1,5 @@
 import {
-  SIGN_UP_ATTESTATION_TEXT_VERSION,
+  signUpAttestationVersion,
   accountExportSchema,
   consentRecordSchema,
   signUpAttestationStatusSchema,
@@ -13,7 +13,7 @@ import { extractSessionCookie, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const attestationPath = "/account/signup-attestation";
-const currentVersionId = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const currentVersionId = signUpAttestationVersion.id;
 const oldVersionId = "attestation-signup-draft-0";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestation re-prompt, export and delete", () => {

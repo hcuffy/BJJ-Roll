@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, signUpAttestationStatusSchema } from "@bjj-roll/shared";
+import { signUpAttestationVersion, signUpAttestationStatusSchema } from "@bjj-roll/shared";
 import type { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 import type { AuthCryptoCodec } from "../auth/authSecrets.js";
@@ -45,7 +45,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 a failed attesta
         "WHEN (NEW.consent_type = 'attestation_signup') EXECUTE FUNCTION public.hen183_refuse_attestation()",
     );
     try {
-      const ticked = { age16Confirmed: true, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+      const ticked = { age16Confirmed: true, signUpAttestationTextVersionId: signUpAttestationVersion.id };
       const send = await postAuthJson(app, otpSendPath, { body: { email: user.email, type: "sign-in", ...ticked }, ipAddress: user.ipAddress });
       expect(send.status).toBe(200);
       const signIn = await postAuthJson(app, otpSignInPath, {
