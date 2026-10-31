@@ -199,10 +199,12 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     expect(screen.text()).not.toContain(SIGNED_IN_SCREEN);
     expect(marker()).toContain(FIRST);
 
+    secureStore.failingKeys.delete(PENDING_SIGN_OUT_KEY);
     await screen.press("Unlock");
     await settle();
 
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    expect(marker()).toContain(FIRST);
     expect(unhandled).toEqual([]);
     expectNoSecretsLogged([...secureStore.items.values()]);
   });
