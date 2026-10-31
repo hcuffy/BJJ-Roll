@@ -50,6 +50,7 @@ Run from the repo root.
 ## Conventions
 
 - Follow CONVENTIONS.v2 (summarised in `.github/coderabbit.md`): strict TypeScript, ESM, double quotes, 2-space indent, trailing commas, full names instead of abbreviations, Vitest tests in `__tests__/` named `<module>.<scenario>.test.ts`.
+- TS types (lint errors): `interface` for object shapes, `type` only for unions, intersections, tuples, mapped/conditional types and primitive aliases; `import type` for type-only imports; no `any` (use `unknown` and narrow); `declare global` only in a package's `globals.d.ts`.
 - Architecture and tooling decisions are recorded in [`DECISIONS.md`](DECISIONS.md).
 
 ## Commits
