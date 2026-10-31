@@ -38,6 +38,9 @@ Version bumps (Postgres image, Python) are recorded here and in the PR that make
 - **Date:** 2026-10-22
 - **Decided by:** Sara (2026-10-22)
 - **Consequences:** HEN-58 builds the schema, RLS and the `bjj_auth_lookup` function as SQL migrations, plus the email-hash adapter wrapper. See `docs/spikes/HEN-47-better-auth.md`.
+- **Notes (moved from code comments, HEN-333):**
+  - `authAdapter.ts`: operations run one at a time on a shared transaction, so one operation's settings never apply to another's query. `authSessionScope.ts`
+    sets all four settings every time, so nothing leaks from an earlier operation in the same transaction.
 
 ## A6: One coarse position set for gi and no-gi; ViCoS classes are eval-only
 
@@ -87,6 +90,9 @@ Revised from planning D17 (email OTP + magic link) on 2026-10-27 for HEN-238.
 - **Decided by:** Sara (method and library); Henry (Apple and Google on top of email OTP)
 - **Consequences:** HEN-239 builds Apple and Google through Better Auth social providers. On the phone, session tokens live only in SecureStore
   (`@better-auth/expo`).
+- **Notes (moved from code comments, HEN-333):**
+  - `accountActions.ts` reads account responses with plain `JSON.parse`: the auth client's default parser turns ISO timestamps into Date objects, which
+    the shared schemas reject.
 
 ## D18: Every stored email and phone number is field-encrypted with an HMAC lookup hash (revised)
 
@@ -142,6 +148,11 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry
 - **Consequences:** App Store rule 4.8 is met by offering Sign in with Apple next to Google sign-in. Every sign-up path (email, Apple, Google) has the
   same 16+ gate (HEN-263). The phone check is built later in HEN-240 and stores the number per D18. HEN-239 builds the sign-in code.
+- **Notes (moved from code comments, HEN-333):**
+  - Apple only on iOS (its native button): Apple's logo artwork is licensed for Apple platforms only (Henry, 27 Oct). From `socialSignIn.ts`.
+  - `appSocialSignIn.ts`: the Apple nonce is 32 random bytes from the OS via expo-crypto, as hex, because Hermes has no Web Crypto.
+  - `socialProviders.ts`: Apple allows client secrets up to six months; a day of slack means a cached secret is never sent close to expiry.
+    Mobile signs in with Google through the browser only, so no client-sent Google id token is accepted (`disableIdTokenSignIn`).
 
 ## D26: Interim key storage is two separate deploy-time secrets
 
@@ -154,6 +165,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Sara
 - **Consequences:** The encryption module (HEN-63) reads the keys through a keyring interface, so a KMS / KEK wrapping can replace the secrets later
   without a schema change. The KMS choice stays OPEN under HEN-191 (M4). ARCHITECTURE §6 email row points here.
+- **Notes (moved from code comments, HEN-333):**
+  - `keyring.ts` holds the keys in a closure, so logging or serialising a keyring never shows key bytes.
 
 ## A7: Local CPU tracker runs in 30 s chunks at 10 fps with a 15 s fallback over 3 GiB peak RSS
 
@@ -182,6 +195,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
     CI and Ruff never need them.
   - Re-prompt flow (HEN-317): a drift frame the tracker reports again ends the run instead of looping. Each video needs a new tracker, so nothing
     carries over between videos.
+    Anchors (the first tap and every re-tap) are in the HEN-318 pixel convention and are checked against the video's frame size before they reach
+    the tracker (HEN-323).
   - Job logs (HEN-227) carry only job IDs, timings, error classes, chunk counters and pose run settings.
 
 ## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads
@@ -190,8 +205,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
   behind one `Pose` interface (`estimate(frame, box)`) so a Modal backend can replace it. Frames come at the tracker's fps (10, A7); one session
   uses 2 intra-op threads. Both values live in `packages/workers/src/bjj_roll_workers/pose_config.json` and are stored with every run.
 - **Bench:** each run records the tangled-frame miss rate (definitions and named thresholds in `pose_bench.py`).
-- **Tangled-frame thresholds (UNTUNED):** `TANGLED_BOX_IOU_THRESHOLD` 0.3, `MIN_KEYPOINT_SCORE` 0.3, `MIN_POSE_MEAN_SCORE` 0.3 and
-  `MIN_OWN_MASK_KEYPOINT_FRACTION` 0.5 in `pose_bench.py` are first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage.
+- **Tangled-frame thresholds (UNTUNED):** `TANGLED_BOX_IOU_THRESHOLD_UNTUNED` 0.3, `MIN_KEYPOINT_SCORE_UNTUNED` 0.3, `MIN_POSE_MEAN_SCORE_UNTUNED` 0.3 and
+  `MIN_OWN_MASK_KEYPOINT_FRACTION_UNTUNED` 0.5 in `pose_bench.py` are first guesses, not tuned on real footage. HEN-67 and HEN-73 tune them with footage.
 - **Threads:** 2 ONNX Runtime intra-op threads stays. The HEN-67 smoke run measures it.
 - **Licence (UNCONFIRMED):** the RTMPose-m weights licence is not confirmed, and the body7 training data (AI Challenger, PoseTrack18) has
   research-only terms. This is OK for the M3 local test (no users, nothing shipped). It BLOCKS any store build until it is cleared. Shipping is a
@@ -236,6 +251,12 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31 (decided 2026-10-22 to 2026-10-25)
 - **Decided by:** Sara (HEN-71), Henry (25 Oct, HEN-65), Bill's gate (HEN-65)
 - **Consequences:** Values live in `authLimits.ts`; any change updates this entry.
+- **Notes (moved from code comments, HEN-333):**
+  - Sign-up attestation (HEN-183, `shared/src/schemas/signUpAttestation.ts`): DRAFT wording (HEN-186); the three duties are phrased as duties the user
+    takes on, not as confessions (§309 Nr. 12 BGB). Only the text version id is stored, never the wording. The final wording waits on HEN-186 and
+    the lawyer review (HEN-45); production refuses to start while the current version is a draft (`serverConfig.ts`).
+  - `authRequestGuards.ts`: proxy headers count for the client IP only when explicitly trusted; for x-forwarded-for the right-most entry (added by
+    the trusted proxy) is used. Otherwise the socket address, else the shared bucket.
 
 ## D28: No answer reveals whether an account exists
 
@@ -266,6 +287,9 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31 (moved from code comments)
 - **Decided by:** Sara (HEN-284)
 - **Consequences:** Tests use an inline queue double; the real queue is covered by `emailQueue.*` and `auth.ageGate.sameWork.queued`.
+- **Notes (moved from code comments, HEN-333):**
+  - `emailQueue.ts` registers a pg-boss `error` listener: pg-boss reports background errors there, and without a listener Node would crash. The
+    message has no email data.
 
 ## D31: Mobile startup budget and pending sign-out queue
 
@@ -277,6 +301,13 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31 (moved from code comments)
 - **Decided by:** Sara's design, Bill's and Stamp's gates (HEN-299, HEN-303, HEN-310, HEN-314, HEN-315)
 - **Consequences:** The `App.*` startup and sign-out tests pin these rules.
+- **Notes (moved from code comments, HEN-333):**
+  - Accepted risk (Sara, HEN-314): if every SecureStore write fails and the server is down, a cold launch comes back signed in. On sign-out the
+    phone's keys are deleted first, so a server that never answers cannot leave the session in use. The server sign-out presents the cookie
+    itself: the Expo plugin's own SecureStore writes on sign-out cannot stop the server sign-out. From `signInActions.ts`.
+  - `startupTimeout.ts`: the 10 s budget exists because React Native's fetch has no timeout (HEN-303, HEN-310).
+  - Privacy (HEN-288, `biometricUnlock.ts`): the phone keeps only two on/off flags in SecureStore. Fingerprints and faces stay inside the OS prompt;
+    the app only learns success or failure, and nothing about biometric unlock is sent to the server.
 
 ## D32: Modal jobs stay in the EU; encryption stays server-only
 
@@ -287,6 +318,9 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31 (moved from code comments)
 - **Decided by:** Sara (HEN-48 option A, HEN-63, HEN-227)
 - **Consequences:** `checkModalResidency.sh` and the residency tests check this statically.
+- **Notes (moved from code comments, HEN-333):**
+  - `modal_call_input.py`: a rejected call input raises with a fixed message, because the rejected value may hold a URL, email or filename and is
+    never echoed.
 
 ## D33: No code comments; rationale lives here
 
@@ -297,3 +331,28 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31
 - **Decided by:** Henry, via Sara (HEN-333)
 - **Consequences:** `local/no-prose-comments` (ESLint) and `packages/workers/scripts/check_no_comments.py` fail CI on a new comment.
+- **Notes (moved from code comments, HEN-333):**
+  - Mobile platform quirks with no other entry:
+    - Export sheet (`ExportDataFirstAction.tsx`, Vera, HEN-311): "shared" only when iOS reports the share completed; Android reports
+      sharedAction even on cancel, so after any closed sheet it gets the neutral "created" line.
+    - Face ID (HEN-288): iOS ends the app the first time it asks for Face ID without the `NSFaceIDUsageDescription` text in app.json, so
+      biometric unlock would crash on iPhones.
+    - Export compliance (HEN-273): the app only uses exempt encryption (HTTPS, OS hashing and random bytes), so App Store Connect need not ask
+      on each upload.
+    - Screen-reader announcements (`StatusText.tsx`): a polite live region on Android, an explicit announcement on iOS (which ignores live
+      regions).
+    - Keyboard (`AuthScreenLayout.tsx`): iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
+      adjustResize alone). Dragging the content closes the keyboard because the iOS number pad has no Done key. On iOS the keyboard covers the
+      home indicator, so while it is open the bottom gap is 24 only.
+
+## D34: A corrupt pending sign-out queue fails closed (Bill D4, HEN-321)
+
+- **Decision:** A stored pending sign-out queue that can't be read is treated as wholly unreadable, including a JSON list cut off mid-write. It takes
+  the same fail-safe path as any other corrupt queue (Bill D4, HEN-315): the next launch signs out the stored session and clears the queue, so auth fails
+  closed. No entry is salvaged from a cut-off queue, by partial or hand parsing; none is dropped silently, and nothing crashes.
+- **Rejected alternative:** Salvaging the readable entries and dropping the bad ones (HEN-321's original "drop bad entries" criterion, superseded).
+- **Date:** 2026-10-31
+- **Decided by:** Sara (option a)
+- **Consequences:** `packages/mobile/src/auth/pendingSignOuts.ts` keeps its fail-safe parsing unchanged. `pendingSignOuts.hardening.test.ts` pins the
+  cut-off case: only the stored session is signed out, and the queue is cleared. Sessions lost in a cut-off queue stay valid on the server until they expire
+  (up to 90 days).

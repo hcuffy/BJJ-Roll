@@ -188,6 +188,18 @@ describe("Pending sign-out queue hardening (HEN-315)", () => {
       },
     );
 
+    it("a cut-off JSON queue is wholly unreadable: launch ends the stored session, salvages no entry and clears the queue (HEN-321)", async () => {
+      secureStore.items.set("bjjroll_cookie", JSON.stringify({ "better-auth.session_token": { value: "session-stored.signature", expires: null } }));
+      storeQueue({ token: "session-old", ageDays: 1 }, { token: "session-older", ageDays: 2 });
+      secureStore.items.set(PENDING_SIGN_OUT_KEY, queued().slice(0, queued().indexOf("session-older")));
+
+      expect(await finishPendingSignOut(client, secureStore)).toBe(true);
+
+      expect(server.presented).toEqual(["session-stored"]);
+      expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain("session-stored");
+      expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(false);
+    });
+
     it("sign-out still completes: the phone is cleared and the server is told", async () => {
       secureStore.items.set(PENDING_SIGN_OUT_KEY, "[garbage");
 

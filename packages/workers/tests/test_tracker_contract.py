@@ -82,7 +82,9 @@ def test_tracker_contract_adapter_lets_the_re_prompt_flow_drive_the_runner() -> 
     re_tap = ReTap(x=12.5, y=9.5)
     prompter = _ScriptedPrompter([re_tap])
 
-    flow_result = run_re_prompt_flow(JOB_ID, VideoRun(VIDEO_ID, "gi", self_tap(0, _jumping_layout)), adapter, _ClipFrameSource(frames), prompter)
+    flow_result = run_re_prompt_flow(
+        JOB_ID, VideoRun(VIDEO_ID, "gi", self_tap(0, _jumping_layout), FRAME_SIZE), adapter, _ClipFrameSource(frames), prompter
+    )
 
     assert prompter.shown == [DriftEvent(frame_index=JUMP_FRAME, reason="mask_jump")]
     assert fake.calls[-1].prompts == {"self": TapPoint(frame_index=JUMP_FRAME, x=re_tap.x, y=re_tap.y)}
@@ -99,7 +101,11 @@ def test_tracker_contract_adapter_keep_track_needs_no_second_run() -> None:
     adapter = RePromptTrackerAdapter(JOB_ID, VIDEO_ID, frames, fake, load_tracker_config(), rss_reader=lambda: 0)
 
     run_re_prompt_flow(
-        JOB_ID, VideoRun(VIDEO_ID, "gi", self_tap(0, _jumping_layout)), adapter, _ClipFrameSource(frames), _ScriptedPrompter([KeepTrack()])
+        JOB_ID,
+        VideoRun(VIDEO_ID, "gi", self_tap(0, _jumping_layout), FRAME_SIZE),
+        adapter,
+        _ClipFrameSource(frames),
+        _ScriptedPrompter([KeepTrack()]),
     )
 
     assert len(fake.calls) == 1
