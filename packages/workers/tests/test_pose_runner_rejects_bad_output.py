@@ -27,7 +27,7 @@ class ShortPose:
 
 
 @pytest.mark.parametrize("pose", [OutsideFramePose(), ShortPose()], ids=["outside_frame", "missing_keypoint"])
-def test_pose_runner_rejects_bad_backend_output(pose: OutsideFramePose | ShortPose) -> None:
+def test_pose_runner_fails_the_run_on_bad_backend_output_instead_of_storing_it(pose: OutsideFramePose | ShortPose) -> None:
     frames = [draw_rectangles(frame_index, [(SELF_LABEL, (2, 3, 8, 11))]) for frame_index in range(3)]
     tracks = {frame.frame_index: frame_tracks(frame, {"self": SELF_LABEL}) for frame in frames}
 

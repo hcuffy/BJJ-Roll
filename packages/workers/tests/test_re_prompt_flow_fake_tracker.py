@@ -179,7 +179,7 @@ class StuckTracker:
         return self.drift
 
 
-def test_re_prompt_flow_stops_when_the_tracker_repeats_a_drift_frame() -> None:
+def test_re_prompt_flow_ends_the_run_instead_of_looping_when_the_tracker_repeats_a_drift_frame() -> None:
     tracker = StuckTracker(DriftEvent(frame_index=120, reason="mask_jump"))
     prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3)])
 
