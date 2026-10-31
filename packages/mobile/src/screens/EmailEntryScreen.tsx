@@ -15,7 +15,7 @@ import { SignInHeader } from "./SignInHeader";
 import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { StatusText } from "./StatusText";
-import { TextField } from "./TextField";
+import { EMAIL_INPUT_PROPS, TextField } from "./TextField";
 import { authStyles } from "./authStyles";
 import { RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
@@ -86,9 +86,10 @@ export function EmailEntryScreen({
   const sendHint = missingHint(isEmailAddress(email), age16Confirmed, attestationAccepted);
   const answers = { age16Confirmed, age18Confirmed, signUpAttestationAccepted: attestationAccepted };
 
-  // A failed sign-in link is a new attempt: this screen's own offline note and red error from the last one go (HEN-304).
+  // A failed sign-in link is a new attempt: this screen's own offline note and red errors from the last one go (HEN-304, HEN-311).
   useEffect(() => setOffline(false), [linkAttempt]);
   useEffect(() => setFormError(null), [linkAttempt]);
+  useEffect(() => setSocialError(null), [linkAttempt]);
 
   const startAction = () => {
     onClearLinkError?.();
@@ -186,7 +187,7 @@ export function EmailEntryScreen({
         linkError={linkError}
         linkErrorReason={linkErrorReason}
         offline={serverUnreachable || (offline && !linkError)}
-        formError={formError}
+        formError={linkError ? null : formError}
         cooldownSecondsLeft={linkCooldown.secondsLeft}
         sending={sending === "link"}
         canUseDifferentEmail={sending === null}
@@ -207,14 +208,7 @@ export function EmailEntryScreen({
         label="Email"
         focusKey={startup.focusEmailKey}
         error={emailError}
-        autoCapitalize="none"
-        autoComplete="email"
-        autoCorrect={false}
-        inputMode="email"
-        keyboardType="email-address"
-        textContentType="emailAddress"
-        placeholder="you@example.com"
-        returnKeyType="go"
+        {...EMAIL_INPUT_PROPS}
         value={email}
         onChangeText={(text) => {
           setEmail(text);
@@ -260,7 +254,7 @@ export function EmailEntryScreen({
           setAttestationError(null);
         }}
       />
-      <StatusText message={formError} style={authStyles.fieldError} />
+      <StatusText message={linkError ? null : formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <EmailSendButtons ready={ready} hint={sendHint} sending={sending} onSend={(kind) => void send(kind)} />
         {socialSignIn ? (
@@ -270,7 +264,7 @@ export function EmailEntryScreen({
             attestationAccepted={attestationAccepted}
             sending={sending}
             progress={socialProgress}
-            error={socialError}
+            error={linkError ? null : socialError}
             onPress={(provider) => void signInWithSocial(provider)}
           />
         ) : null}

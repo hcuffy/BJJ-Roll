@@ -12,7 +12,7 @@ vi.mock("react-native", async () => ({
   AccessibilityInfo: { announceForAccessibility: vi.fn(), sendAccessibilityEvent: vi.fn() },
   // Backed by appStateHarness so a test can send the app to the background and back.
   AppState: { addEventListener: (await import("./appStateHarness")).harnessAppStateAddEventListener },
-  Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })) },
+  Share: { share: vi.fn(() => Promise.resolve({ action: "sharedAction" })), sharedAction: "sharedAction", dismissedAction: "dismissedAction" },
   StyleSheet: { create: <Styles>(styles: Styles) => styles },
   ActivityIndicator: "ActivityIndicator",
   Image: "Image",

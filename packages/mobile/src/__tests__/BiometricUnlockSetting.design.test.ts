@@ -9,7 +9,16 @@ const SET_UP_NOTE = "Add a fingerprint or face in your phone's Settings to use t
 
 const renderToggle = async (setting: BiometricSetting) => {
   const onChangeBiometricUnlock = vi.fn((): Promise<BiometricCheck> => Promise.resolve({ ok: true }));
-  const screen = await renderScreen(createElement(BiometricUnlockSetting, { setting, onSettingChanged: () => undefined, onChangeBiometricUnlock }));
+  const screen = await renderScreen(
+    createElement(BiometricUnlockSetting, {
+      setting,
+      onSettingChanged: () => undefined,
+      onChangeBiometricUnlock,
+      error: null,
+      onErrorChanged: () => undefined,
+      onChangeStarted: () => undefined,
+    }),
+  );
   return { screen, onChangeBiometricUnlock };
 };
 

@@ -49,6 +49,8 @@ export const authStyles = StyleSheet.create({
   checkmark: { ...typeScale.body, color: colours.onPrimary, fontWeight: "700" },
   checkboxLabel: { ...typeScale.body, color: colours.textPrimary, flexShrink: 1 },
   fieldError: { ...typeScale.label, color: colours.danger },
+  // A calm grey status line, e.g. the share confirmation (HEN-311).
+  fieldNote: { ...typeScale.label, color: colours.textSecondary },
   notice: { ...typeScale.body, color: colours.textPrimary },
   card: { backgroundColor: colours.surface, borderRadius: radius.card, padding: spacing.medium, flexDirection: "row", gap: 12 },
   errorCard: { borderWidth: 1, borderColor: colours.danger },

@@ -110,11 +110,12 @@ describe("SignedInScreen 18+ confirmation (HEN-263)", () => {
   });
 
   it("a failed save shows a plain message and keeps the button for a retry; a failed read still shows the button", async () => {
-    harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    // A network failure gets the grey note instead (HEN-311, SignedInScreen.adultOfflineNote.test.ts).
+    harness.state.adultResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
     const screen = await harness.render();
     await screen.press(CONFIRM);
     await screen.press(DIALOG_YES);
-    expect(screen.text()).toContain(`We could not save that. ${FAILURE_MESSAGES.network}`);
+    expect(screen.text()).toContain(`We could not save that. ${FAILURE_MESSAGES.unknown}`);
     expect(screen.getPressable(CONFIRM)).toBeDefined();
 
     harness.state.ageStatusResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });

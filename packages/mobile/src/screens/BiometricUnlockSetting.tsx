@@ -23,6 +23,9 @@ export interface BiometricUnlockSettingState {
   readonly setting: BiometricSetting | null;
   readonly onSettingChanged: (setting: BiometricSetting) => void;
   readonly onChangeBiometricUnlock: BiometricUnlockSettingProps["onChangeBiometricUnlock"];
+  /** The toggle's red error; held by the screen so its clearMessages() clears it with the other slots (HEN-311). */
+  readonly error: string | null;
+  readonly onErrorChanged: (error: string | null) => void;
 }
 
 /**
@@ -34,6 +37,7 @@ export function useBiometricUnlockSetting({
   onChangeBiometricUnlock,
 }: BiometricUnlockSettingProps): BiometricUnlockSettingState {
   const [setting, setSetting] = useState<BiometricSetting | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // The parent passes a fresh callback on every render.
   const readSetting = useRef(onReadBiometricSetting);
   useEffect(() => {
@@ -47,20 +51,32 @@ export function useBiometricUnlockSetting({
       active = false;
     };
   }, []);
-  return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock };
+  return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock, error, onErrorChanged: setError };
+}
+
+export interface BiometricUnlockSettingViewProps extends BiometricUnlockSettingState {
+  /** Called first when the toggle starts a change: the screen's clearMessages(), as for every signed-in action (Vera, HEN-311). */
+  readonly onChangeStarted: () => void;
 }
 
 /**
  * Account section toggle (HEN-288). The whole row is the switch (one screen-reader stop, named by the visible label).
  * Disabled, with a note that is also its hint, on a phone without a fingerprint or face enrolled.
  */
-export function BiometricUnlockSetting({ setting, onSettingChanged, onChangeBiometricUnlock }: BiometricUnlockSettingState) {
+export function BiometricUnlockSetting({
+  setting,
+  onSettingChanged,
+  onChangeBiometricUnlock,
+  error,
+  onErrorChanged: setError,
+  onChangeStarted,
+}: BiometricUnlockSettingViewProps) {
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const kind = setting?.kind ?? "biometrics";
   const copy = BIOMETRIC_COPY[kind];
 
   const change = async (on: boolean) => {
+    onChangeStarted();
     setSaving(true);
     setError(null);
     const check = await onChangeBiometricUnlock(on).catch((): BiometricCheck => ({ ok: false, failure: "failed" }));

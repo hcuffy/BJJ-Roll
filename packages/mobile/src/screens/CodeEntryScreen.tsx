@@ -131,7 +131,7 @@ export function CodeEntryScreen({
       </View>
       <TextField
         label="6-digit code"
-        error={codeError}
+        error={linkError ? null : codeError}
         autoFocus
         autoComplete="one-time-code"
         textContentType="oneTimeCode"
@@ -155,7 +155,7 @@ export function CodeEntryScreen({
       {linkError ? (
         <LinkErrorCard message={linkErrorReason === "invalidLink" ? CODE_SCREEN_INVALID_LINK : linkError} reason={linkErrorReason} />
       ) : null}
-      <StatusText message={formError} style={authStyles.fieldError} />
+      <StatusText message={linkError ? null : formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>
         <AuthButton
           title="Sign in"
