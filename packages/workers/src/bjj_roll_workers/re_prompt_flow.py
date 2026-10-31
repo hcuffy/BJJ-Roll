@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 
-from bjj_roll_workers.geometry import TapPoint
+from bjj_roll_workers.geometry import FrameSize, TapPoint, validate_point_in_frame
 from bjj_roll_workers.job_logging import log_job_event
 
 type Style = Literal["gi", "no-gi"]
@@ -48,10 +48,14 @@ class VideoRun:
     video_id: str
     style: Style
     first_tap: TapPoint
+    frame_size: FrameSize
 
     def __post_init__(self) -> None:
         if self.style not in _STYLES:
             raise ValueError("unknown style")
+        if not isinstance(self.first_tap, TapPoint):
+            raise TypeError("each video needs the user's own tap")
+        validate_point_in_frame(self.first_tap, self.frame_size)
 
 
 @dataclass(frozen=True)
@@ -84,6 +88,7 @@ def run_re_prompt_flow(job_id: str, video: VideoRun, tracker: Tracker, frame_sou
             answer = prompter.ask_was_this_you(drift, frame_source.frame_at(drift.frame_index))
             if isinstance(answer, ReTap):
                 correction = TapPoint(frame_index=drift.frame_index, x=answer.x, y=answer.y)
+                validate_point_in_frame(correction, video.frame_size)
                 corrections.append(correction)
                 tracker.anchor(correction)
     finally:

@@ -182,6 +182,8 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
     CI and Ruff never need them.
   - Re-prompt flow (HEN-317): a drift frame the tracker reports again ends the run instead of looping. Each video needs a new tracker, so nothing
     carries over between videos.
+    Anchors (the first tap and every re-tap) are in the HEN-318 pixel convention and are checked against the video's frame size before they reach
+    the tracker (HEN-323).
   - Job logs (HEN-227) carry only job IDs, timings, error classes, chunk counters and pose run settings.
 
 ## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads
@@ -297,3 +299,15 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31
 - **Decided by:** Henry, via Sara (HEN-333)
 - **Consequences:** `local/no-prose-comments` (ESLint) and `packages/workers/scripts/check_no_comments.py` fail CI on a new comment.
+
+## D34: A corrupt pending sign-out queue fails closed (Bill D4, HEN-321)
+
+- **Decision:** A stored pending sign-out queue that can't be read is treated as wholly unreadable, including a JSON list cut off mid-write. It takes
+  the same fail-safe path as any other corrupt queue (Bill D4, HEN-315): the next launch signs out the stored session and clears the queue, so auth fails
+  closed. No entry is salvaged from a cut-off queue, by partial or hand parsing; none is dropped silently, and nothing crashes.
+- **Rejected alternative:** Salvaging the readable entries and dropping the bad ones (HEN-321's original "drop bad entries" criterion, superseded).
+- **Date:** 2026-10-31
+- **Decided by:** Sara (option a)
+- **Consequences:** `packages/mobile/src/auth/pendingSignOuts.ts` keeps its fail-safe parsing unchanged. `pendingSignOuts.hardening.test.ts` pins the
+  cut-off case: only the stored session is signed out, and the queue is cleared. Sessions lost in a cut-off queue stay valid on the server until they expire
+  (up to 90 days).
