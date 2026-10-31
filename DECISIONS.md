@@ -188,3 +188,15 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry and Sara (HEN-319); licence, threads, thresholds and wiring: Sara, 30 Oct 13:57 CET
 - **Consequences:** Only the user's own keypoints are stored (D6). numpy and onnxruntime are not CI dependencies; a real run uses the HEN-318 private venv.
   No store build ships the pose runner until the licence is cleared.
+
+## D34: A corrupt pending sign-out queue fails closed (Bill D4, HEN-321)
+
+- **Decision:** A stored pending sign-out queue that can't be read is treated as wholly unreadable, including a JSON list cut off mid-write. It takes
+  the same fail-safe path as any other corrupt queue (Bill D4, HEN-315): the next launch signs out the stored session and clears the queue, so auth fails
+  closed. No entry is salvaged from a cut-off queue, by partial or hand parsing; none is dropped silently, and nothing crashes.
+- **Rejected alternative:** Salvaging the readable entries and dropping the bad ones (HEN-321's original "drop bad entries" criterion, superseded).
+- **Date:** 2026-10-31
+- **Decided by:** Sara (option a)
+- **Consequences:** `packages/mobile/src/auth/pendingSignOuts.ts` keeps its fail-safe parsing unchanged. `pendingSignOuts.hardening.test.ts` pins the
+  cut-off case: only the stored session is signed out, and the queue is cleared. Sessions lost in a cut-off queue stay valid on the server until they expire
+  (up to 90 days).
