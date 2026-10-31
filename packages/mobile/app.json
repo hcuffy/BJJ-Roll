@@ -5,10 +5,6 @@
     "version": "0.0.0",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#111313",
-    "androidStatusBar": {
-      "barStyle": "light-content",
-      "backgroundColor": "#111313"
-    },
     "scheme": "bjjroll",
     "ios": {
       "bundleIdentifier": "com.bjj.roll",
@@ -21,7 +17,13 @@
     "android": {
       "package": "com.bjj.roll"
     },
-    "plugins": ["expo-secure-store", "expo-web-browser", "expo-apple-authentication"],
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-apple-authentication",
+      ["./plugins/withIosSplashBackground", { "backgroundColor": "#111313" }],
+      ["expo-splash-screen", { "backgroundColor": "#111313" }]
+    ],
     "extra": {
       "backendUrl": "http://10.0.2.2:3000",
       "socialSignIn": {
