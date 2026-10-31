@@ -28,7 +28,7 @@ def test_pose_bench_rule_constants_are_named() -> None:
     assert (TANGLED_BOX_IOU_THRESHOLD, MIN_KEYPOINT_SCORE, MIN_POSE_MEAN_SCORE, MIN_OWN_MASK_KEYPOINT_FRACTION) == (0.3, 0.3, 0.3, 0.5)
 
 
-def test_pose_bench_box_iou() -> None:
+def test_pose_bench_box_iou_is_overlap_over_union_and_zero_for_boxes_apart() -> None:
     assert box_iou(Box(0, 0, 4, 4), Box(2, 0, 6, 4)) == 8 / 24
     assert box_iou(Box(0, 0, 2, 2), Box(5, 5, 6, 6)) == 0.0
 

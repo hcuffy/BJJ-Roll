@@ -170,6 +170,19 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-30
 - **Decided by:** Sara (her calls, 30 Oct 07:59 CET) (HEN-318)
 - **Consequences:** The pose runner (HEN-319) uses the same coordinate types (`geometry.py`). A real local run needs its own venv and weights (not in the repo).
+- **Notes (moved from code docstrings, HEN-333):**
+  - Frame sampler (HEN-351): for each sample time k / fps it keeps the first source frame at or after that time, renumbers the kept frames from 0
+    and records each one's timestamp in seconds. A clip slower than the sampling rate is refused. Frames stay in memory and are never logged.
+  - Coordinates (`geometry.py`): sampled-frame pixels, origin top-left, x right, y down. A `Box` has `x_min <= x_max` and `y_min <= y_max`, and its
+    max edges are exclusive. `box_iou` is 0.0 when the boxes don't overlap or both are empty. Error messages never carry coordinate values.
+  - SAM 2.1 tracker backend: the weights are not shipped, downloaded or read by tests. numpy and onnxruntime are imported lazily on the first `track`
+    call. The graph input and output names are unverified until the first local smoke run.
+  - Export script: without `--checkpoint` it fetches Meta's recorded Apache-2.0 checkpoint into the mode-700 output folder and refuses any other URL
+    or licence. torch and `sam2` run in a separate Python 3.13 venv inside the mode-700 footage folder and are imported only inside `export`, so
+    CI and Ruff never need them.
+  - Re-prompt flow (HEN-317): a drift frame the tracker reports again ends the run instead of looping. Each video needs a new tracker, so nothing
+    carries over between videos.
+  - Job logs (HEN-227) carry only job IDs, timings, error classes, chunk counters and pose run settings.
 
 ## A8: Local CPU pose runs RTMPose-m (COCO-17) at the tracker's 10 fps with 2 ONNX Runtime threads
 
@@ -188,6 +201,24 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Decided by:** Henry and Sara (HEN-319); licence, threads, thresholds and wiring: Sara, 30 Oct 13:57 CET
 - **Consequences:** Only the user's own keypoints are stored (D6). numpy and onnxruntime are not CI dependencies; a real run uses the HEN-318 private venv.
   No store build ships the pose runner until the licence is cleared.
+- **Notes (moved from code docstrings, HEN-333):**
+  - Pose contract (`pose.py`): `estimate(frame, box)` gets the tracker's `Box` for that frame and returns exactly `COCO17_KEYPOINT_NAMES` in that
+    order, each inside the frame in `geometry` pixels, with a score in [0, 1]. `estimate` keeps nothing between calls. Callers never see which
+    backend runs (local RTMPose-m, a later Modal backend, or the test fake).
+  - The pose runner estimates every tracked athlete with a box, so the bench can tell when the user's pose landed on the partner. Only the user's
+    own pose is kept; partner and bystander poses never leave the runner (D6). A frame where the tracker had no box for the user has no pose.
+  - Bench definitions: a frame where the user has no box is not tangled (that is a tracker loss, flagged by the drift detector). A tangled frame
+    with no confident keypoints at all counts as a miss. The bench report holds counts only, never keypoints, boxes or anything about the partner.
+  - Pose output: `<footage folder>/poses/<video id>.json` through the HEN-318 footage-folder guard (folder mode 700, file mode 600). It holds only
+    the user's keypoints, the run's fps and thread count, and the bench counts. Nothing is logged.
+  - RTMPose-m backend: `end2end.onnx` from OpenMMLab's RTMPose-m body7 ONNX SDK (URL and licence in the HEN-319 handoff), never shipped, downloaded or
+    read by tests. numpy and onnxruntime are imported lazily on the first `estimate`. The top-down pipeline follows mmpose/rtmlib without OpenCV:
+    the box is padded by `BOX_PADDING`, widened to the model's aspect ratio, resampled (nearest pixel, zero outside the frame) and normalised with
+    ImageNet mean/std. The SimCC x/y outputs are decoded by argmax / `SIMCC_SPLIT_RATIO`. The score is the smaller of the x and y maxima, clipped to
+    [0, 1]. This is unverified until the first local smoke run.
+  - Test fake (`tests/pose_fakes.py`): the fake model takes the most common person label inside the box, so a box mostly covered by the partner
+    yields the partner's pose, i.e. the mislabel a top-down model makes when athletes tangle. Each label has its own score, so a leaked partner
+    keypoint is recognisable.
 
 ## D27: Auth limits, codes and try budgets (moved from code comments)
 

@@ -6,7 +6,7 @@ from bjj_roll_workers.pose import Pose
 from bjj_roll_workers.pose_config import load_pose_config
 
 
-def test_rtmpose_onnx_pose_import_and_construction_load_no_model_packages(tmp_path: Path) -> None:
+def test_rtmpose_onnx_pose_loads_no_model_packages_on_import_or_construction_so_ci_never_needs_them(tmp_path: Path) -> None:
     for name in ("onnxruntime", "numpy"):
         sys.modules.pop(name, None)
     module = importlib.import_module("bjj_roll_workers.rtmpose_onnx_pose")
