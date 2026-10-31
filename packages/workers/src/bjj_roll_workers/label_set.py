@@ -89,11 +89,16 @@ def _label_id(value: object) -> str:
 def _parse_detail(raw: dict) -> Detail:
     if not isinstance(raw.get("label"), str) or not raw["label"]:
         raise ValueError("label set detail needs a label")
+    if type(raw.get("gi_only", False)) is not bool:
+        raise ValueError("label set gi_only is not true or false")
+    variants = tuple(_label_id(variant) for variant in raw.get("variants", ()))
+    if len(set(variants)) != len(variants):
+        raise ValueError("duplicate variant id in label set")
     return Detail(
         id=_label_id(raw["id"]),
         label=raw["label"],
         gi_only=raw.get("gi_only", False),
-        variants=tuple(_label_id(variant) for variant in raw.get("variants", ())),
+        variants=variants,
     )
 
 
