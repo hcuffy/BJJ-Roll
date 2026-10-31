@@ -47,7 +47,12 @@ function parseEntries(value: string): unknown[] {
   }
 }
 
-async function readEntries(secureStore: SessionKeyStore): Promise<PendingSignOut[] | null> {
+interface StoredQueue {
+  readonly entries: PendingSignOut[];
+  readonly pruned: boolean;
+}
+
+async function readEntries(secureStore: SessionKeyStore): Promise<StoredQueue | null> {
   let value: string | null;
   try {
     value = await secureStore.getItemAsync(PENDING_SIGN_OUT_KEY);
@@ -56,37 +61,43 @@ async function readEntries(secureStore: SessionKeyStore): Promise<PendingSignOut
   }
   const now = currentMs();
   const entries: PendingSignOut[] = [];
-  for (const entry of value === null ? [] : parseEntries(value).map((stored) => entryOf(stored, now))) {
+  const stored = value === null ? [] : parseEntries(value).map((item) => entryOf(item, now));
+  for (const entry of stored) {
     if (now - entry.queuedAt < SESSION_MAX_LIFETIME_MS && !entries.some(({ marker }) => marker === entry.marker)) {
       entries.push(entry);
     }
   }
-  return entries;
+  return { entries, pruned: entries.length < stored.length };
 }
 
 export async function readPendingSignOuts(secureStore: SessionKeyStore): Promise<readonly string[] | null> {
-  return (await readEntries(secureStore))?.map(({ marker }) => marker) ?? null;
+  const queue = await readEntries(secureStore);
+  if (queue?.pruned) {
+    await changeQueue(secureStore, () => null).catch(() => undefined);
+  }
+  return queue?.entries.map(({ marker }) => marker) ?? null;
 }
 
 async function writeEntries(secureStore: SessionKeyStore, entries: readonly PendingSignOut[]): Promise<void> {
-  const write =
-    entries.length === 0
-      ? secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY)
-      : secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, JSON.stringify(entries));
-  await write.catch(() => undefined);
+  await (entries.length === 0
+    ? secureStore.deleteItemAsync(PENDING_SIGN_OUT_KEY)
+    : secureStore.setItemAsync(PENDING_SIGN_OUT_KEY, JSON.stringify(entries)));
 }
 
 const lastChanges = new WeakMap<SessionKeyStore, Promise<void>>();
 
 function changeQueue(secureStore: SessionKeyStore, change: (entries: readonly PendingSignOut[]) => PendingSignOut[] | null): Promise<void> {
   const changed = (lastChanges.get(secureStore) ?? Promise.resolve()).then(async () => {
-    const entries = await readEntries(secureStore);
-    const next = entries === null ? null : change(entries);
+    const queue = await readEntries(secureStore);
+    const next = queue === null ? null : (change(queue.entries) ?? (queue.pruned ? queue.entries : null));
     if (next !== null) {
       await writeEntries(secureStore, next);
     }
   });
-  lastChanges.set(secureStore, changed);
+  lastChanges.set(
+    secureStore,
+    changed.catch(() => undefined),
+  );
   return changed;
 }
 
