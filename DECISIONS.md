@@ -179,4 +179,5 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31
 - **Decided by:** Sara (option a)
 - **Consequences:** `packages/mobile/src/auth/pendingSignOuts.ts` keeps its fail-safe parsing unchanged. `pendingSignOuts.hardening.test.ts` pins the
-  cut-off case: only the stored session is signed out, and the queue is cleared.
+  cut-off case: only the stored session is signed out, and the queue is cleared. Sessions lost in a cut-off queue stay valid on the server until they expire
+  (up to 90 days).
