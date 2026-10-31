@@ -57,6 +57,7 @@ export function useBiometricUnlockSetting({
 export interface BiometricUnlockSettingViewProps extends BiometricUnlockSettingState {
   /** Called first when the toggle starts a change: the screen's clearMessages(), as for every signed-in action (Vera, HEN-311). */
   readonly onChangeStarted: () => void;
+  readonly otherActionRunning?: boolean;
 }
 
 /**
@@ -70,6 +71,7 @@ export function BiometricUnlockSetting({
   error,
   onErrorChanged: setError,
   onChangeStarted,
+  otherActionRunning = false,
 }: BiometricUnlockSettingViewProps) {
   const [saving, setSaving] = useState(false);
   const kind = setting?.kind ?? "biometrics";
@@ -90,7 +92,7 @@ export function BiometricUnlockSetting({
 
   const available = setting?.available === true;
   const on = available && setting.on;
-  const disabled = !available || saving;
+  const disabled = !available || saving || otherActionRunning;
   return (
     <View style={styles.item}>
       <Pressable

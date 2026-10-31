@@ -255,7 +255,7 @@ export function SignedInScreen({
           />
           <StatusText message={messages.adultError} style={authStyles.fieldError} />
           <ServerUnreachableNote visible={messages.adultOffline} />
-          <BiometricUnlockSetting {...biometricSetting} onChangeStarted={messages.clearMessages} />
+          <BiometricUnlockSetting {...biometricSetting} onChangeStarted={messages.clearMessages} otherActionRunning={isBusy} />
           <AuthButton
             ref={deleteEntry}
             title="Delete account"

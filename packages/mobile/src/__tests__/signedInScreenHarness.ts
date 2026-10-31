@@ -34,6 +34,7 @@ export function createSignedInScreenHarness() {
     adultResult: Promise.resolve<AgeConfirmationResult>({ ok: true, status: { age16Confirmed: true, age18Confirmed: true, canPurchase: true } }),
     shareSpy: undefined as unknown as MockInstance<typeof Share.share>,
     biometricChangeResult: Promise.resolve<BiometricCheck>({ ok: true }),
+    biometricChanges: [] as boolean[],
   };
   state.shareSpy = vi.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction" });
   vi.mocked(AccessibilityInfo.sendAccessibilityEvent).mockClear();
@@ -64,7 +65,10 @@ export function createSignedInScreenHarness() {
           return state.adultResult;
         },
         onReadBiometricSetting: () => Promise.resolve({ available: true, on: false, kind: "biometrics" } as const),
-        onChangeBiometricUnlock: () => state.biometricChangeResult,
+        onChangeBiometricUnlock: (on: boolean) => {
+          state.biometricChanges.push(on);
+          return state.biometricChangeResult;
+        },
       }),
     );
 
