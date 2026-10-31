@@ -37,4 +37,37 @@ describe("iOS launch screen plugin refuses to fall back to the system colour (HE
     }
     expect(() => withIosSplashBackground({ name: "BJJ Roll", slug: "bjj-roll" }, { backgroundColor: colours.background })).not.toThrow();
   });
+
+  it("keeps the root view's other colours and points only backgroundColor at SplashScreenBackground #111313", async () => {
+    const tintColour = { $: { key: "tintColor", systemColor: "systemBlueColor" } };
+    const storyboard = storyboardWith({ color: [{ $: { ...tintColour.$ } }, systemBackground] }, [{}]);
+    const result = (await applyPluginToStoryboard(storyboard, colours.background)) as { modResults: typeof storyboard };
+    const { document } = result.modResults as {
+      document: {
+        scenes: { scene: { objects: { viewController: { view: { color: object[] }[] }[] }[] }[] }[];
+        resources: { namedColor: { $: object; color: { $: object }[] }[] }[];
+      };
+    };
+    expect(document.scenes[0]?.scene[0]?.objects[0]?.viewController[0]?.view[0]?.color).toEqual([
+      tintColour,
+      { $: { key: "backgroundColor", name: "SplashScreenBackground" } },
+    ]);
+    expect(document.resources[0]?.namedColor).toEqual([
+      {
+        $: { name: "SplashScreenBackground" },
+        color: [
+          {
+            $: {
+              alpha: "1.000",
+              red: "0.0666666666666667",
+              green: "0.0745098039215686",
+              blue: "0.0745098039215686",
+              customColorSpace: "sRGB",
+              colorSpace: "custom",
+            },
+          },
+        ],
+      },
+    ]);
+  });
 });
