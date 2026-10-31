@@ -67,7 +67,11 @@ export async function checkBiometric(promptMessage: string): Promise<BiometricCh
 
 /** Whether launch must ask for the check first. A store that cannot be read counts as on: sign-out is always offered. */
 export async function isBiometricUnlockOn(secureStore: SessionKeyStore): Promise<boolean> {
-  return (await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY).catch(() => "on")) === "on";
+  try {
+    return (await secureStore.getItemAsync(BIOMETRIC_UNLOCK_KEY)) === "on";
+  } catch {
+    return true;
+  }
 }
 
 export async function readBiometricSetting(secureStore: SessionKeyStore): Promise<BiometricSetting> {
