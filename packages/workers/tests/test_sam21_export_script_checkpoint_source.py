@@ -110,3 +110,18 @@ def test_sam21_export_script_removes_a_partial_checkpoint_when_the_fetch_fails(t
         script.download_checkpoint(folder, script.META_CHECKPOINT, failing_fetch)
 
     assert list(folder.iterdir()) == []
+
+
+def test_sam21_export_script_removes_a_partial_checkpoint_on_any_fetch_error(tmp_path: Path) -> None:
+    script = _load_script()
+
+    def interrupted_fetch(url: str) -> Iterator[bytes]:
+        yield FAKE_CHECKPOINT[:8]
+        raise KeyboardInterrupt
+
+    folder = _private_folder(tmp_path)
+
+    with pytest.raises(KeyboardInterrupt):
+        script.download_checkpoint(folder, script.META_CHECKPOINT, interrupted_fetch)
+
+    assert list(folder.iterdir()) == []

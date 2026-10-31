@@ -90,6 +90,9 @@ def download_checkpoint(output_folder: Path, source: CheckpointSource = META_CHE
     except OSError:
         checkpoint.unlink(missing_ok=True)
         raise CheckpointError("checkpoint download failed") from None
+    except BaseException:
+        checkpoint.unlink(missing_ok=True)
+        raise
     return checkpoint
 
 
