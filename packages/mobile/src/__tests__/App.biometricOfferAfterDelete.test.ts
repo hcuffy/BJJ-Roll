@@ -101,7 +101,6 @@ describe("App: the biometric offer after account delete and after sign-out (HEN-
     expect(offersSeen).toBe(1);
   });
 
-  // Vera polish (HEN-300): a delete that did not happen keeps the offer flag, so the same account is not offered again.
   it("a delete refused by the server, then one that fails offline, keeps the flag: no offer after signing in again", async () => {
     const screen = await launchApp();
     await signIn(screen, "member@example.test");
