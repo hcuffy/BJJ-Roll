@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6.41.0/schema.json",
-  "include": ["exports", "types", "nsExports", "nsTypes", "duplicates"],
+  "include": ["dependencies", "unlisted", "exports", "types", "nsExports", "nsTypes", "duplicates"],
+  "ignoreDependencies": ["@expo/ui", "expo-updates"],
   "ignore": ["packages/*/src/__tests__/**"],
   "workspaces": {
     "packages/backend": {
