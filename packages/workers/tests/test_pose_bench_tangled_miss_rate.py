@@ -2,10 +2,10 @@ from dataclasses import replace
 
 from bjj_roll_workers.geometry import COCO17_KEYPOINT_NAMES, Box, Keypoint, box_iou
 from bjj_roll_workers.pose_bench import (
-    MIN_KEYPOINT_SCORE,
-    MIN_OWN_MASK_KEYPOINT_FRACTION,
-    MIN_POSE_MEAN_SCORE,
-    TANGLED_BOX_IOU_THRESHOLD,
+    MIN_KEYPOINT_SCORE_UNTUNED,
+    MIN_OWN_MASK_KEYPOINT_FRACTION_UNTUNED,
+    MIN_POSE_MEAN_SCORE_UNTUNED,
+    TANGLED_BOX_IOU_THRESHOLD_UNTUNED,
     is_tangled,
     is_tangled_miss,
     summarise_bench,
@@ -25,7 +25,12 @@ def _pose_at(x: float, y: float, score: float) -> tuple[Keypoint, ...]:
 
 
 def test_pose_bench_rule_constants_are_named() -> None:
-    assert (TANGLED_BOX_IOU_THRESHOLD, MIN_KEYPOINT_SCORE, MIN_POSE_MEAN_SCORE, MIN_OWN_MASK_KEYPOINT_FRACTION) == (0.3, 0.3, 0.3, 0.5)
+    assert (TANGLED_BOX_IOU_THRESHOLD_UNTUNED, MIN_KEYPOINT_SCORE_UNTUNED, MIN_POSE_MEAN_SCORE_UNTUNED, MIN_OWN_MASK_KEYPOINT_FRACTION_UNTUNED) == (
+        0.3,
+        0.3,
+        0.3,
+        0.5,
+    )
 
 
 def test_pose_bench_box_iou_is_overlap_over_union_and_zero_for_boxes_apart() -> None:
@@ -49,7 +54,7 @@ def test_pose_bench_iou_exactly_at_the_threshold_is_tangled() -> None:
     at_threshold = {"self": replace(tracks["self"], box=own_box), "partner": replace(tracks["partner"], box=partner_box)}
     below = {"self": replace(tracks["self"], box=own_box), "partner": replace(tracks["partner"], box=Box(0, 0, 10, 2.9))}
 
-    assert box_iou(own_box, partner_box) == TANGLED_BOX_IOU_THRESHOLD
+    assert box_iou(own_box, partner_box) == TANGLED_BOX_IOU_THRESHOLD_UNTUNED
     assert is_tangled(at_threshold, "self")
     assert not is_tangled(below, "self")
 
@@ -60,7 +65,7 @@ def test_pose_bench_counts_a_pose_on_the_partner_a_low_score_or_no_pose_as_a_mis
 
     assert not is_tangled_miss(_pose_at(2.5, 2.5, 0.9), own)
     assert is_tangled_miss(_pose_at(5.5, 5.5, 0.9), own)
-    assert is_tangled_miss(_pose_at(2.5, 2.5, MIN_POSE_MEAN_SCORE / 2), own)
+    assert is_tangled_miss(_pose_at(2.5, 2.5, MIN_POSE_MEAN_SCORE_UNTUNED / 2), own)
     assert is_tangled_miss(None, own)
 
 
