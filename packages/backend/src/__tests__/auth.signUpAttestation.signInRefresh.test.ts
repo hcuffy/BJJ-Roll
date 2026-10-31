@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION, signUpAttestationStatusSchema, type SignUpAttestationStatus } from "@bjj-roll/shared";
+import { signUpAttestationVersion, signUpAttestationStatusSchema, type SignUpAttestationStatus } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import type { SignedInUser } from "./accountTestFlow.js";
@@ -6,7 +6,7 @@ import { createAgeGateTestContext, magicLinkSendPath, otpSendPath, otpSignInPath
 import { extractSessionCookie, getAuthPath, postAuthJson } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
-const currentVersionId = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+const currentVersionId = signUpAttestationVersion.id;
 const oldVersionId = "attestation-signup-draft-0";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the sign-in tick refreshes the attestation for existing accounts", () => {

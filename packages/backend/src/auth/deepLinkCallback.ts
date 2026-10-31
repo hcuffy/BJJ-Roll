@@ -1,6 +1,6 @@
 import { DEEP_LINK_CALLBACK_URL, DEEP_LINK_SCHEME } from "./authLimits.js";
 
-export const MAGIC_LINK_REDIRECT_PARAMETERS = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
+export const magicLinkRedirectParameters = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
 
 const DEEP_LINK_HOST = new URL(DEEP_LINK_CALLBACK_URL).host;
 const DEEP_LINK_PREFIX = `${DEEP_LINK_SCHEME}://${DEEP_LINK_HOST}`;
@@ -36,7 +36,7 @@ export function isAllowedDeepLinkCallbackUrl(value: unknown): value is string {
 }
 
 export function findInvalidRedirectParameters(source: (name: string) => unknown): string[] {
-  return MAGIC_LINK_REDIRECT_PARAMETERS.filter((name) => {
+  return magicLinkRedirectParameters.filter((name) => {
     const value = source(name);
     return value !== undefined && value !== null && !isAllowedDeepLinkCallbackUrl(value);
   });

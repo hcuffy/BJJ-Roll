@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Platform, Share, StyleSheet, View } from "react-native";
 import type { AccountExportResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { spacing } from "../theme/tokens";
 import { type AccountFailureView, accountFailureView } from "./accountFailureView";
 import { AuthButton } from "./AuthButton";
@@ -13,7 +13,7 @@ export const EXPORT_SHARED_NOTICE = "Your data export was shared.";
 export const EXPORT_CREATED_NOTICE = "Your data export was created. Check that you saved a copy.";
 
 const EXPORT_FAILED = "Export failed.";
-const exportFailedUnknown: AccountFailureView = { offline: false, error: `${EXPORT_FAILED} ${FAILURE_MESSAGES.unknown}` };
+const exportFailedUnknown: AccountFailureView = { offline: false, error: `${EXPORT_FAILED} ${failureMessages.unknown}` };
 
 export async function shareAccountExport(
   onExportData: () => Promise<AccountExportResult>,

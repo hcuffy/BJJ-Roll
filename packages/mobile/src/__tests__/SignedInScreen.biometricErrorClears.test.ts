@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import type { renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness } from "./signedInScreenHarness";
@@ -51,7 +51,7 @@ describe("SignedInScreen: a signed-in action clears the biometric toggle error (
   });
 
   it("18+ offline (grey note showing), then toggle fails: only the red toggle error shows, no grey note", async () => {
-    harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    harness.state.adultResult = Promise.resolve({ ok: false, reason: "network", message: failureMessages.network });
     harness.state.biometricChangeResult = Promise.resolve({ ok: false, failure: "failed" });
     const screen = await harness.render();
     await screen.press(CONFIRM);

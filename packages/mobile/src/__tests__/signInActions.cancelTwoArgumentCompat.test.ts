@@ -5,7 +5,7 @@ import { cancelPendingSignOut } from "../auth/signInActions";
 import { createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 
 const cookieOf = (token: string) => `better-auth.session_token=${token}.signature`;
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 
 describe("cancelPendingSignOut with two arguments", () => {
   let secureStore: ReturnType<typeof createMemorySecureStore>;
@@ -20,7 +20,7 @@ describe("cancelPendingSignOut with two arguments", () => {
       if (!new URL(request.url).pathname.endsWith("/sign-out")) {
         return Promise.resolve(Response.json({}));
       }
-      const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? "no-cookie";
+      const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? "no-cookie";
       presented.push(session);
       return Promise.resolve(session === "refused" ? Response.json({ message: "down" }, { status: 503 }) : Response.json({ success: true }));
     };

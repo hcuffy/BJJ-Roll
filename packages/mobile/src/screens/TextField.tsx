@@ -10,7 +10,7 @@ export interface TextFieldProps extends Omit<TextInputProps, "style" | "accessib
   readonly focusKey?: number;
 }
 
-export const EMAIL_INPUT_PROPS: TextInputProps = {
+export const emailInputProps: TextInputProps = {
   autoCapitalize: "none",
   autoComplete: "email",
   autoCorrect: false,

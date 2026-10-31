@@ -8,9 +8,9 @@ import { OrDivider } from "./OrDivider";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 
-const SOCIAL_LOADING_TITLES: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
+const socialLoadingTitles: Readonly<Record<SocialProvider, string>> = { apple: "Opening Apple…", google: "Opening Google…" };
 export const SOCIAL_SIGNING_IN_TITLE = "Signing in…";
-const BRAND_BUTTONS = { apple: AppleSignInButton, google: GoogleSignInButton } as const;
+const brandButtons = { apple: AppleSignInButton, google: GoogleSignInButton } as const;
 
 const styles = StyleSheet.create({
   notYet: { ...typeScale.label, color: colours.textSecondary, textAlign: "center" },
@@ -48,11 +48,11 @@ export function SocialSignInButtons({
         </Text>
       ) : null}
       {providers.map((provider) => {
-        const BrandButton = BRAND_BUTTONS[provider];
+        const BrandButton = brandButtons[provider];
         return (
           <BrandButton
             key={provider}
-            loadingTitle={SOCIAL_LOADING_TITLES[provider]}
+            loadingTitle={socialLoadingTitles[provider]}
             accessibilityHint={hint}
             loading={sending === provider}
             disabled={sending !== null && sending !== provider}
@@ -70,7 +70,7 @@ export function SocialSignInButtons({
             importantForAccessibility="no"
           />
           <StatusText
-            message={progress === "opening" ? SOCIAL_LOADING_TITLES[running] : SOCIAL_SIGNING_IN_TITLE}
+            message={progress === "opening" ? socialLoadingTitles[running] : SOCIAL_SIGNING_IN_TITLE}
             style={styles.progress}
             announce="polite"
           />

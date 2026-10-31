@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Platform, Share, Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +15,7 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 async function renderGateConfirm(): Promise<Screen> {
   const prompt: SignUpAttestationResult = {
     ok: true,
-    status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+    status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
   };
   const screen = await renderScreen(
     createElement(

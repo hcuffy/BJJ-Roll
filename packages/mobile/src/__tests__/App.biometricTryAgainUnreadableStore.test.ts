@@ -26,7 +26,7 @@ const SIGNED_IN_SCREEN = "You are signed in";
 const LOCKED_TITLE = "BJJ Roll is locked";
 const TRY_AGAIN = "Try again";
 const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-value";
-const SESSION_PATTERN = /better-auth\.session_token=([^.;]+)\./u;
+const sessionPattern = /better-auth\.session_token=([^.;]+)\./u;
 
 function createSessionServer() {
   const backend = createFakeBackend();
@@ -50,7 +50,7 @@ function createSessionServer() {
     if ([...state.downPaths].some((path) => pathname.endsWith(path))) {
       throw new TypeError("fetch failed");
     }
-    const session = SESSION_PATTERN.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
+    const session = sessionPattern.exec(request.headers.get("cookie") ?? "")?.[1] ?? null;
     if (pathname.endsWith("/sign-in/email-otp") || pathname.endsWith("/magic-link/exchange")) {
       return newSession();
     }

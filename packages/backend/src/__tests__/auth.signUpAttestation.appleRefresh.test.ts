@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { currentSignUpAttestation, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
@@ -66,6 +66,6 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the Apple sign-i
     expect(await signInWithApple("apple-sub-refresh", "refresh.apple.member@example.com", { age16Confirmed: true })).toBe(userId);
     expect(await attestationVersionsFor(userId)).toEqual([]);
     expect(await signInWithApple("apple-sub-refresh", "refresh.apple.member@example.com", ticked)).toBe(userId);
-    expect(await attestationVersionsFor(userId)).toEqual([SIGN_UP_ATTESTATION_TEXT_VERSION.id]);
+    expect(await attestationVersionsFor(userId)).toEqual([signUpAttestationVersion.id]);
   });
 });

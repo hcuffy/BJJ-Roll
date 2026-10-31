@@ -1,10 +1,10 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createPublicKey, verify } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { readSocialSignUpAgeAnswers } from "../auth/ageGate.js";
 import { encodeCreateData, encodeUpdateData } from "../auth/authCodecTransform.js";
 import {
-  APPLE_ENVIRONMENT_NAMES,
+  appleEnvironmentNames,
   APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX,
   buildSocialProviders,
   createAppleClientSecret,
@@ -42,7 +42,7 @@ describe("HEN-239 social provider config", () => {
   });
 
   it("fails fast naming the first missing variable of a half-set provider, never a value", () => {
-    for (const missingName of APPLE_ENVIRONMENT_NAMES) {
+    for (const missingName of appleEnvironmentNames) {
       const environment = { ...googleEnvironment, ...appleEnvironment(), [missingName]: "" };
       expect(() => loadSocialProviderConfig(environment)).toThrow(`Missing required environment variable ${missingName}`);
     }
@@ -142,7 +142,7 @@ describe("HEN-239 age gate for social sign-up (16+, HEN-263)", () => {
   });
 
   it("HEN-183: reads the attestation text version id from the same place, and keeps it only when it is the current version", () => {
-    const attested = { ...ticked16, signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id };
+    const attested = { ...ticked16, signUpAttestationTextVersionId: signUpAttestationVersion.id };
     expect(readSocialSignUpAgeAnswers("/sign-in/social", { additionalData: attested }, undefined)).toEqual({ social: true, answers: attested });
     expect(readSocialSignUpAgeAnswers("/callback/google", undefined, attested)).toEqual({ social: true, answers: attested });
     expect(

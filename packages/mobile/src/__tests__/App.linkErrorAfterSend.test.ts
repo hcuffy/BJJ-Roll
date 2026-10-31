@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
@@ -28,7 +28,7 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 const EMAIL = "member@example.test";
 const LINK_CODE = "one-time-exchange-code";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
-const EXPIRED_MESSAGE = FAILURE_MESSAGES.invalidLink;
+const EXPIRED_MESSAGE = failureMessages.invalidLink;
 
 describe("App when a sign-in link fails after a send (HEN-304)", () => {
   let backend: ReturnType<typeof createFakeBackend>;

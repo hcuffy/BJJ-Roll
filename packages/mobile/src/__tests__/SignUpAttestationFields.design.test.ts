@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_DUTIES, SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
+import { signUpAttestationDuties, SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { ATTESTATION_LEAD, ATTESTATION_VERSION_NOTE } from "../auth/signUpAttestation";
@@ -16,10 +16,10 @@ describe("SignUpAttestationFields design (HEN-183)", () => {
     const card = cards[0];
     expect(flattenStyle(card?.props.style)).toMatchObject({ borderRadius: radius.card, padding: spacing.medium, marginTop: spacing.small });
     const cardText = card ? textOf(card) : "";
-    for (const part of [ATTESTATION_LEAD, ...SIGN_UP_ATTESTATION_DUTIES, ATTESTATION_VERSION_NOTE, SIGN_UP_ATTESTATION_LABEL]) {
+    for (const part of [ATTESTATION_LEAD, ...signUpAttestationDuties, ATTESTATION_VERSION_NOTE, SIGN_UP_ATTESTATION_LABEL]) {
       expect(cardText).toContain(part);
     }
-    expect(cardText.indexOf(ATTESTATION_LEAD)).toBeLessThan(cardText.indexOf(SIGN_UP_ATTESTATION_DUTIES[0] ?? ""));
+    expect(cardText.indexOf(ATTESTATION_LEAD)).toBeLessThan(cardText.indexOf(signUpAttestationDuties[0] ?? ""));
   });
 
   it("the lead line is Body semibold white", async () => {
@@ -33,12 +33,12 @@ describe("SignUpAttestationFields design (HEN-183)", () => {
 
   it("each duty is its own line and its bullet is hidden from screen readers", async () => {
     const screen = await render();
-    for (const duty of SIGN_UP_ATTESTATION_DUTIES) {
+    for (const duty of signUpAttestationDuties) {
       const dutyText = screen.findAllByType("Text").find((node) => textOf(node) === duty);
       expect(dutyText).toBeTruthy();
     }
     const bullets = screen.findAllByType("Text").filter((node) => textOf(node).trim() === "•");
-    expect(bullets).toHaveLength(SIGN_UP_ATTESTATION_DUTIES.length);
+    expect(bullets).toHaveLength(signUpAttestationDuties.length);
     for (const bullet of bullets) {
       expect(bullet.props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: "no" });
     }

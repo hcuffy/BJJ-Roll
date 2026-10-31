@@ -1,9 +1,9 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { Share, Text } from "react-native";
 import { beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, SignUpAttestationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { SignUpAttestationGate } from "../screens/SignUpAttestationGate";
 import { colours } from "../theme/tokens";
@@ -16,15 +16,15 @@ const CONFIRM_TITLE = "Delete your account?";
 const EMAIL_CODE = "Email me a code";
 const prompt: SignUpAttestationResult = {
   ok: true,
-  status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+  status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
 };
-const readError: SignUpAttestationResult = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown };
-const offlineExport: AccountExportResult = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
-const rateLimitedExport: AccountExportResult = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited };
-const EXPORT_ERROR = `Export failed. ${FAILURE_MESSAGES.rateLimited}`;
-const CODE_ERROR = `We could not send the code. ${FAILURE_MESSAGES.rateLimited}`;
-const offlineCode: AccountCodeResult = { ok: false, reason: "network", message: FAILURE_MESSAGES.network };
-const rateLimitedCode: AccountCodeResult = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited };
+const readError: SignUpAttestationResult = { ok: false, reason: "unknown", message: failureMessages.unknown };
+const offlineExport: AccountExportResult = { ok: false, reason: "network", message: failureMessages.network };
+const rateLimitedExport: AccountExportResult = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited };
+const EXPORT_ERROR = `Export failed. ${failureMessages.rateLimited}`;
+const CODE_ERROR = `We could not send the code. ${failureMessages.rateLimited}`;
+const offlineCode: AccountCodeResult = { ok: false, reason: "network", message: failureMessages.network };
+const rateLimitedCode: AccountCodeResult = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited };
 const gateScreens = [
   ["the re-accept prompt", prompt],
   ["the status-read error screen", readError],
@@ -185,6 +185,6 @@ describe("SignUpAttestationGate: Export my data first on the delete confirm", ()
     const { screen } = await renderGate(prompt);
     await screen.press(EXPORT_FIRST);
 
-    expect(screen.text()).toContain(`Export failed. ${FAILURE_MESSAGES.unknown}`);
+    expect(screen.text()).toContain(`Export failed. ${failureMessages.unknown}`);
   });
 });

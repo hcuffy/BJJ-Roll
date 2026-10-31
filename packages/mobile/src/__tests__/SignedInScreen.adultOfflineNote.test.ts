@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AgeConfirmationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { colours } from "../theme/tokens";
 import { flattenStyle } from "./screenHarness";
@@ -10,7 +10,7 @@ const CONFIRM = "Confirm I am 18 or older";
 const CANT_UNDO = "You can't undo this, except by deleting your account.";
 const DIALOG_YES = "Yes, I am 18 or older";
 const NOT_SAVED = "We could not save that.";
-const failed = (reason: "network" | "rateLimited" | "unknown"): AgeConfirmationResult => ({ ok: false, reason, message: FAILURE_MESSAGES[reason] });
+const failed = (reason: "network" | "rateLimited" | "unknown"): AgeConfirmationResult => ({ ok: false, reason, message: failureMessages[reason] });
 
 describe("SignedInScreen 18+ confirm offline note (HEN-311)", () => {
   let harness: ReturnType<typeof createSignedInScreenHarness>;
@@ -52,7 +52,7 @@ describe("SignedInScreen 18+ confirm offline note (HEN-311)", () => {
     await screen.press(CONFIRM);
     await screen.press(DIALOG_YES);
 
-    const error = screen.queryByText(`${NOT_SAVED} ${FAILURE_MESSAGES[reason]}`);
+    const error = screen.queryByText(`${NOT_SAVED} ${failureMessages[reason]}`);
     expect(error?.props.accessibilityRole).toBe("alert");
     expect(flattenStyle(error?.props.style).color).toBe(colours.danger);
     expect(screen.text()).not.toContain(SERVER_UNREACHABLE_NOTE);

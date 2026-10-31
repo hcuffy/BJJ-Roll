@@ -1,7 +1,7 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
-import { completeMagicLink, FAILURE_MESSAGES, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
+import { completeMagicLink, failureMessages, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 
 function createTestClient() {
@@ -28,7 +28,7 @@ describe("sign-in requests", () => {
       type: "sign-in",
       age16Confirmed: true,
       age18Confirmed: false,
-      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      signUpAttestationTextVersionId: signUpAttestationVersion.id,
     });
   });
 
@@ -73,7 +73,7 @@ describe("sign-in requests", () => {
       callbackURL: "bjjroll://auth",
       age16Confirmed: true,
       age18Confirmed: false,
-      signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+      signUpAttestationTextVersionId: signUpAttestationVersion.id,
     });
   });
 
@@ -100,7 +100,7 @@ describe("sign-in requests", () => {
     expect(await completeMagicLink(client, "bjjroll://auth?r=link_invalid")).toEqual({
       ok: false,
       reason: "invalidLink",
-      message: FAILURE_MESSAGES.invalidLink,
+      message: failureMessages.invalidLink,
     });
   });
 
@@ -111,7 +111,7 @@ describe("sign-in requests", () => {
   ])("shows only the generic error for an unknown reason code or a legacy error param, never URL text: %s", async (url) => {
     const { backend, client } = createTestClient();
     const result = await completeMagicLink(client, url);
-    expect(result).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    expect(result).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 

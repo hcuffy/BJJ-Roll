@@ -1,4 +1,4 @@
-import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_LABEL, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { AGE_GATE_REFUSAL_MESSAGE, SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { readFileSync } from "node:fs";
@@ -180,7 +180,7 @@ describe("EmailEntryScreen", () => {
           type: "sign-in",
           age16Confirmed: true,
           age18Confirmed: false,
-          signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+          signUpAttestationTextVersionId: signUpAttestationVersion.id,
         },
       ],
     ]);
@@ -204,14 +204,14 @@ describe("EmailEntryScreen", () => {
         callbackURL: "bjjroll://auth",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
       {
         email: "member@example.test",
         type: "sign-in",
         age16Confirmed: true,
         age18Confirmed: true,
-        signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
       },
     ]);
     expect(sentAdult).toEqual([true]);

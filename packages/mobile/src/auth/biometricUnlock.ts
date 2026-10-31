@@ -15,7 +15,7 @@ export type BiometricFailure = "cancelled" | "lockout" | "notSetUp" | "failed";
 
 export type BiometricCheck = { readonly ok: true } | { readonly ok: false; readonly failure: BiometricFailure };
 
-const FAILURES: Partial<Record<LocalAuthentication.LocalAuthenticationError, BiometricFailure>> = {
+const failures: Partial<Record<LocalAuthentication.LocalAuthenticationError, BiometricFailure>> = {
   user_cancel: "cancelled",
   system_cancel: "cancelled",
   app_cancel: "cancelled",
@@ -46,7 +46,7 @@ async function isBiometricEnrolled(): Promise<boolean> {
 export async function checkBiometric(promptMessage: string): Promise<BiometricCheck> {
   try {
     const result = await LocalAuthentication.authenticateAsync({ promptMessage, disableDeviceFallback: false });
-    return result.success ? { ok: true } : { ok: false, failure: FAILURES[result.error] ?? "failed" };
+    return result.success ? { ok: true } : { ok: false, failure: failures[result.error] ?? "failed" };
   } catch {
     return { ok: false, failure: "failed" };
   }

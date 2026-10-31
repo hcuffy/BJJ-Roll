@@ -50,11 +50,11 @@ export interface AuthCryptoCodec {
   hashEmailQueueJobKey(jobKey: string): string;
 }
 
-const HEX_KEY_PATTERN = /^[0-9a-fA-F]{64}$/u;
+const hexKeyPattern = /^[0-9a-fA-F]{64}$/u;
 
 function parseThirtyTwoByteHexKey(rawHex: string, secretLabel: string): Buffer {
   const trimmed = rawHex.trim();
-  if (!HEX_KEY_PATTERN.test(trimmed)) {
+  if (!hexKeyPattern.test(trimmed)) {
     throw new Error(`${secretLabel} must be a 64-character hex string (${String(ENCRYPTION_KEY_BYTES)} bytes)`);
   }
   const buffer = Buffer.from(trimmed, "hex");

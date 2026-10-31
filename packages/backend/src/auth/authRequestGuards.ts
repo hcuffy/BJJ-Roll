@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 import {
   AGE_GATE_REFUSAL_MESSAGE,
   MAGIC_LINK_REASON_PARAM,
-  MAGIC_LINK_REASONS,
+  magicLinkReasons,
   SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
   type MagicLinkReason,
 } from "@bjj-roll/shared";
@@ -10,8 +10,8 @@ import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
 
-export const TRUSTABLE_PROXY_IP_HEADERS = ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] as const;
-export type TrustableProxyIpHeader = (typeof TRUSTABLE_PROXY_IP_HEADERS)[number];
+export const trustableProxyIpHeaders = ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] as const;
+export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
 
 export const CLIENT_IP_HEADER = "x-bjj-client-ip";
 const UNKNOWN_CLIENT_IP = "0.0.0.0";
@@ -32,7 +32,7 @@ export function resolveClientIpAddress(
   remoteAddress: string | undefined,
   trustedProxyIpHeaders: readonly TrustableProxyIpHeader[],
 ): string {
-  for (const headerName of TRUSTABLE_PROXY_IP_HEADERS) {
+  for (const headerName of trustableProxyIpHeaders) {
     if (!trustedProxyIpHeaders.includes(headerName)) {
       continue;
     }
@@ -113,9 +113,9 @@ function magicLinkVerifyErrorMessage(errorCode: string): string {
 
 function magicLinkReason(errorCode: string): MagicLinkReason {
   if (errorCode === "AGE_CONFIRMATION_REQUIRED") {
-    return MAGIC_LINK_REASONS.ageRefused;
+    return magicLinkReasons.ageRefused;
   }
-  return errorCode === "SIGN_UP_ATTESTATION_REQUIRED" ? MAGIC_LINK_REASONS.attestationRefused : MAGIC_LINK_REASONS.linkInvalid;
+  return errorCode === "SIGN_UP_ATTESTATION_REQUIRED" ? magicLinkReasons.attestationRefused : magicLinkReasons.linkInvalid;
 }
 
 function reasonOnlyLocation(redirectUrl: URL, reason: MagicLinkReason): string {

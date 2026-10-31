@@ -6,7 +6,7 @@ import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
-import { BIOMETRIC_COPY, BIOMETRIC_SIGN_OUT_NOTE } from "./biometricCopy";
+import { biometricCopy, BIOMETRIC_SIGN_OUT_NOTE } from "./biometricCopy";
 
 export interface BiometricLockScreenProps {
   readonly kind: BiometricKind;
@@ -15,7 +15,7 @@ export interface BiometricLockScreenProps {
 }
 
 export function BiometricLockScreen({ kind, onUnlocked, onSignOut }: BiometricLockScreenProps) {
-  const copy = BIOMETRIC_COPY[kind];
+  const copy = biometricCopy[kind];
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unlocked = useRef(onUnlocked);

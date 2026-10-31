@@ -1,4 +1,4 @@
-import { ageConfirmationStatusSchema, SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { ageConfirmationStatusSchema, signUpAttestationVersion } from "@bjj-roll/shared";
 import { afterAll, beforeAll, expect, vi } from "vitest";
 import { createAccountTestFlow, type SignedInUser } from "./accountTestFlow.js";
 import { extractSessionCookie, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
@@ -67,7 +67,7 @@ export function createAgeGateTestContext() {
 
   const sendOtp = (email: string, ipAddress: string, ageAnswers: Record<string, unknown>): Promise<Response> =>
     postAuthJson(current().app, otpSendPath, {
-      body: { email, type: "sign-in", signUpAttestationTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, ...ageAnswers },
+      body: { email, type: "sign-in", signUpAttestationTextVersionId: signUpAttestationVersion.id, ...ageAnswers },
       ipAddress,
     });
 

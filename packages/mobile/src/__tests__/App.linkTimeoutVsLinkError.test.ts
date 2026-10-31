@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen, settle } from "./screenHarness";
@@ -26,7 +26,7 @@ type ExchangeMode = "neverAnswers" | "refusedInTime";
 
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGN_IN_LINK = "bjjroll://auth?code=one-time-exchange-code";
-const LINK_ERROR = FAILURE_MESSAGES.invalidLink;
+const LINK_ERROR = failureMessages.invalidLink;
 
 describe("App cold-start link: timeout vs refused link (HEN-303, HEN-304)", () => {
   let exchangeMode: ExchangeMode;

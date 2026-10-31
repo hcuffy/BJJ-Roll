@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { confirmAdult, deleteAccount, exportAccountData, readAgeConfirmation, requestAccountDeletionCode } from "../auth/accountActions";
 import { createMobileAuthClient } from "../auth/authClient";
-import { FAILURE_MESSAGES, verifyEmailCode } from "../auth/signInActions";
-import { createFakeBackend, createMemorySecureStore, TEST_ACCOUNT_EXPORT, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { failureMessages, verifyEmailCode } from "../auth/signInActions";
+import { createFakeBackend, createMemorySecureStore, testAccountExport, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 
 async function createSignedInSession() {
   const backend = createFakeBackend();
@@ -24,7 +24,7 @@ describe("account requests (HEN-65)", () => {
     expect(backend.requests).toHaveLength(1);
     expect(backend.requests[0]).toMatchObject({ url: `${TEST_BACKEND_URL}/account/export`, method: "GET" });
     expect(backend.requests[0]?.cookie).toContain("signed-session-value");
-    expect(result).toEqual({ ok: true, json: JSON.stringify(TEST_ACCOUNT_EXPORT, null, 2) });
+    expect(result).toEqual({ ok: true, json: JSON.stringify(testAccountExport, null, 2) });
   });
 
   it("asks for a delete code with POST /account/delete-code and the session cookie", async () => {
@@ -53,22 +53,22 @@ describe("account requests (HEN-65)", () => {
   it("a refused code (403) is a code error and keeps the session; a refused code request (429) says to wait", async () => {
     const { backend, secureStore, session } = await createSignedInSession();
 
-    expect(await deleteAccount(session, "000000")).toEqual({ ok: false, reason: "invalidCode", message: FAILURE_MESSAGES.invalidCode });
+    expect(await deleteAccount(session, "000000")).toEqual({ ok: false, reason: "invalidCode", message: failureMessages.invalidCode });
     expect(secureStore.items.get("bjjroll_cookie")).toContain("signed-session-value");
 
     backend.fetchImplementation.mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ error: "Too many codes requested. Try again later." }), { status: 429 })),
     );
-    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited });
+    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited });
   });
 
   it("keeps the session and returns the plain no-connection message when the backend cannot be reached", async () => {
     const { backend, secureStore, session } = await createSignedInSession();
     backend.fetchImplementation.mockRejectedValue(new TypeError("Network request failed"));
 
-    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
-    expect(await deleteAccount(session, TEST_DELETE_CODE)).toEqual({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
-    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "network", message: failureMessages.network });
+    expect(await deleteAccount(session, TEST_DELETE_CODE)).toEqual({ ok: false, reason: "network", message: failureMessages.network });
+    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "network", message: failureMessages.network });
     expect(secureStore.items.get("bjjroll_cookie")).toContain("signed-session-value");
   });
 
@@ -78,9 +78,9 @@ describe("account requests (HEN-65)", () => {
       Promise.resolve(new Response(JSON.stringify({ error: "boom: internal detail" }), { status: 500 })),
     );
 
-    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
-    expect(await deleteAccount(session, TEST_DELETE_CODE)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
-    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    expect(await requestAccountDeletionCode(session)).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
+    expect(await deleteAccount(session, TEST_DELETE_CODE)).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
+    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
     expect(secureStore.items.get("bjjroll_cookie")).toContain("signed-session-value");
   });
 
@@ -102,10 +102,10 @@ describe("account requests (HEN-65)", () => {
     backend.fetchImplementation.mockImplementationOnce(() =>
       Promise.resolve(new Response(JSON.stringify({ canPurchase: true }), { status: 200, headers: { "content-type": "application/json" } })),
     );
-    expect(await readAgeConfirmation(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    expect(await readAgeConfirmation(session)).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
 
     backend.fetchImplementation.mockRejectedValueOnce(new TypeError("Network request failed"));
-    expect(await confirmAdult(session)).toEqual({ ok: false, reason: "network", message: FAILURE_MESSAGES.network });
+    expect(await confirmAdult(session)).toEqual({ ok: false, reason: "network", message: failureMessages.network });
   });
 
   it("treats an export that does not match the shared schema as a failure", async () => {
@@ -116,6 +116,6 @@ describe("account requests (HEN-65)", () => {
       ),
     );
 
-    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    expect(await exportAccountData(session)).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
   });
 });

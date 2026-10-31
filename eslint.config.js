@@ -4,6 +4,21 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import unicorn from "eslint-plugin-unicorn";
 import noProseComments from "./eslint/noProseComments.js";
 
+const namingConvention = [
+  { selector: "default", format: ["camelCase"], leadingUnderscore: "allow" },
+  { selector: "variable", modifiers: ["const", "global"], types: ["boolean", "string", "number"], format: ["camelCase", "UPPER_CASE"] },
+  { selector: "variable", modifiers: ["destructured"], format: null },
+  { selector: "typeLike", format: ["PascalCase"] },
+  { selector: ["objectLiteralProperty", "typeProperty"], format: null },
+  { selector: "import", format: null },
+];
+const notPascalHook = { regex: "^Use[A-Z]", match: false };
+const componentNamingConvention = [
+  ...namingConvention,
+  { selector: "function", format: ["camelCase", "PascalCase"], custom: notPascalHook },
+  { selector: "variable", modifiers: ["const"], types: ["function"], format: ["camelCase", "PascalCase"], custom: notPascalHook },
+];
+
 const unlintedFiles = ["**/vitest.config.ts", "**/vite.config.ts", "**/scripts/**", "**/babel.config.js", "**/metro.config.js"];
 
 export default tseslint.config(
@@ -27,15 +42,7 @@ export default tseslint.config(
         "error",
         { selector: "TSModuleDeclaration[kind='global']", message: "Global augmentation goes only in the package's globals.d.ts." },
       ],
-      "@typescript-eslint/naming-convention": [
-        "error",
-        { selector: "default", format: ["camelCase"], leadingUnderscore: "allow" },
-        { selector: "variable", format: ["camelCase", "UPPER_CASE", "PascalCase"] },
-        { selector: "function", format: ["camelCase", "PascalCase"] },
-        { selector: "typeLike", format: ["PascalCase"] },
-        { selector: ["objectLiteralProperty", "typeProperty"], format: null },
-        { selector: "import", format: null },
-      ],
+      "@typescript-eslint/naming-convention": ["error", ...namingConvention],
       "unicorn/name-replacements": [
         "error",
         { replacements: { db: false }, allowList: { env: true, deps: true, Deps: true, props: true, Props: true }, ignore: ["e2e"] },
@@ -60,6 +67,10 @@ export default tseslint.config(
   {
     files: ["**/globals.d.ts"],
     rules: { "no-restricted-syntax": "off" },
+  },
+  {
+    files: ["**/*.tsx"],
+    rules: { "@typescript-eslint/naming-convention": ["error", ...componentNamingConvention] },
   },
   {
     files: ["**/*.config.{js,ts}", "packages/mobile/app/**/_layout.tsx"],

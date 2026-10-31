@@ -1,7 +1,7 @@
 import { AccessibilityInfo } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountExportResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { flattenStyle, textOf } from "./screenHarness";
 import { createSignedInScreenHarness, deferred, EXPORT_JSON } from "./signedInScreenHarness";
@@ -58,11 +58,11 @@ describe("SignedInScreen account actions (HEN-65)", () => {
   });
 
   it("export: a failure (not the network) shows a plain message and the button retries", async () => {
-    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: failureMessages.unknown });
     const screen = await renderSignedIn();
 
     await screen.press("Export my data");
-    expect(screen.text()).toContain(`Export failed. ${FAILURE_MESSAGES.unknown}`);
+    expect(screen.text()).toContain(`Export failed. ${failureMessages.unknown}`);
     expect(state.shareSpy).not.toHaveBeenCalled();
 
     state.exportResult = Promise.resolve({ ok: true, json: EXPORT_JSON });
@@ -155,9 +155,9 @@ describe("SignedInScreen account actions (HEN-65)", () => {
     expect(screen.text()).toContain("Delete your account?");
     expect(screen.isDisabled("Email me a code")).toBe(false);
 
-    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown });
+    state.exportResult = Promise.resolve({ ok: false, reason: "unknown", message: failureMessages.unknown });
     await screen.press("Export my data first");
-    expect(screen.queryByText(`Export failed. ${FAILURE_MESSAGES.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
+    expect(screen.queryByText(`Export failed. ${failureMessages.unknown}`)?.props).toMatchObject({ accessibilityRole: "alert" });
   });
 
   it("the confirm is a binary choice: Sign out is hidden while it is open", async () => {

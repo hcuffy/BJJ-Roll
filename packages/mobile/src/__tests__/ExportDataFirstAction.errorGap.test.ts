@@ -1,8 +1,8 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult, SignUpAttestationResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SignUpAttestationGate } from "../screens/SignUpAttestationGate";
 import { flattenStyle, type HostNode, renderScreen } from "./screenHarness";
 
@@ -16,11 +16,11 @@ describe("Export my data first spacing to its own error", () => {
         onReadStatus: () =>
           Promise.resolve<SignUpAttestationResult>({
             ok: true,
-            status: { required: true, currentTextVersionId: SIGN_UP_ATTESTATION_TEXT_VERSION.id, acceptedTextVersionId: null },
+            status: { required: true, currentTextVersionId: signUpAttestationVersion.id, acceptedTextVersionId: null },
           }),
         onAccept: () => Promise.reject(new Error("not used")),
         onSignOut: () => undefined,
-        onExportData: () => Promise.resolve<AccountExportResult>({ ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited }),
+        onExportData: () => Promise.resolve<AccountExportResult>({ ok: false, reason: "rateLimited", message: failureMessages.rateLimited }),
         onRequestDeleteCode: () => Promise.resolve<AccountCodeResult>({ ok: true }),
         onDeleteAccount: () => Promise.resolve<AccountDeletionResult>({ ok: true }),
         onAccountDeleted: () => undefined,
@@ -30,7 +30,7 @@ describe("Export my data first spacing to its own error", () => {
     await screen.press("Export my data first");
 
     const button = screen.getPressable("Export my data first");
-    const error = screen.queryByText(`Export failed. ${FAILURE_MESSAGES.rateLimited}`);
+    const error = screen.queryByText(`Export failed. ${failureMessages.rateLimited}`);
     expect(error).not.toBeNull();
     const row = screen
       .findAllByType("View")

@@ -1,4 +1,4 @@
-import { SIGN_UP_ATTESTATION_TEXT_VERSION } from "@bjj-roll/shared";
+import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { vi } from "vitest";
 
 export const TEST_BACKEND_URL = "http://backend.test";
@@ -48,7 +48,7 @@ function jsonResponse(body: unknown, headers: Record<string, string> = {}, statu
 
 export const TEST_DELETE_CODE = "654321";
 
-export const TEST_ACCOUNT_EXPORT = {
+export const testAccountExport = {
   exportedAt: "2026-10-25T08:00:00.000Z",
   user: {
     id: "01964c3a-7f00-7000-8000-000000000001",
@@ -84,7 +84,7 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
   const requests: RecordedRequest[] = [];
   let adultConfirmed = false;
   let acceptedAttestation =
-    options.signUpAttestationAcceptedVersion === undefined ? SIGN_UP_ATTESTATION_TEXT_VERSION.id : options.signUpAttestationAcceptedVersion;
+    options.signUpAttestationAcceptedVersion === undefined ? signUpAttestationVersion.id : options.signUpAttestationAcceptedVersion;
   const fetchImplementation = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init);
     const bodyText = request.method === "GET" ? "" : await request.text();
@@ -127,15 +127,15 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
       }
       if (pathname === "/account/signup-attestation") {
         if (request.method === "POST") {
-          if (requests.at(-1)?.body?.textVersionId !== SIGN_UP_ATTESTATION_TEXT_VERSION.id) {
+          if (requests.at(-1)?.body?.textVersionId !== signUpAttestationVersion.id) {
             return jsonResponse({ error: "Invalid request" }, {}, 400);
           }
-          acceptedAttestation = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+          acceptedAttestation = signUpAttestationVersion.id;
         }
         if (options.signUpAttestationBadPayload === true) {
           return jsonResponse({ required: "maybe" });
         }
-        const current = SIGN_UP_ATTESTATION_TEXT_VERSION.id;
+        const current = signUpAttestationVersion.id;
         return jsonResponse({ required: acceptedAttestation !== current, currentTextVersionId: current, acceptedTextVersionId: acceptedAttestation });
       }
       if (pathname === "/account/age-confirmation") {
@@ -154,7 +154,7 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
         const codeMatches = requests.at(-1)?.body?.code === TEST_DELETE_CODE;
         return codeMatches ? jsonResponse({ deleted: true }) : jsonResponse({ error: "Invalid or expired code" }, {}, 403);
       }
-      return jsonResponse(TEST_ACCOUNT_EXPORT);
+      return jsonResponse(testAccountExport);
     }
     return jsonResponse({ status: true });
   };

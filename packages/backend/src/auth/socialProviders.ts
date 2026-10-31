@@ -9,8 +9,8 @@ export const APPLE_TEAM_ID_ENV = "APPLE_TEAM_ID";
 export const APPLE_KEY_ID_ENV = "APPLE_KEY_ID";
 export const APPLE_PRIVATE_KEY_ENV = "APPLE_PRIVATE_KEY";
 
-export const GOOGLE_ENVIRONMENT_NAMES = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
-export const APPLE_ENVIRONMENT_NAMES = [
+export const googleEnvironmentNames = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
+export const appleEnvironmentNames = [
   APPLE_SERVICE_ID_ENV,
   APPLE_APP_BUNDLE_IDENTIFIER_ENV,
   APPLE_TEAM_ID_ENV,
@@ -60,8 +60,8 @@ function readProviderGroup<Name extends string>(
 }
 
 export function loadSocialProviderConfig(env: ProviderEnvironment, requirements: SocialProviderRequirements = {}): SocialProviderConfig {
-  const google = readProviderGroup(env, GOOGLE_ENVIRONMENT_NAMES, requirements.requireGoogle === true);
-  const apple = readProviderGroup(env, APPLE_ENVIRONMENT_NAMES, requirements.requireApple === true);
+  const google = readProviderGroup(env, googleEnvironmentNames, requirements.requireGoogle === true);
+  const apple = readProviderGroup(env, appleEnvironmentNames, requirements.requireApple === true);
   return {
     ...(google ? { google: { clientId: google[GOOGLE_CLIENT_ID_ENV], clientSecret: google[GOOGLE_CLIENT_SECRET_ENV] } } : {}),
     ...(apple

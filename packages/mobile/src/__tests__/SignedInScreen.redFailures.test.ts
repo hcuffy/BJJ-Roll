@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AccountCodeResult, AccountDeletionResult, AccountExportResult } from "../auth/accountActions";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { SERVER_UNREACHABLE_NOTE } from "../screens/ServerUnreachableNote";
 import { colours } from "../theme/tokens";
 import { flattenStyle, type renderScreen } from "./screenHarness";
 import { createSignedInScreenHarness } from "./signedInScreenHarness";
 
-const unknown = { ok: false, reason: "unknown", message: FAILURE_MESSAGES.unknown } as const;
-const rateLimited = { ok: false, reason: "rateLimited", message: FAILURE_MESSAGES.rateLimited } as const;
+const unknown = { ok: false, reason: "unknown", message: failureMessages.unknown } as const;
+const rateLimited = { ok: false, reason: "rateLimited", message: failureMessages.rateLimited } as const;
 
 type Screen = Awaited<ReturnType<typeof renderScreen>>;
 

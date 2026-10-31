@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AGE_ADULT_CONFIRMATION_NOTE } from "../auth/ageConfirmation";
-import { FAILURE_MESSAGES } from "../auth/signInActions";
+import { failureMessages } from "../auth/signInActions";
 import { socialNotLinked } from "../auth/socialSignIn";
 
-const ACCOUNT_EXISTENCE_WORDING =
+const accountExistenceWording =
   /already (?:has|have|belongs|exists|registered|in use|linked|signed up)|existing (?:account|user)|account exists|in use by/iu;
 const sourceDirectories = ["..", "../../../shared/src"].map((relative) => fileURLToPath(new URL(relative, import.meta.url)));
 
@@ -31,7 +31,7 @@ describe("HEN-239 sign-in copy never says whether an email has an account", () =
     for (const provider of ["apple", null] as const) {
       expect(socialNotLinked(provider)).toMatchObject({ message: "We couldn't sign you in this way. Sign in with your email instead." });
     }
-    expect(FAILURE_MESSAGES.accountNotLinked).toBe("We couldn't sign you in this way. Sign in with your email instead.");
+    expect(failureMessages.accountNotLinked).toBe("We couldn't sign you in this way. Sign in with your email instead.");
   });
 
   it("has no account-existence wording anywhere in app or shared source (copy or comments)", () => {
@@ -39,7 +39,7 @@ describe("HEN-239 sign-in copy never says whether an email has an account", () =
     expect(files.some((filePath) => filePath.endsWith("signInActions.ts"))).toBe(true);
     expect(AGE_ADULT_CONFIRMATION_NOTE).toBe("Only needed to buy things later. Already have an account? Confirm in Account.");
     for (const filePath of files) {
-      expect(readFileSync(filePath, "utf8").replaceAll(AGE_ADULT_CONFIRMATION_NOTE, ""), filePath).not.toMatch(ACCOUNT_EXISTENCE_WORDING);
+      expect(readFileSync(filePath, "utf8").replaceAll(AGE_ADULT_CONFIRMATION_NOTE, ""), filePath).not.toMatch(accountExistenceWording);
     }
   });
 });
