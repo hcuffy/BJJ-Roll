@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from bjj_roll_workers.geometry import TapPoint
+from bjj_roll_workers.re_prompt_flow import KeepTrack, VideoRun, run_re_prompt_flow
 from bjj_roll_workers.tracker_config import load_tracker_config
 from bjj_roll_workers.tracker_runner import RePromptTrackerAdapter, track_video
 from bjj_roll_workers.tracking_output import write_tracking_result
@@ -85,3 +86,43 @@ def test_tracker_runner_rejects_an_out_of_frame_tap_before_tracking() -> None:
     with pytest.raises(ValueError):
         track_video(JOB_ID, FIRST_VIDEO_ID, make_clip(5, drifting_self_layout), TapPoint(0, 16.0, 1.0), fake, load_tracker_config())
     assert fake.calls == []
+
+
+def test_tracker_runner_refuses_a_second_video_with_no_tap_of_its_own() -> None:
+    fake = LabelFakeTracker()
+    frames = make_clip(5, drifting_self_layout)
+    track_video(JOB_ID, FIRST_VIDEO_ID, frames, self_tap(0), fake, load_tracker_config(), rss_reader=lambda: 0)
+    first_video_calls = len(fake.calls)
+
+    with pytest.raises(TypeError):
+        track_video(JOB_ID, SECOND_VIDEO_ID, frames, None, fake, load_tracker_config(), rss_reader=lambda: 0)  # type: ignore[arg-type]
+
+    assert len(fake.calls) == first_video_calls
+
+
+class _KeepEveryTrack:
+    def ask_was_this_you(self, drift: object, frame: bytes) -> KeepTrack:
+        return KeepTrack()
+
+
+class _NoFrames:
+    def frame_at(self, frame_index: int) -> bytes:
+        return b""
+
+
+def test_tracker_runner_refuses_a_batch_run_without_a_tap_for_each_video() -> None:
+    fake = LabelFakeTracker()
+    frames = make_clip(5, drifting_self_layout)
+    untapped_video = VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None)  # type: ignore[arg-type]
+    batch = [VideoRun(video_id=FIRST_VIDEO_ID, style="gi", first_tap=self_tap(0)), untapped_video]
+    adapters = [RePromptTrackerAdapter(JOB_ID, video.video_id, frames, fake, load_tracker_config(), rss_reader=lambda: 0) for video in batch]
+
+    first_result = run_re_prompt_flow(JOB_ID, batch[0], adapters[0], _NoFrames(), _KeepEveryTrack())
+    first_video_calls = len(fake.calls)
+    with pytest.raises(TypeError):
+        run_re_prompt_flow(JOB_ID, batch[1], adapters[1], _NoFrames(), _KeepEveryTrack())
+
+    assert first_result.video_id == FIRST_VIDEO_ID
+    assert len(fake.calls) == first_video_calls
+    with pytest.raises(RuntimeError):
+        adapters[1].result()
