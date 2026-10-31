@@ -16,6 +16,7 @@
     "@bjj-roll/shared": "workspace:*",
     "@expo/ui": "~57.0.22",
     "better-auth": "1.7.7",
+    "dayjs": "1.11.23",
     "expo": "~57.0.27",
     "expo-apple-authentication": "~57.0.2",
     "expo-constants": "~57.0.22",

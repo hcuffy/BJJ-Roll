@@ -17,6 +17,7 @@ import {
   type AuthTransaction,
   type ResolvedWhereScope,
 } from "./authSessionScope.js";
+import { currentMs } from "../dates.js";
 
 export interface CreateEncryptedRlsAuthAdapterOptions {
   readonly pool: Pool;
@@ -127,7 +128,7 @@ export function createEncryptedRlsAuthAdapter(
           const modelKey = normalizeModelKey(model);
           return (await scoped<RowRecord | null>({ model, where }, async (adapter, scope) => {
             const row = await adapter.findOne<RowRecord>({ model, where: scope.clauses ?? [], join });
-            if (row && modelKey === "session" && isSessionPastLifetime(row, Date.now())) {
+            if (row && modelKey === "session" && isSessionPastLifetime(row, currentMs())) {
               await adapter.delete({ model, where: [{ field: "id", operator: "eq", value: String(row.id), connector: "AND" }] });
               return null;
             }
@@ -138,7 +139,7 @@ export function createEncryptedRlsAuthAdapter(
           const modelKey = normalizeModelKey(model);
           return (await scoped<RowRecord[]>({ model, where }, async (adapter, scope) => {
             const rows = await adapter.findMany<RowRecord>({ model, where: scope.clauses, limit, sortBy, offset, join });
-            const nowMs = Date.now();
+            const nowMs = currentMs();
             const live = modelKey === "session" ? rows.filter((row) => !isSessionPastLifetime(row, nowMs)) : rows;
             return live.map((row) => decodeRow(model, row, scope.rawSessionToken) as RowRecord);
           })) as never;

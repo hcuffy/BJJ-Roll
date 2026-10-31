@@ -8,6 +8,7 @@ import {
   RATE_LIMIT_WINDOW_SECONDS,
 } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
+import { currentMs } from "../dates.js";
 
 export interface RateLimitRuleConfig {
   readonly window: number;
@@ -75,7 +76,7 @@ export async function incrementRateLimitCounter(pool: Pool, key: string, windowS
            ELSE public.rate_limits.last_request
          END
        RETURNING count`,
-      [randomUUID(), key, Date.now(), windowSeconds * 1000],
+      [randomUUID(), key, currentMs(), windowSeconds * 1000],
     );
     await client.query("COMMIT");
     return result.rows[0]?.count ?? 1;

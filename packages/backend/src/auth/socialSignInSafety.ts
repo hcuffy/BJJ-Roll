@@ -3,6 +3,7 @@ import { APIError, type createAuthMiddleware } from "better-auth/api";
 import { verifyProviderIdToken } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
+import { currentDate, secondsAfter } from "../dates.js";
 
 type AuthMiddlewareContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
@@ -44,7 +45,7 @@ function sameText(left: string, right: string): boolean {
 
 export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<boolean> {
   const identifier = `${USED_NONCE_IDENTIFIER_PREFIX}${nonceClaim}`;
-  const now = new Date();
+  const now = currentDate();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -56,7 +57,7 @@ export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<bo
     if (used.rowCount === 0) {
       await client.query(
         `INSERT INTO public.verifications (id, identifier, value, expires_at, created_at, updated_at) VALUES ($1, $2, 'used', $3, $4, $4)`,
-        [randomUUID(), identifier, new Date(now.getTime() + USED_NONCE_RETENTION_SECONDS * 1000), now],
+        [randomUUID(), identifier, secondsAfter(now, USED_NONCE_RETENTION_SECONDS), now],
       );
     }
     await client.query("COMMIT");

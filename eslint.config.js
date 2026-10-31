@@ -19,6 +19,17 @@ const componentNamingConvention = [
   { selector: "variable", modifiers: ["const"], types: ["function"], format: ["camelCase", "PascalCase"], custom: notPascalHook },
 ];
 
+const globalAugmentationBan = {
+  selector: "TSModuleDeclaration[kind='global']",
+  message: "Global augmentation goes only in the package's globals.d.ts.",
+};
+const rawDateMessage = "Use the package's src/dates.ts (dayjs) instead of the raw Date clock or constructor.";
+const rawDateBan = [
+  { selector: "NewExpression[callee.name='Date']", message: rawDateMessage },
+  { selector: "MemberExpression[object.name='Date'][property.name='now']", message: rawDateMessage },
+];
+const dateBoundaryFiles = ["packages/*/src/dates.ts", "**/__tests__/**", "**/*.test.{ts,tsx}"];
+
 const unlintedFiles = ["**/vitest.config.ts", "**/vite.config.ts", "**/scripts/**", "**/babel.config.js", "**/metro.config.js"];
 
 export default tseslint.config(
@@ -38,10 +49,7 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports", fixStyle: "inline-type-imports" }],
       "@typescript-eslint/no-import-type-side-effects": "error",
-      "no-restricted-syntax": [
-        "error",
-        { selector: "TSModuleDeclaration[kind='global']", message: "Global augmentation goes only in the package's globals.d.ts." },
-      ],
+      "no-restricted-syntax": ["error", globalAugmentationBan, ...rawDateBan],
       "@typescript-eslint/naming-convention": ["error", ...namingConvention],
       "unicorn/name-replacements": [
         "error",
@@ -66,7 +74,11 @@ export default tseslint.config(
   },
   {
     files: ["**/globals.d.ts"],
-    rules: { "no-restricted-syntax": "off" },
+    rules: { "no-restricted-syntax": ["error", ...rawDateBan] },
+  },
+  {
+    files: dateBoundaryFiles,
+    rules: { "no-restricted-syntax": ["error", globalAugmentationBan] },
   },
   {
     files: ["**/*.tsx"],

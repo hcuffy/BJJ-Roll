@@ -6,6 +6,7 @@ import type { Pool } from "pg";
 import { MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS } from "./authLimits.js";
 import { isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
+import { currentDate, currentMs, secondsAfter, toMs } from "../dates.js";
 
 const EXCHANGE_IDENTIFIER_PREFIX = "magic-link-exchange:";
 
@@ -46,8 +47,8 @@ async function storeExchangeCodeInDatabase(
   const hashedCode = codec.hashExchangeCode(exchangeParameters.rawCode);
   const identifier = `${EXCHANGE_IDENTIFIER_PREFIX}${hashedCode}`;
   const encryptedValue = codec.encryptVerificationPayload(JSON.stringify({ userId: exchangeParameters.userId }));
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS * 1000);
+  const now = currentDate();
+  const expiresAt = secondsAfter(now, MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS);
 
   const client = await pool.connect();
   try {
@@ -102,8 +103,8 @@ async function consumeExchangeCodeFromDatabase(pool: Pool, codec: AuthCryptoCode
     });
   }
 
-  const expiresAtMilliseconds = new Date(consumedRow.expires_at).getTime();
-  if (Date.now() >= expiresAtMilliseconds) {
+  const expiresAtMilliseconds = toMs(consumedRow.expires_at);
+  if (currentMs() >= expiresAtMilliseconds) {
     throw new APIError("UNAUTHORIZED", {
       message: "Magic link exchange code has expired",
     });

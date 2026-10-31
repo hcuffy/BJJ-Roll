@@ -3,6 +3,7 @@ import type { Kysely } from "kysely";
 import { cascadeDeleteUserAccount } from "./cascadeDelete.js";
 import { withUserContext } from "./connection.js";
 import type { BjjRollDatabase } from "./schema.js";
+import { currentDate } from "../dates.js";
 
 function parseHandleUpdatePayload(rawBody: unknown): { valid: true; handle: string | null } | { valid: false } {
   if (typeof rawBody !== "object" || rawBody === null || !("handle" in rawBody)) {
@@ -58,7 +59,7 @@ export function createUserAccountRoutes(db: Kysely<BjjRollDatabase>): Hono {
         .updateTable("users")
         .set({
           handle: parsedBody.handle,
-          updatedAt: new Date(),
+          updatedAt: currentDate(),
         })
         .where("id", "=", targetUserId)
         .returning(["id", "handle", "updatedAt"])

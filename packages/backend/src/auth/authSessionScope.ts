@@ -4,6 +4,7 @@ import { sql, type Transaction } from "kysely";
 import { extractEmailHmacFromIdentifier, normalizeModelKey, transformVerificationIdentifier } from "./authCodecTransform.js";
 import { SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS, SESSION_UPDATE_AGE_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
+import { currentMs, toDate, toMs } from "../dates.js";
 
 const REVOKE_UNPROVEN_ACCESS_PREFIX = "revoke-unproven-account-access:";
 const hashedSessionTokenPattern = /^[0-9a-f]{64}$/u;
@@ -129,17 +130,17 @@ export async function resolveWhereScope(
 }
 
 export function isSessionPastLifetime(row: Record<string, unknown>, nowMs: number): boolean {
-  const createdAtMs = new Date(String(row.createdAt)).getTime();
-  const expiresAtMs = new Date(String(row.expiresAt)).getTime();
+  const createdAtMs = toMs(String(row.createdAt));
+  const expiresAtMs = toMs(String(row.expiresAt));
   const absoluteMaxMs = createdAtMs + SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS * 1000;
   return nowMs >= expiresAtMs || nowMs >= absoluteMaxMs;
 }
 
 export function capSessionCreateExpiry(encoded: Record<string, unknown>): void {
-  const createdAtMs = encoded.createdAt instanceof Date ? encoded.createdAt.getTime() : Date.now();
-  const requestedExpiresAtMs = encoded.expiresAt instanceof Date ? encoded.expiresAt.getTime() : createdAtMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000;
+  const createdAtMs = encoded.createdAt instanceof Date ? toMs(encoded.createdAt) : currentMs();
+  const requestedExpiresAtMs = encoded.expiresAt instanceof Date ? toMs(encoded.expiresAt) : createdAtMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000;
   const absoluteCapMs = createdAtMs + SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS * 1000;
-  encoded.expiresAt = new Date(Math.min(requestedExpiresAtMs, absoluteCapMs));
+  encoded.expiresAt = toDate(Math.min(requestedExpiresAtMs, absoluteCapMs));
 }
 
 export async function applySessionUpdateRules(
@@ -155,8 +156,8 @@ export async function applySessionUpdateRules(
   if (!existing) {
     return null;
   }
-  const nowMs = Date.now();
-  const createdAtMs = new Date(String(existing.createdAt)).getTime();
+  const nowMs = currentMs();
+  const createdAtMs = toMs(String(existing.createdAt));
   const absoluteCapMs = createdAtMs + SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS * 1000;
   if (nowMs >= absoluteCapMs) {
     await scoped.delete({
@@ -165,14 +166,14 @@ export async function applySessionUpdateRules(
     });
     return null;
   }
-  const updatedAtMs = new Date(String(existing.updatedAt)).getTime();
+  const updatedAtMs = toMs(String(existing.updatedAt));
   if (nowMs - updatedAtMs < SESSION_UPDATE_AGE_SECONDS * 1000) {
     return existing;
   }
   const requestedExpiresAtMs =
-    encodedUpdate.expiresAt instanceof Date ? encodedUpdate.expiresAt.getTime() : nowMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000;
-  encodedUpdate.expiresAt = new Date(Math.min(requestedExpiresAtMs, absoluteCapMs));
-  encodedUpdate.updatedAt = new Date(nowMs);
+    encodedUpdate.expiresAt instanceof Date ? toMs(encodedUpdate.expiresAt) : nowMs + SESSION_SLIDING_EXPIRY_SECONDS * 1000;
+  encodedUpdate.expiresAt = toDate(Math.min(requestedExpiresAtMs, absoluteCapMs));
+  encodedUpdate.updatedAt = toDate(nowMs);
   return await scoped.update<Record<string, unknown>>({
     model,
     where: clauses,

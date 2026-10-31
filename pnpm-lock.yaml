@@ -55,6 +55,9 @@ importers:
       better-auth:
         specifier: 1.7.7
         version: 1.7.7(@opentelemetry/api@1.9.1)(pg@8.23.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(terser@5.51.2)(yaml@2.9.1)))
+      dayjs:
+        specifier: 1.11.23
+        version: 1.11.23
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -129,6 +132,9 @@ importers:
       better-auth:
         specifier: 1.7.7
         version: 1.7.7(@opentelemetry/api@1.9.1)(pg@8.23.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(terser@5.51.2)(yaml@2.9.1)))
+      dayjs:
+        specifier: 1.11.23
+        version: 1.11.23
       expo:
         specifier: ~57.0.27
         version: 57.0.27(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@57.0.1)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@6.0.3)
@@ -2035,6 +2041,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  dayjs@1.11.23:
+    resolution: {integrity: sha512-QDTCU0M0MxR3hQfnlDJfwekQiaanm1ubOD231u73WBckQ/fsamwRLiE2GBz6D3a/xF1NgfiDLJjXBa1hYOYTtQ==}
 
   debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -6142,6 +6151,8 @@ snapshots:
       which: 2.0.2
 
   csstype@3.2.3: {}
+
+  dayjs@1.11.23: {}
 
   debug@2.6.9(supports-color@8.1.1):
     dependencies:
