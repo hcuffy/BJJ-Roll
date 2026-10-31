@@ -161,7 +161,7 @@ export function SignedInScreen({
     setDeleteStep("none");
   };
 
-  const isBusy = runningTask !== null;
+  const isBusy = runningTask !== null || biometricSetting.saving;
   const exportButtonProps = {
     disabled: isBusy && runningTask !== "export",
     loading: runningTask === "export",
