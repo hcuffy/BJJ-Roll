@@ -14,7 +14,7 @@ export interface BiometricOfferScreenProps {
   readonly onDone: () => void;
 }
 
-export const BIOMETRIC_CHECK_FAILED = "That didn't work. Try again, or choose Not now.";
+const BIOMETRIC_CHECK_FAILED = "That didn't work. Try again, or choose Not now.";
 
 export function BiometricOfferScreen({ kind, onTurnOn, onDone }: BiometricOfferScreenProps) {
   const [checking, setChecking] = useState(false);

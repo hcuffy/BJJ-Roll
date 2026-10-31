@@ -331,19 +331,6 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Date:** 2026-10-31
 - **Decided by:** Henry, via Sara (HEN-333)
 - **Consequences:** `local/no-prose-comments` (ESLint) and `packages/workers/scripts/check_no_comments.py` fail CI on a new comment.
-- **Notes (moved from code comments, HEN-333):**
-  - Mobile platform quirks with no other entry:
-    - Export sheet (`ExportDataFirstAction.tsx`, Vera, HEN-311): "shared" only when iOS reports the share completed; Android reports
-      sharedAction even on cancel, so after any closed sheet it gets the neutral "created" line.
-    - Face ID (HEN-288): iOS ends the app the first time it asks for Face ID without the `NSFaceIDUsageDescription` text in app.json, so
-      biometric unlock would crash on iPhones.
-    - Export compliance (HEN-273): the app only uses exempt encryption (HTTPS, OS hashing and random bytes), so App Store Connect need not ask
-      on each upload.
-    - Screen-reader announcements (`StatusText.tsx`): a polite live region on Android, an explicit announcement on iOS (which ignores live
-      regions).
-    - Keyboard (`AuthScreenLayout.tsx`): iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
-      adjustResize alone). Dragging the content closes the keyboard because the iOS number pad has no Done key. On iOS the keyboard covers the
-      home indicator, so while it is open the bottom gap is 24 only.
 
 ## D34: A corrupt pending sign-out queue fails closed (Bill D4, HEN-321)
 
@@ -356,3 +343,21 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
 - **Consequences:** `packages/mobile/src/auth/pendingSignOuts.ts` keeps its fail-safe parsing unchanged. `pendingSignOuts.hardening.test.ts` pins the
   cut-off case: only the stored session is signed out, and the queue is cleared. Sessions lost in a cut-off queue stay valid on the server until they expire
   (up to 90 days).
+
+## D35: Mobile platform quirks
+
+- **Decision:** iOS/Android differences that shape mobile code with no other entry are recorded here, not in code comments.
+- **Date:** 2026-10-31
+- **Decided by:** Sara (HEN-333 review)
+- **Notes (moved from code comments, HEN-333):**
+  - Export sheet (`ExportDataFirstAction.tsx`, Vera, HEN-311): "shared" only when iOS reports the share completed; Android reports
+    sharedAction even on cancel, so after any closed sheet it gets the neutral "created" line.
+  - Face ID (HEN-288): iOS ends the app the first time it asks for Face ID without the `NSFaceIDUsageDescription` text in app.json, so
+    biometric unlock would crash on iPhones.
+  - Export compliance (HEN-273): the app only uses exempt encryption (HTTPS, OS hashing and random bytes), so App Store Connect need not ask
+    on each upload.
+  - Screen-reader announcements (`StatusText.tsx`): a polite live region on Android, an explicit announcement on iOS (which ignores live
+    regions).
+  - Keyboard (`AuthScreenLayout.tsx`): iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
+    adjustResize alone). Dragging the content closes the keyboard because the iOS number pad has no Done key. On iOS the keyboard covers the
+    home indicator, so while it is open the bottom gap is 24 only.

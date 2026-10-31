@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6.41.0/schema.json",
+  "include": ["exports", "types", "nsExports", "nsTypes", "duplicates"],
+  "ignore": ["packages/*/src/__tests__/**"],
+  "workspaces": {
+    "packages/backend": {
+      "entry": ["src/server.ts"]
+    },
+    "packages/mobile": {
+      "entry": ["src/__tests__/nativeModuleMocks.ts"]
+    }
+  }
+}

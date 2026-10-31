@@ -1,15 +1,16 @@
 import { createPrivateKey, sign } from "node:crypto";
 import type { BetterAuthOptions } from "better-auth/types";
+import { currentSeconds } from "../dates.js";
 
 export const GOOGLE_CLIENT_ID_ENV = "GOOGLE_CLIENT_ID";
 export const GOOGLE_CLIENT_SECRET_ENV = "GOOGLE_CLIENT_SECRET";
 export const APPLE_SERVICE_ID_ENV = "APPLE_SERVICE_ID";
-export const APPLE_APP_BUNDLE_IDENTIFIER_ENV = "APPLE_APP_BUNDLE_IDENTIFIER";
-export const APPLE_TEAM_ID_ENV = "APPLE_TEAM_ID";
+const APPLE_APP_BUNDLE_IDENTIFIER_ENV = "APPLE_APP_BUNDLE_IDENTIFIER";
+const APPLE_TEAM_ID_ENV = "APPLE_TEAM_ID";
 export const APPLE_KEY_ID_ENV = "APPLE_KEY_ID";
-export const APPLE_PRIVATE_KEY_ENV = "APPLE_PRIVATE_KEY";
+const APPLE_PRIVATE_KEY_ENV = "APPLE_PRIVATE_KEY";
 
-export const googleEnvironmentNames = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
+const googleEnvironmentNames = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
 export const appleEnvironmentNames = [
   APPLE_SERVICE_ID_ENV,
   APPLE_APP_BUNDLE_IDENTIFIER_ENV,
@@ -18,7 +19,7 @@ export const appleEnvironmentNames = [
   APPLE_PRIVATE_KEY_ENV,
 ] as const;
 
-export interface GoogleProviderConfig {
+interface GoogleProviderConfig {
   readonly clientId: string;
   readonly clientSecret: string;
 }
@@ -85,7 +86,7 @@ function encodeBase64Url(value: string | Buffer): string {
   return Buffer.from(value).toString("base64url");
 }
 
-export function createAppleClientSecret(config: AppleProviderConfig, clientId: string, nowSeconds = Math.floor(Date.now() / 1000)): string {
+export function createAppleClientSecret(config: AppleProviderConfig, clientId: string, nowSeconds = currentSeconds()): string {
   const header = encodeBase64Url(JSON.stringify({ alg: "ES256", kid: config.keyId }));
   const payload = encodeBase64Url(
     JSON.stringify({
@@ -103,7 +104,7 @@ export function createAppleClientSecret(config: AppleProviderConfig, clientId: s
 export function createAppleClientSecretSource(config: AppleProviderConfig): (clientId: string) => string {
   const cache = new Map<string, { secret: string; renewAtSeconds: number }>();
   return (clientId) => {
-    const nowSeconds = Math.floor(Date.now() / 1000);
+    const nowSeconds = currentSeconds();
     const cached = cache.get(clientId);
     if (cached && cached.renewAtSeconds > nowSeconds) {
       return cached.secret;

@@ -63,6 +63,8 @@ jobs:
         run: |
           pnpm test:comments
           pnpm lint
+      - name: Unused exports and types (knip)
+        run: pnpm knip
       - name: Modal EU residency guard (HEN-227)
         run: |
           sh scripts/checkModalResidency.test.sh

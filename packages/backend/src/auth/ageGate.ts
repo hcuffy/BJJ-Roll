@@ -13,11 +13,12 @@ import type { Pool, PoolClient } from "pg";
 import { MAGIC_LINK_EXPIRY_SECONDS, OTP_EXPIRY_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { applyScopeSettings, emptyScopeSettings, type AuthTransaction } from "./authSessionScope.js";
+import { currentDate, secondsAfter } from "../dates.js";
 
 const PENDING_IDENTIFIER_PREFIX = "age-confirmation-";
 const PENDING_EXPIRY_SECONDS = Math.max(OTP_EXPIRY_SECONDS, MAGIC_LINK_EXPIRY_SECONDS);
 
-export interface PendingSignUpAnswers {
+interface PendingSignUpAnswers {
   readonly age16Confirmed: boolean;
   readonly age18Confirmed: boolean;
   readonly signUpAttestationTextVersionId: string | null;
@@ -57,11 +58,11 @@ export function isAccountCreatingSend(path: string, body: unknown): body is Reco
   return canCreateUser && typeof bodyRecord.email === "string" && bodyRecord.email.includes("@");
 }
 
-export function ageConfirmationRequiredError(): APIError {
+function ageConfirmationRequiredError(): APIError {
   return new APIError("BAD_REQUEST", { code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
 }
 
-export function signUpAttestationRequiredError(): APIError {
+function signUpAttestationRequiredError(): APIError {
   return new APIError("BAD_REQUEST", { code: "SIGN_UP_ATTESTATION_REQUIRED", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE });
 }
 
@@ -98,7 +99,7 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
   const answers = readSignUpAnswers(body);
   await withAppRole(pool, { verificationIdentifier: identifier }, async (client) => {
     await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
-    const now = new Date();
+    const now = currentDate();
     await client.query(
       `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
        VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $5, $6, $6)`,
@@ -107,7 +108,7 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
         codec.computeEmailHmac(body.email),
         identifier,
         codec.encryptVerificationPayload(JSON.stringify(answers)),
-        new Date(now.getTime() + PENDING_EXPIRY_SECONDS * 1000),
+        secondsAfter(now, PENDING_EXPIRY_SECONDS),
         now,
       ],
     );
@@ -121,12 +122,12 @@ function decodePendingAgeAnswers(codec: AuthCryptoCodec, value: string | undefin
 async function selectPendingAgeAnswers(client: PoolClient, codec: AuthCryptoCodec, identifier: string): Promise<PendingSignUpAnswers | null> {
   const result = await client.query<{ value: string }>("SELECT value FROM public.verifications WHERE identifier = $1 AND expires_at > $2", [
     identifier,
-    new Date(),
+    currentDate(),
   ]);
   return decodePendingAgeAnswers(codec, result.rows[0]?.value);
 }
 
-export async function assertPendingAgeConfirmation(pool: Pool, codec: AuthCryptoCodec, email: string): Promise<void> {
+async function assertPendingAgeConfirmation(pool: Pool, codec: AuthCryptoCodec, email: string): Promise<void> {
   const identifier = pendingIdentifier(codec, email);
   const answers = await withAppRole(pool, { verificationIdentifier: identifier }, (client) => selectPendingAgeAnswers(client, codec, identifier));
   requireAcceptedSignUpAnswers(answers);
@@ -140,7 +141,7 @@ export async function storeAgeConfirmationInUserTransaction(
   const identifier = pendingIdentifier(codec, user.email);
   await applyScopeSettings(transaction, { ...emptyScopeSettings(), userId: user.id, verificationIdentifier: identifier });
   const pending = await sql<{ value: string }>`SELECT value FROM public.verifications
-    WHERE identifier = ${identifier} AND expires_at > ${new Date()}`.execute(transaction);
+    WHERE identifier = ${identifier} AND expires_at > ${currentDate()}`.execute(transaction);
   const pendingAnswers = decodePendingAgeAnswers(codec, pending.rows[0]?.value);
   await sql`DELETE FROM public.verifications WHERE identifier = ${identifier}`.execute(transaction);
   const { age16Confirmed, age18Confirmed, signUpAttestationTextVersionId } = requireAcceptedSignUpAnswers(pendingAnswers);

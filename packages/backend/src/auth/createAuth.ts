@@ -54,9 +54,7 @@ import {
   type AuthEventLogger,
 } from "./socialSignInHooks.js";
 
-export type { AuthEventLogger, AuthEventName } from "./socialSignInHooks.js";
-
-export { resolveClientIpAddress, trustableProxyIpHeaders, type TrustableProxyIpHeader } from "./authRequestGuards.js";
+export { trustableProxyIpHeaders, type TrustableProxyIpHeader } from "./authRequestGuards.js";
 
 export interface CreateAuthOptions {
   readonly pool: Pool;
@@ -72,7 +70,7 @@ export interface CreateAuthOptions {
   readonly logAuthEvent?: AuthEventLogger;
 }
 
-export interface AuthConnectionInfo {
+interface AuthConnectionInfo {
   readonly remoteAddress?: string | undefined;
 }
 

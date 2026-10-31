@@ -1,9 +1,10 @@
+import type { AgeConfirmationRecord, SignUpAttestationRecord } from "@bjj-roll/shared";
 import type { ColumnType, Generated } from "kysely";
 
-export type TimestampColumn = ColumnType<Date, Date | string | undefined, Date | string>;
-export type RequiredTimestampColumn = ColumnType<Date, Date | string, Date | string>;
+type TimestampColumn = ColumnType<Date, Date | string | undefined, Date | string>;
+type RequiredTimestampColumn = ColumnType<Date, Date | string, Date | string>;
 
-export interface UsersTable {
+interface UsersTable {
   id: string;
   emailCiphertext: string;
   emailHash: string;
@@ -14,7 +15,7 @@ export interface UsersTable {
   updatedAt: TimestampColumn;
 }
 
-export interface SessionsTable {
+interface SessionsTable {
   id: string;
   userId: string;
   token: string;
@@ -25,7 +26,7 @@ export interface SessionsTable {
   updatedAt: TimestampColumn;
 }
 
-export interface AccountsTable {
+interface AccountsTable {
   id: string;
   userId: string;
   accountId: string;
@@ -41,7 +42,7 @@ export interface AccountsTable {
   updatedAt: TimestampColumn;
 }
 
-export interface VerificationsTable {
+interface VerificationsTable {
   id: string;
   userId: string | null;
   identifier: string;
@@ -51,10 +52,10 @@ export interface VerificationsTable {
   updatedAt: Generated<Date>;
 }
 
-export interface ConsentRecordsTable {
+interface ConsentRecordsTable {
   id: string;
   userId: string;
-  consentType: "age_confirmation" | "attestation_signup";
+  consentType: (AgeConfirmationRecord | SignUpAttestationRecord)["consentType"];
   textVersionId: string;
   age16Confirmed: boolean | null;
   age18Confirmed: boolean | null;
@@ -69,8 +70,6 @@ export interface BjjRollDatabase {
   verifications: VerificationsTable;
   consentRecords: ConsentRecordsTable;
 }
-
-export type DatabaseSchema = BjjRollDatabase;
 
 export const userDataTables = ["users", "sessions", "accounts", "verifications", "consent_records"] as const;
 export type UserDataTableName = (typeof userDataTables)[number];

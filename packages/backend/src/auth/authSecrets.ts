@@ -28,7 +28,7 @@ export interface AuthSecretConfig {
   readonly previousDataEncryptionKeys?: Readonly<Record<number, string>>;
 }
 
-export interface EncryptedUserEmailFields {
+interface EncryptedUserEmailFields {
   readonly emailCiphertext: string;
   readonly emailHash: string;
   readonly keyVersion: number;

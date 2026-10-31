@@ -57,7 +57,7 @@ export function extractEmailHmacFromIdentifier(rawIdentifier: string, codec: Aut
   return rawIdentifier.includes("@") ? codec.computeEmailHmac(rawIdentifier) : null;
 }
 
-export function extractEmailFromVerificationValue(rawValue: string): string | null {
+function extractEmailFromVerificationValue(rawValue: string): string | null {
   if (!rawValue.startsWith("{")) {
     return null;
   }

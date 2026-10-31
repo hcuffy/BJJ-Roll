@@ -21,10 +21,11 @@ import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
 import type { EmailQueue } from "./email/index.js";
 import type { AuthenticatedUserIdResolver } from "./handleRoutes.js";
+import { currentDate, toIsoString } from "./dates.js";
 
-export type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
+type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
 
-export type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
+type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
 
 export interface AccountRoutesOptions {
   db: Kysely<BjjRollDatabase>;
@@ -49,7 +50,7 @@ function isSocialProviderName(providerId: string): providerId is SocialProviderN
 }
 
 function formatTimestamp(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return toIsoString(value);
 }
 
 async function handleExportAccount(context: Context, options: AccountRoutesOptions): Promise<Response> {
@@ -73,7 +74,7 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
   );
   const linkedProviders = [...new Set(providerRows.map((providerRow) => providerRow.providerId))].filter(isSocialProviderName).sort();
   const exported: AccountExport = accountExportSchema.parse({
-    exportedAt: new Date().toISOString(),
+    exportedAt: toIsoString(currentDate()),
     user: {
       id: row.id,
       email: options.decryptUserEmail(row.emailCiphertext, row.keyVersion),
@@ -210,7 +211,7 @@ async function handleAcceptSignUpAttestation(context: Context, options: AccountR
   return context.json(status, 200);
 }
 
-export function createAccountRoutes(input: AccountRoutesInput): Hono {
+function createAccountRoutes(input: AccountRoutesInput): Hono {
   const options: AccountRoutesOptions = { ...input, logAccountEvent: input.logAccountEvent ?? defaultLogAccountEvent };
   const routes = new Hono();
   routes.get("/account/export", (context) => handleExportAccount(context, options));

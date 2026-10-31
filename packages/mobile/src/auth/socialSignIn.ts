@@ -18,7 +18,7 @@ export type SocialProvider = "apple" | "google";
 
 export const SOCIAL_SIGN_IN_CALLBACK_URL = `${MAGIC_LINK_CALLBACK_URL}${SOCIAL_SIGN_IN_CALLBACK_PATH}`;
 
-export const ACCOUNT_NOT_LINKED_ERROR = "account_not_linked";
+const ACCOUNT_NOT_LINKED_ERROR = "account_not_linked";
 const GOOGLE_NOT_LINKED_MESSAGE = "We couldn't sign you in with Google. Sign in with your email instead.";
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 

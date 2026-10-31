@@ -22,6 +22,7 @@ import { SignUpAttestationFields } from "./SignUpAttestationFields";
 import { StatusText } from "./StatusText";
 import { authStyles } from "./authStyles";
 import { whileFlagged } from "./whileFlagged";
+import type { DeleteStep } from "./types";
 
 export interface SignUpAttestationGateProps {
   readonly onReadStatus: () => Promise<SignUpAttestationResult>;
@@ -38,8 +39,6 @@ export const GATE_READ_ERROR = "Couldn't check your account. Try again.";
 export const TRY_AGAIN = "Try again";
 
 type GateState = "checking" | "readFailed" | "prompt" | "accepted";
-type DeleteStep = "none" | "confirm" | "code";
-
 const styles = StyleSheet.create({ deleteEntry: { marginTop: spacing.small } });
 
 function moveScreenReaderFocus(target: ComponentRef<typeof Text> | ComponentRef<typeof View> | null): void {

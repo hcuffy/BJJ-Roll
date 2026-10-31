@@ -4,7 +4,7 @@ import { SESSION_STORAGE_PREFIX } from "./authClient";
 import type { SessionKeyStore } from "./signInActions";
 
 export const BIOMETRIC_UNLOCK_KEY = `${SESSION_STORAGE_PREFIX}_biometric_unlock`;
-export const BIOMETRIC_OFFERED_KEY = `${SESSION_STORAGE_PREFIX}_biometric_offered`;
+const BIOMETRIC_OFFERED_KEY = `${SESSION_STORAGE_PREFIX}_biometric_offered`;
 
 export type BiometricKind = "faceId" | "touchId" | "biometrics";
 

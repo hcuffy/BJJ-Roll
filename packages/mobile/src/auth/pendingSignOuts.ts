@@ -1,4 +1,5 @@
 import { SESSION_STORAGE_PREFIX } from "./authClient";
+import { currentMs } from "../dates";
 
 export interface SessionKeyStore {
   readonly deleteItemAsync: (key: string) => Promise<void>;
@@ -53,7 +54,7 @@ async function readEntries(secureStore: SessionKeyStore): Promise<PendingSignOut
   } catch {
     return null;
   }
-  const now = Date.now();
+  const now = currentMs();
   const entries: PendingSignOut[] = [];
   for (const entry of value === null ? [] : parseEntries(value).map((stored) => entryOf(stored, now))) {
     if (now - entry.queuedAt < SESSION_MAX_LIFETIME_MS && !entries.some(({ marker }) => marker === entry.marker)) {
@@ -91,7 +92,7 @@ function changeQueue(secureStore: SessionKeyStore, change: (entries: readonly Pe
 
 export async function addPendingSignOut(secureStore: SessionKeyStore, marker: string): Promise<void> {
   await changeQueue(secureStore, (entries) =>
-    entries.some((entry) => entry.marker === marker) ? null : [...entries, { marker, queuedAt: Date.now() }],
+    entries.some((entry) => entry.marker === marker) ? null : [...entries, { marker, queuedAt: currentMs() }],
   );
 }
 

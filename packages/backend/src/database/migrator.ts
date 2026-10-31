@@ -15,7 +15,7 @@ function resolveDefaultMigrationsDirectory(): string {
 
 const defaultMigrationsDirectory = resolveDefaultMigrationsDirectory();
 
-export class SqlFileMigrationProvider implements MigrationProvider {
+class SqlFileMigrationProvider implements MigrationProvider {
   private readonly migrationsDirectory: string;
 
   public constructor(migrationsDirectory: string = defaultMigrationsDirectory) {

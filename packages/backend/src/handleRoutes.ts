@@ -3,6 +3,7 @@ import { sql, type Kysely } from "kysely";
 import { handleSchema, setHandleRequestSchema } from "@bjj-roll/shared";
 import { withUserContext } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
+import { currentDate, toIsoString } from "./dates.js";
 
 export type AuthenticatedUserIdResolver = (context: Context) => Promise<string | null> | string | null;
 
@@ -28,7 +29,7 @@ export function isUniqueHandleConflict(error: unknown): boolean {
 }
 
 function formatTimestamp(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : String(value);
+  return value instanceof Date ? toIsoString(value) : String(value);
 }
 
 function resolveOptions(dbOrOptions: Kysely<BjjRollDatabase> | HandleRoutesOptions, config?: HandleRouteConfig): HandleRoutesOptions {
@@ -137,7 +138,7 @@ async function handleSetUserHandle(context: Context, options: HandleRoutesOption
         .updateTable("users")
         .set({
           handle: parsedBody.handle,
-          updatedAt: new Date(),
+          updatedAt: currentDate(),
         })
         .where("id", "=", authenticatedUserId)
         .where("handle", "is", null)

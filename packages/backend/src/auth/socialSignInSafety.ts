@@ -1,10 +1,10 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { APIError, type createAuthMiddleware } from "better-auth/api";
+import { APIError } from "better-auth/api";
 import { verifyProviderIdToken } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
-
-type AuthMiddlewareContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+import { currentDate, secondsAfter } from "../dates.js";
+import type { AuthMiddlewareContext } from "./types.js";
 
 const MIN_NONCE_LENGTH = 16;
 const MAX_NONCE_LENGTH = 256;
@@ -13,9 +13,9 @@ const USED_NONCE_IDENTIFIER_PREFIX = "apple-id-token-nonce:";
 
 const invalidToken = (): APIError => new APIError("UNAUTHORIZED", { code: "INVALID_TOKEN", message: "Invalid token" });
 
-export const socialSignInNotLinked = (): APIError => new APIError("UNAUTHORIZED", { code: "OAUTH_LINK_ERROR", message: "account not linked" });
+const socialSignInNotLinked = (): APIError => new APIError("UNAUTHORIZED", { code: "OAUTH_LINK_ERROR", message: "account not linked" });
 
-export function isProviderEmailVerified(profile: Record<string, unknown> | undefined): boolean {
+function isProviderEmailVerified(profile: Record<string, unknown> | undefined): boolean {
   const claim = profile?.email_verified;
   return claim === true || claim === "true";
 }
@@ -44,7 +44,7 @@ function sameText(left: string, right: string): boolean {
 
 export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<boolean> {
   const identifier = `${USED_NONCE_IDENTIFIER_PREFIX}${nonceClaim}`;
-  const now = new Date();
+  const now = currentDate();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -56,7 +56,7 @@ export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<bo
     if (used.rowCount === 0) {
       await client.query(
         `INSERT INTO public.verifications (id, identifier, value, expires_at, created_at, updated_at) VALUES ($1, $2, 'used', $3, $4, $4)`,
-        [randomUUID(), identifier, new Date(now.getTime() + USED_NONCE_RETENTION_SECONDS * 1000), now],
+        [randomUUID(), identifier, secondsAfter(now, USED_NONCE_RETENTION_SECONDS), now],
       );
     }
     await client.query("COMMIT");

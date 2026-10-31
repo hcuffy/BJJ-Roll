@@ -1,6 +1,6 @@
 import { DEEP_LINK_CALLBACK_URL, DEEP_LINK_SCHEME } from "./authLimits.js";
 
-export const magicLinkRedirectParameters = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
+const magicLinkRedirectParameters = ["callbackURL", "newUserCallbackURL", "errorCallbackURL"] as const;
 
 const DEEP_LINK_HOST = new URL(DEEP_LINK_CALLBACK_URL).host;
 const DEEP_LINK_PREFIX = `${DEEP_LINK_SCHEME}://${DEEP_LINK_HOST}`;

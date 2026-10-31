@@ -1,4 +1,4 @@
-import { getOAuthState, type createAuthMiddleware } from "better-auth/api";
+import { getOAuthState } from "better-auth/api";
 import type { Pool } from "pg";
 import { readSocialSignUpAgeAnswers, refreshSignUpAttestationAfterSignIn, type SocialSignUpAgeAnswers } from "./ageGate.js";
 import {
@@ -11,6 +11,7 @@ import {
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { createAppleClientSecretSource, type AppleProviderConfig } from "./socialProviders.js";
 import { neutralizeAccountNotLinkedRedirect } from "./socialSignInSafety.js";
+import type { AuthMiddlewareContext } from "./types.js";
 
 export type AuthEventName = "apple_refresh_token_missing" | "signup_attestation_refresh_failed";
 
@@ -21,8 +22,6 @@ const defaultLogAuthEvent: AuthEventLogger = (event, userId) => {
 };
 
 const MAX_APPLE_AUTHORIZATION_CODE_LENGTH = 1024;
-
-type AuthMiddlewareContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
 interface UserCreateHookContext {
   readonly path?: string;
@@ -83,7 +82,7 @@ async function refreshSignUpAttestation(middlewareContext: AuthMiddlewareContext
   }
 }
 
-export async function captureAppleRefreshToken(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture): Promise<void> {
+async function captureAppleRefreshToken(middlewareContext: AuthMiddlewareContext, capture: AppleSignInCapture): Promise<void> {
   const { appleTokenClient, codec, logAuthEvent } = capture;
   if (middlewareContext.path !== "/sign-in/social" || !appleTokenClient) {
     return;

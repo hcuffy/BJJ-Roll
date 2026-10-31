@@ -5,7 +5,7 @@ import { StatusText } from "./StatusText";
 
 export const SERVER_UNREACHABLE_NOTE = "Can't reach the server right now. Check your connection and try again.";
 
-export interface StartupRetry {
+interface StartupRetry {
   readonly onRetry: () => void;
   readonly retrying: boolean;
   readonly announceKey: number;
