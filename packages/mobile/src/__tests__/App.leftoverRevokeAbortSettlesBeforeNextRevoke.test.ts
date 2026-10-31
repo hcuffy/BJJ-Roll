@@ -1,6 +1,3 @@
-// Bill gate draft (HEN-330 @ 062a89b). Copy to packages/mobile/src/__tests__/ to run. Not part of the PR branch.
-// Real fetch settles an aborted request a moment after abort(); the harness rejects in the same tick, so "abort but do
-// not wait" (P2) passed every test. Here the aborted request settles only when the test says so.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import {
   type AppClientSlot,
@@ -33,7 +30,6 @@ describe("App: the next revoke waits until the aborted one has settled (HEN-330 
   let phone: ReturnType<typeof createLeftoverRevokePhone>;
   let consoleSpies: MockInstance[];
 
-  // Aborted requests settle only after release(), like a real fetch tearing down its connection.
   const slowAbortSettle = () => {
     let release = () => undefined as void;
     const released = new Promise<void>((resolve) => {
@@ -81,7 +77,6 @@ describe("App: the next revoke waits until the aborted one has settled (HEN-330 
     await screen.press("Try again");
     await settle();
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
-    // The launch's revoke is aborted but has not settled yet: the Try again revoke must not have started.
     expect(phone.server.peakInFlight.get(FIRST)).toBe(1);
 
     release();
