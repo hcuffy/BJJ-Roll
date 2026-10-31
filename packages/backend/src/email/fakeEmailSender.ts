@@ -21,7 +21,7 @@ export interface FakeSentOneTimeCodeMessage {
   text: string;
 }
 
-export interface FakeSentMagicLinkMessage {
+interface FakeSentMagicLinkMessage {
   idempotencyKey?: string;
   kind: "magic_link";
   to: string;
@@ -31,7 +31,7 @@ export interface FakeSentMagicLinkMessage {
   text: string;
 }
 
-export interface FakeSentAccountDeletedMessage {
+interface FakeSentAccountDeletedMessage {
   idempotencyKey?: string;
   kind: "account_deleted";
   to: string;

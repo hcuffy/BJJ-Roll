@@ -13,7 +13,7 @@ import {
 export type FetchFunction = typeof globalThis.fetch;
 
 export const DEFAULT_LETTERMINT_ENDPOINT = "https://api.lettermint.co/v1/send";
-export const DEFAULT_LETTERMINT_TIMEOUT_MILLISECONDS = 10_000;
+const DEFAULT_LETTERMINT_TIMEOUT_MILLISECONDS = 10_000;
 
 export interface LettermintEmailSenderConfig {
   apiKey: string;

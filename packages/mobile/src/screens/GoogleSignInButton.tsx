@@ -3,7 +3,7 @@ import googleSignInDarkPill from "../../assets/google-sign-in-dark-pill.png";
 import { sizes } from "../theme/tokens";
 import type { BrandButtonProps } from "./brandButtonProps";
 
-export const GOOGLE_BUTTON_TITLE = "Sign in with Google";
+const GOOGLE_BUTTON_TITLE = "Sign in with Google";
 
 const IMAGE_WIDTH = Math.round((sizes.buttonHeight * 180) / 40);
 

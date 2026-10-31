@@ -11,10 +11,10 @@ import {
 } from "./emailSender.js";
 
 export const EMAIL_QUEUE_NAME = "email_send";
-export const EMAIL_QUEUE_RETRY_LIMIT = 2;
+const EMAIL_QUEUE_RETRY_LIMIT = 2;
 export const EMAIL_QUEUE_RETRY_DELAY_SECONDS = 1;
-export const EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS = 60;
-export const EMAIL_QUEUE_EXPIRE_SECONDS = 60;
+const EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS = 60;
+const EMAIL_QUEUE_EXPIRE_SECONDS = 60;
 export const EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS = 6 * 60 * 60;
 
 export type QueuedEmail =
@@ -60,7 +60,7 @@ interface SealedEmailJob {
   readonly sealed: string;
 }
 
-export function isRetryableEmailError(error: unknown): boolean {
+function isRetryableEmailError(error: unknown): boolean {
   if (!(error instanceof EmailSendError)) {
     return true;
   }

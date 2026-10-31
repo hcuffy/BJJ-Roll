@@ -18,7 +18,7 @@ import { currentDate, secondsAfter } from "../dates.js";
 const PENDING_IDENTIFIER_PREFIX = "age-confirmation-";
 const PENDING_EXPIRY_SECONDS = Math.max(OTP_EXPIRY_SECONDS, MAGIC_LINK_EXPIRY_SECONDS);
 
-export interface PendingSignUpAnswers {
+interface PendingSignUpAnswers {
   readonly age16Confirmed: boolean;
   readonly age18Confirmed: boolean;
   readonly signUpAttestationTextVersionId: string | null;
@@ -58,11 +58,11 @@ export function isAccountCreatingSend(path: string, body: unknown): body is Reco
   return canCreateUser && typeof bodyRecord.email === "string" && bodyRecord.email.includes("@");
 }
 
-export function ageConfirmationRequiredError(): APIError {
+function ageConfirmationRequiredError(): APIError {
   return new APIError("BAD_REQUEST", { code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
 }
 
-export function signUpAttestationRequiredError(): APIError {
+function signUpAttestationRequiredError(): APIError {
   return new APIError("BAD_REQUEST", { code: "SIGN_UP_ATTESTATION_REQUIRED", message: SIGN_UP_ATTESTATION_REFUSAL_MESSAGE });
 }
 
@@ -127,7 +127,7 @@ async function selectPendingAgeAnswers(client: PoolClient, codec: AuthCryptoCode
   return decodePendingAgeAnswers(codec, result.rows[0]?.value);
 }
 
-export async function assertPendingAgeConfirmation(pool: Pool, codec: AuthCryptoCodec, email: string): Promise<void> {
+async function assertPendingAgeConfirmation(pool: Pool, codec: AuthCryptoCodec, email: string): Promise<void> {
   const identifier = pendingIdentifier(codec, email);
   const answers = await withAppRole(pool, { verificationIdentifier: identifier }, (client) => selectPendingAgeAnswers(client, codec, identifier));
   requireAcceptedSignUpAnswers(answers);

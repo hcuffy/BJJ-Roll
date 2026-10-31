@@ -8,9 +8,9 @@ export const modalFunctionNames = {
   video_render_masked: "render_masked_video",
 } as const satisfies Partial<Record<JobQueue, string>>;
 
-export type ModalQueue = keyof typeof modalFunctionNames;
+type ModalQueue = keyof typeof modalFunctionNames;
 
-export interface RemoteOnlyFunction {
+interface RemoteOnlyFunction {
   remote(positionalArguments: unknown[]): Promise<unknown>;
 }
 
@@ -23,7 +23,7 @@ export interface ModalJobRequest {
   input: ModalCallInput;
 }
 
-export class ModalJobCallError extends Error {
+class ModalJobCallError extends Error {
   readonly errorClass: string;
 
   constructor(errorClass: string) {

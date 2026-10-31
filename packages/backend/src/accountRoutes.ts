@@ -23,9 +23,9 @@ import type { EmailQueue } from "./email/index.js";
 import type { AuthenticatedUserIdResolver } from "./handleRoutes.js";
 import { currentDate, toIsoString } from "./dates.js";
 
-export type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
+type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
 
-export type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
+type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
 
 export interface AccountRoutesOptions {
   db: Kysely<BjjRollDatabase>;
@@ -211,7 +211,7 @@ async function handleAcceptSignUpAttestation(context: Context, options: AccountR
   return context.json(status, 200);
 }
 
-export function createAccountRoutes(input: AccountRoutesInput): Hono {
+function createAccountRoutes(input: AccountRoutesInput): Hono {
   const options: AccountRoutesOptions = { ...input, logAccountEvent: input.logAccountEvent ?? defaultLogAccountEvent };
   const routes = new Hono();
   routes.get("/account/export", (context) => handleExportAccount(context, options));

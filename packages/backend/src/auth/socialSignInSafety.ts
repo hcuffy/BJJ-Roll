@@ -1,11 +1,10 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { APIError, type createAuthMiddleware } from "better-auth/api";
+import { APIError } from "better-auth/api";
 import { verifyProviderIdToken } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
 import { currentDate, secondsAfter } from "../dates.js";
-
-type AuthMiddlewareContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+import type { AuthMiddlewareContext } from "./types.js";
 
 const MIN_NONCE_LENGTH = 16;
 const MAX_NONCE_LENGTH = 256;
@@ -14,9 +13,9 @@ const USED_NONCE_IDENTIFIER_PREFIX = "apple-id-token-nonce:";
 
 const invalidToken = (): APIError => new APIError("UNAUTHORIZED", { code: "INVALID_TOKEN", message: "Invalid token" });
 
-export const socialSignInNotLinked = (): APIError => new APIError("UNAUTHORIZED", { code: "OAUTH_LINK_ERROR", message: "account not linked" });
+const socialSignInNotLinked = (): APIError => new APIError("UNAUTHORIZED", { code: "OAUTH_LINK_ERROR", message: "account not linked" });
 
-export function isProviderEmailVerified(profile: Record<string, unknown> | undefined): boolean {
+function isProviderEmailVerified(profile: Record<string, unknown> | undefined): boolean {
   const claim = profile?.email_verified;
   return claim === true || claim === "true";
 }

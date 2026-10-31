@@ -3,44 +3,20 @@ export {
   renderAccountDeletedEmail,
   renderMagicLinkEmail,
   renderOneTimeCodeEmail,
-  type EmailIdempotency,
   type EmailSender,
-  type EmailSendFailureReason,
-  type OneTimeCodePurpose,
-  type RenderedEmailMessage,
   type SendAccountDeletedNoticeInput,
   type SendMagicLinkInput,
   type SendOneTimeCodeInput,
 } from "./emailSender.js";
+export { FakeEmailSender, type FakeSentOneTimeCodeMessage } from "./fakeEmailSender.js";
+export { DEFAULT_LETTERMINT_ENDPOINT, LettermintEmailSender, type FetchFunction, type LettermintSendRequestBody } from "./lettermintEmailSender.js";
 export {
-  FakeEmailSender,
-  type FakeSentAccountDeletedMessage,
-  type FakeSentEmailMessage,
-  type FakeSentMagicLinkMessage,
-  type FakeSentOneTimeCodeMessage,
-} from "./fakeEmailSender.js";
-export {
-  DEFAULT_LETTERMINT_ENDPOINT,
-  DEFAULT_LETTERMINT_TIMEOUT_MILLISECONDS,
-  LettermintEmailSender,
-  type FetchFunction,
-  type LettermintEmailSenderConfig,
-  type LettermintSendRequestBody,
-} from "./lettermintEmailSender.js";
-export {
-  EMAIL_QUEUE_EXPIRE_SECONDS,
   EMAIL_QUEUE_NAME,
   EMAIL_QUEUE_NOTICE_LIFETIME_SECONDS,
-  EMAIL_QUEUE_RETRY_DELAY_MAX_SECONDS,
   EMAIL_QUEUE_RETRY_DELAY_SECONDS,
-  EMAIL_QUEUE_RETRY_LIMIT,
-  isRetryableEmailError,
   PgBossEmailQueue,
   type EmailQueue,
-  type EmailQueueLogger,
   type EmailQueueLogLine,
-  type EnqueueEmailOptions,
   type PgBossEmailQueueOptions,
   type QueuedEmail,
-  type StartEmailQueueOptions,
 } from "./emailQueue.js";

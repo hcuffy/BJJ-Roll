@@ -39,11 +39,11 @@ export async function lookupUserIdByEmailHmacInTransaction(transaction: AuthTran
   return result.rows[0]?.userId ?? null;
 }
 
-export function isHashedSessionToken(value: string): boolean {
+function isHashedSessionToken(value: string): boolean {
   return hashedSessionTokenPattern.test(value);
 }
 
-export function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): string {
+function hashSessionTokenValue(value: string, codec: AuthCryptoCodec): string {
   return isHashedSessionToken(value) ? value : codec.hashSessionToken(value);
 }
 

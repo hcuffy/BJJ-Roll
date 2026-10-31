@@ -5,12 +5,12 @@ import { currentSeconds } from "../dates.js";
 export const GOOGLE_CLIENT_ID_ENV = "GOOGLE_CLIENT_ID";
 export const GOOGLE_CLIENT_SECRET_ENV = "GOOGLE_CLIENT_SECRET";
 export const APPLE_SERVICE_ID_ENV = "APPLE_SERVICE_ID";
-export const APPLE_APP_BUNDLE_IDENTIFIER_ENV = "APPLE_APP_BUNDLE_IDENTIFIER";
-export const APPLE_TEAM_ID_ENV = "APPLE_TEAM_ID";
+const APPLE_APP_BUNDLE_IDENTIFIER_ENV = "APPLE_APP_BUNDLE_IDENTIFIER";
+const APPLE_TEAM_ID_ENV = "APPLE_TEAM_ID";
 export const APPLE_KEY_ID_ENV = "APPLE_KEY_ID";
-export const APPLE_PRIVATE_KEY_ENV = "APPLE_PRIVATE_KEY";
+const APPLE_PRIVATE_KEY_ENV = "APPLE_PRIVATE_KEY";
 
-export const googleEnvironmentNames = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
+const googleEnvironmentNames = [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV] as const;
 export const appleEnvironmentNames = [
   APPLE_SERVICE_ID_ENV,
   APPLE_APP_BUNDLE_IDENTIFIER_ENV,
@@ -19,7 +19,7 @@ export const appleEnvironmentNames = [
   APPLE_PRIVATE_KEY_ENV,
 ] as const;
 
-export interface GoogleProviderConfig {
+interface GoogleProviderConfig {
   readonly clientId: string;
   readonly clientSecret: string;
 }
