@@ -84,6 +84,8 @@ def track_video(
     rss_reader: RssReader = read_peak_rss_bytes,
 ) -> VideoTrackingResult:
     """Track the user from `own_tap` to the end of `frames` (frame index = position, sampled at `config.frames_per_second`)."""
+    if not isinstance(own_tap, TapPoint):
+        raise TypeError("each video needs the user's own tap")
     other_taps = dict(other_taps or {})
     if OWN_ATHLETE_ID in other_taps:
         raise ValueError("other athletes cannot use the user's athlete ID")

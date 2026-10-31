@@ -170,3 +170,31 @@ def test_re_prompt_flow_counts_per_style_sum_two_videos_of_the_same_style() -> N
     counts_by_style = count_re_prompts_by_style([first_result, second_result])
 
     assert {style: (counts.re_prompt_count, counts.correction_count) for style, counts in counts_by_style.items()} == {"gi": (3, 2)}
+
+
+@dataclass
+class StuckTracker:
+    """Reports the same drift on every call, as a tracker stuck on one frame would; fails the test instead of hanging."""
+
+    drift: DriftEvent
+    calls: int = 0
+
+    def anchor(self, tap: TapPoint) -> None:
+        pass
+
+    def next_drift(self) -> DriftEvent | None:
+        self.calls += 1
+        if self.calls > 100:
+            raise AssertionError("re-prompt flow kept asking the tracker after a repeated drift frame")
+        return self.drift
+
+
+def test_re_prompt_flow_stops_when_the_tracker_repeats_a_drift_frame() -> None:
+    tracker = StuckTracker(DriftEvent(frame_index=120, reason="mask_jump"))
+    prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3)])
+
+    result = run_re_prompt_flow(JOB_ID, VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), tracker, FakeFrameSource(), prompter)
+
+    assert tracker.calls == 2
+    assert result.re_prompt_count == 1
+    assert result.corrections == (TapPoint(frame_index=120, x=0.7, y=0.3),)

@@ -64,3 +64,27 @@ def test_re_prompt_flow_logs_no_filename_url_token_or_frame_bytes(capsys: pytest
     for fragment in FORBIDDEN_FRAGMENTS:
         assert fragment not in captured.out
         assert fragment not in captured.err
+
+
+class RaisingPrompter:
+    def ask_was_this_you(self, drift: DriftEvent, frame: bytes) -> PromptAnswer:
+        raise RuntimeError(f"prompt failed for {UPLOADED_FILENAME}")
+
+
+def test_re_prompt_flow_logs_finished_even_when_the_prompter_raises(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(RuntimeError):
+        run_re_prompt_flow(
+            JOB_ID,
+            VideoRun(VIDEO_ID, "gi", TapPoint(frame_index=0, x=0.4123, y=0.5678), FRAME_SIZE),
+            PoisonedTracker(),
+            PoisonedFrameSource(),
+            RaisingPrompter(),
+        )
+
+    captured = capsys.readouterr()
+    entries = [json.loads(line) for line in captured.out.splitlines() if line]
+    assert [entry["event"] for entry in entries] == ["re_prompt_flow_started", "re_prompt_flow_finished"]
+    assert set(entries[-1]) <= {"event", "jobId", "durationSeconds", "level", "timestamp"}
+    for fragment in [*FORBIDDEN_FRAGMENTS, "0.4123", "0.5678"]:
+        assert fragment not in captured.out
+        assert fragment not in captured.err

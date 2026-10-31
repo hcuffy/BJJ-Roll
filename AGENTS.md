@@ -38,7 +38,7 @@ Run from the repo root.
 
 ## Python workers
 
-- `packages/workers` is Python, not a pnpm package. Python is pinned to `3.15.0` (`packages/workers/.python-version`); install uv 0.13.1 directly (no other Python setup needed, uv fetches 3.15.0).
+- `packages/workers` is Python, not a pnpm package. The package accepts Python >= 3.13; `packages/workers/.python-version` (3.15.0) is the default. CI runs 3.13 and 3.15, and the real ONNX run uses 3.13. Install uv 0.13.1 directly (no other Python setup needed, uv fetches the Python it needs).
 - Setup: `cd packages/workers && uv sync --locked` (`uv.lock` is committed).
 - Lint: `uv run ruff check` and `uv run ruff format --check` (line length 150, double quotes, 4-space indent). Test: `uv run pytest`.
 - Tests live in `packages/workers/tests/`, named `test_<module>_<scenario>.py`. Full variable names apply here too.
@@ -50,6 +50,7 @@ Run from the repo root.
 ## Conventions
 
 - Follow CONVENTIONS.v2 (summarised in `.github/coderabbit.md`): strict TypeScript, ESM, double quotes, 2-space indent, trailing commas, full names instead of abbreviations, Vitest tests in `__tests__/` named `<module>.<scenario>.test.ts`.
+- TS types (lint errors): `interface` for object shapes, `type` only for unions, intersections, tuples, mapped/conditional types and primitive aliases; `import type` for type-only imports; no `any` (use `unknown` and narrow); `declare global` only in a package's `globals.d.ts`.
 - Architecture and tooling decisions are recorded in [`DECISIONS.md`](DECISIONS.md).
 
 ## Commits
