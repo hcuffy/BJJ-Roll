@@ -42,8 +42,7 @@ type AuthScreen =
 
 const accountExitNotices: Record<AccountDeletionExit, string> = {
   deleted: "Your account was deleted. If you sign up again, you get a new, empty account.",
-  sessionLeft: "Your account was deleted. Close and reopen the app to finish signing out.",
-  signedOut: "You're signed out. If your account still exists, sign in and try again.",
+  signedOut: "You're signed out. We couldn't confirm the delete. If you sign in and your data is still there, delete it again under Account.",
 };
 
 export function App() {

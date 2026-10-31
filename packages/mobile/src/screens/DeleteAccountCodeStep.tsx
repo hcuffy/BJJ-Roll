@@ -29,7 +29,6 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
   const [offline, setOffline] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const responseLost = useRef(false);
   const heading = useRef<ComponentRef<typeof Text>>(null);
 
   useEffect(() => {
@@ -65,13 +64,12 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
     runOnce("delete", async () => {
       const result = await onDeleteAccount(code);
       if (result.ok) {
-        onAccountDeleted(result.sessionLeft ? "sessionLeft" : "deleted");
-      } else if (result.reason === "signedOut" && responseLost.current) {
+        onAccountDeleted("deleted");
+      } else if (result.reason === "signedOut") {
         onAccountDeleted("signedOut");
       } else if (result.reason === "invalidCode") {
         setCodeError(result.message);
       } else {
-        responseLost.current ||= result.reason === "network";
         showFailure(accountFailureView(result, "Your account was not deleted."));
       }
     });

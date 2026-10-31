@@ -23,8 +23,12 @@ const { App } = await import("../App");
 
 const CODE_STEP = "Enter the code we emailed you";
 const NOT_DELETED = "Your account was not deleted.";
-const SIGNED_OUT_NOTICE = "You're signed out. If your account still exists, sign in and try again.";
-const SESSION_LEFT_NOTICE = "Your account was deleted. Close and reopen the app to finish signing out.";
+const SIGNED_OUT_NOTICE = [
+  "You're signed out.",
+  "We couldn't confirm the delete.",
+  "If you sign in and your data is still there, delete it again under Account.",
+].join(" ");
+const DELETED_NOTICE = "Your account was deleted. If you sign up again, you get a new, empty account.";
 const EMAIL_SCREEN = "Continue with email";
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -33,7 +37,7 @@ function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-describe("App: account delete retry after a lost response and a failing session clear (HEN-329)", () => {
+describe("App: account delete 401, lost response and a failing session clear (HEN-329)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let logged: string[];
@@ -42,11 +46,21 @@ describe("App: account delete retry after a lost response and a failing session 
     const request = new Request(input, init);
     return request.method === "DELETE" && new URL(request.url).pathname === "/account";
   };
+  let codeReplies: Fetch[] = [];
+  const isCodeRequest = (input: string | URL | Request, init?: RequestInit) => {
+    return new URL(new Request(input, init).url).pathname === "/account/delete-code";
+  };
 
   const signInAndOpenCodeStep = async (deleteReplies: readonly Fetch[] = []) => {
     const replies = [...deleteReplies];
+    const replyFor = (input: string | URL | Request, init?: RequestInit) => {
+      if (isDelete(input, init)) {
+        return replies.shift();
+      }
+      return isCodeRequest(input, init) ? codeReplies.shift() : undefined;
+    };
     const fetchImplementation: Fetch = (input, init) => {
-      const reply = isDelete(input, init) ? replies.shift() : undefined;
+      const reply = replyFor(input, init);
       return reply ? reply(input, init) : backend.fetchImplementation(input, init);
     };
     appClient.store = secureStore;
@@ -84,6 +98,7 @@ describe("App: account delete retry after a lost response and a failing session 
     deepLinkState.url = null;
     resetBackListeners();
     logged = [];
+    codeReplies = [];
     for (const level of ["log", "info", "warn", "error", "debug"] as const) {
       vi.spyOn(console, level).mockImplementation((...parts: unknown[]) => {
         logged.push(
@@ -96,6 +111,12 @@ describe("App: account delete retry after a lost response and a failing session 
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  const expectPoliteNotice = (screen: Awaited<ReturnType<typeof signInAndOpenCodeStep>>, message: string) => {
+    const notice = screen.queryByText(message);
+    expect(notice?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
+    expect(notice?.props.accessibilityRole).toBeUndefined();
+  };
 
   it("a retry that gets 401 after a lost response signs out to the email screen with neutral copy, never deleted or not deleted", async () => {
     const screen = await signInAndOpenCodeStep([lostResponse, status(401)]);
@@ -110,18 +131,31 @@ describe("App: account delete retry after a lost response and a failing session 
     expect(screen.text()).not.toContain(CODE_STEP);
     expect(screen.text()).not.toContain("deleted");
     expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
+    expectPoliteNotice(screen, SIGNED_OUT_NOTICE);
   });
 
-  it("a confirmed delete whose phone session clear fails shows a message, leaves the code step and runs the deleted exit", async () => {
+  it("a confirmed delete whose phone session clear fails shows the normal deleted copy, leaves the code step and runs the deleted exit", async () => {
     const screen = await signInAndOpenCodeStep();
     secureStore.failingKeys.add("bjjroll_cookie");
 
     await pressDelete(screen);
 
-    expect(screen.text()).toContain(SESSION_LEFT_NOTICE);
+    expect(screen.text()).toContain(DELETED_NOTICE);
+    expect(screen.text()).not.toContain("reopen");
     expect(screen.text()).toContain(EMAIL_SCREEN);
     expect(screen.text()).not.toContain(CODE_STEP);
     expect(screen.text()).not.toContain(NOT_DELETED);
+    expectPoliteNotice(screen, DELETED_NOTICE);
+  });
+
+  it("a session clear that fails once after a confirmed delete is tried once more in the background", async () => {
+    const screen = await signInAndOpenCodeStep();
+    secureStore.deleteItemAsync.mockRejectedValueOnce(new Error("SecureStore write failed"));
+
+    await pressDelete(screen);
+
+    expect(screen.text()).toContain(DELETED_NOTICE);
+    expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
   });
 
   it.each([
@@ -139,14 +173,29 @@ describe("App: account delete retry after a lost response and a failing session 
     expect(secureStore.items.has("bjjroll_cookie")).toBe(true);
   });
 
-  it("a 401 on the first delete keeps today's red not-deleted error on the code step", async () => {
+  it("a 401 on the first delete signs out to the email screen with the same neutral copy", async () => {
     const screen = await signInAndOpenCodeStep([status(401)]);
 
     await pressDelete(screen);
 
+    expect(screen.text()).toContain(SIGNED_OUT_NOTICE);
+    expect(screen.text()).toContain(EMAIL_SCREEN);
+    expect(screen.text()).not.toContain(CODE_STEP);
+    expect(screen.text()).not.toContain(NOT_DELETED);
+    expect(secureStore.items.has("bjjroll_cookie")).toBe(false);
+  });
+
+  it("a 401 on a new delete code request keeps today's red error on the code step and stays signed in", async () => {
+    const screen = await signInAndOpenCodeStep();
+    codeReplies = [status(401)];
+
+    await screen.press("Send a new code");
+    await settle();
+
     expect(screen.text()).toContain(CODE_STEP);
-    expect(screen.text()).toContain(`${NOT_DELETED} ${failureMessages.unknown}`);
+    expect(screen.text()).toContain(`We could not send the code. ${failureMessages.unknown}`);
     expect(screen.text()).not.toContain(SIGNED_OUT_NOTICE);
+    expect(secureStore.items.has("bjjroll_cookie")).toBe(true);
   });
 
   it("logs no session token, cookie or delete code on the lost-response retry or the failing session clear", async () => {

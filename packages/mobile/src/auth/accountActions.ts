@@ -23,8 +23,8 @@ interface AccountFailure {
   readonly message: string;
 }
 export type AccountCodeResult = { readonly ok: true } | AccountFailure;
-export type AccountDeletionResult = { readonly ok: true; readonly sessionLeft?: true } | AccountFailure;
-export type AccountDeletionExit = "deleted" | "sessionLeft" | "signedOut";
+export type AccountDeletionResult = { readonly ok: true } | AccountFailure;
+export type AccountDeletionExit = "deleted" | "signedOut";
 export type AccountExportResult = { readonly ok: true; readonly json: string } | AccountFailure;
 export type AgeConfirmationResult = { readonly ok: true; readonly status: AgeConfirmationStatus } | AccountFailure;
 export type SignUpAttestationResult = { readonly ok: true; readonly status: SignUpAttestationStatus } | AccountFailure;
@@ -129,9 +129,9 @@ export async function deleteAccount(session: AccountSession, code: string): Prom
   if (!accountDeletionResponseSchema.safeParse(response.data).success) {
     return failure("unknown");
   }
-  const cleared = await Promise.all(sessionStorageKeys.map((key) => session.secureStore.deleteItemAsync(key))).then(
-    () => true,
-    () => false,
-  );
-  return cleared ? { ok: true } : { ok: true, sessionLeft: true };
+  const clearSession = () => Promise.all(sessionStorageKeys.map((key) => session.secureStore.deleteItemAsync(key)));
+  await clearSession().catch(() => {
+    void clearSession().catch(() => undefined);
+  });
+  return { ok: true };
 }
