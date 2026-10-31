@@ -16,7 +16,7 @@ import {
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { type BiometricKind, changeBiometricUnlock, clearBiometricUnlock, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
-import { cancelPendingSignOut, completeMagicLink, failureMessages, type FailureReason, signOut } from "./auth/signInActions";
+import { completeMagicLink, failureMessages, type FailureReason, signOut } from "./auth/signInActions";
 import { checkStartup, readBiometricLock } from "./auth/startupCheck";
 import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
@@ -27,6 +27,7 @@ import { LoadingScreen } from "./screens/LoadingScreen";
 import { SignUpAttestationGate } from "./screens/SignUpAttestationGate";
 import { SignedInScreen } from "./screens/SignedInScreen";
 import { colours } from "./theme/tokens";
+import { useLeftoverRevoke } from "./useLeftoverRevoke";
 import { useStartupRetry } from "./useStartupRetry";
 
 type AuthScreen =
@@ -47,12 +48,7 @@ export function App() {
   const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
   const startupBudget = useRef<StartupBudget | null>(null);
-  const leftoverRevoke = useRef<{ readonly stop: AbortController; readonly done: Promise<void> } | null>(null);
-  const startLeftoverRevoke = (deadline?: AbortSignal) => {
-    const stop = new AbortController();
-    deadline?.addEventListener("abort", () => stop.abort());
-    leftoverRevoke.current = { stop, done: cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal) };
-  };
+  const { start: startLeftoverRevoke, take: takeLeftoverRevoke } = useLeftoverRevoke();
   const runStartupCheck = () => {
     const budget = createStartupBudget();
     startupBudget.current = budget;
@@ -143,8 +139,7 @@ export function App() {
     void clearBiometricUnlock(appSecureStore).catch(() => undefined);
     setScreen({ name: "signingOut" });
     setServerUnreachable(false);
-    const leftover = leftoverRevoke.current;
-    leftoverRevoke.current = null;
+    const leftover = takeLeftoverRevoke();
     leftover?.stop.abort();
     void withStartupTimeout(async (signal) => {
       await leftover?.done;
@@ -155,7 +150,7 @@ export function App() {
   };
 
   const handleAccountDeleted = () => {
-    void clearBiometricUnlock(appSecureStore).catch(() => undefined);
+    void clearBiometricUnlock(appSecureStore, { resetOffer: true }).catch(() => undefined);
     setServerUnreachable(false);
     setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
     setScreen({ name: "email" });

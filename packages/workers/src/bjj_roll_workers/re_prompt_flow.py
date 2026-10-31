@@ -77,17 +77,17 @@ def run_re_prompt_flow(job_id: str, video: VideoRun, tracker: Tracker, frame_sou
     log_job_event("re_prompt_flow_started", job_id)
     prompted_frames: set[int] = set()
     corrections: list[TapPoint] = []
-    tracker.anchor(video.first_tap)
-    while (drift := tracker.next_drift()) is not None:
-        if drift.frame_index in prompted_frames:
-            continue
-        prompted_frames.add(drift.frame_index)
-        answer = prompter.ask_was_this_you(drift, frame_source.frame_at(drift.frame_index))
-        if isinstance(answer, ReTap):
-            correction = TapPoint(frame_index=drift.frame_index, x=answer.x, y=answer.y)
-            corrections.append(correction)
-            tracker.anchor(correction)
-    log_job_event("re_prompt_flow_finished", job_id, duration_seconds=time.monotonic() - started_at)
+    try:
+        tracker.anchor(video.first_tap)
+        while (drift := tracker.next_drift()) is not None and drift.frame_index not in prompted_frames:
+            prompted_frames.add(drift.frame_index)
+            answer = prompter.ask_was_this_you(drift, frame_source.frame_at(drift.frame_index))
+            if isinstance(answer, ReTap):
+                correction = TapPoint(frame_index=drift.frame_index, x=answer.x, y=answer.y)
+                corrections.append(correction)
+                tracker.anchor(correction)
+    finally:
+        log_job_event("re_prompt_flow_finished", job_id, duration_seconds=time.monotonic() - started_at)
     return VideoRePromptResult(video_id=video.video_id, style=video.style, re_prompt_count=len(prompted_frames), corrections=tuple(corrections))
 
 

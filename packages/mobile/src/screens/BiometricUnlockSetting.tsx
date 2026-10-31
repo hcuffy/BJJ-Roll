@@ -23,6 +23,8 @@ export interface BiometricUnlockSettingState {
   readonly onChangeBiometricUnlock: BiometricUnlockSettingProps["onChangeBiometricUnlock"];
   readonly error: string | null;
   readonly onErrorChanged: (error: string | null) => void;
+  readonly saving: boolean;
+  readonly onSavingChanged: (saving: boolean) => void;
 }
 
 export function useBiometricUnlockSetting({
@@ -31,6 +33,7 @@ export function useBiometricUnlockSetting({
 }: BiometricUnlockSettingProps): BiometricUnlockSettingState {
   const [setting, setSetting] = useState<BiometricSetting | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const readSetting = useRef(onReadBiometricSetting);
   useEffect(() => {
     let active = true;
@@ -43,11 +46,13 @@ export function useBiometricUnlockSetting({
       active = false;
     };
   }, []);
-  return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock, error, onErrorChanged: setError };
+  return { setting, onSettingChanged: setSetting, onChangeBiometricUnlock, error, onErrorChanged: setError, saving, onSavingChanged: setSaving };
 }
 
-export interface BiometricUnlockSettingViewProps extends BiometricUnlockSettingState {
+export interface BiometricUnlockSettingViewProps extends Omit<BiometricUnlockSettingState, "saving" | "onSavingChanged"> {
+  readonly onSavingChanged?: BiometricUnlockSettingState["onSavingChanged"];
   readonly onChangeStarted: () => void;
+  readonly otherActionRunning?: boolean;
 }
 
 export function BiometricUnlockSetting({
@@ -56,9 +61,15 @@ export function BiometricUnlockSetting({
   onChangeBiometricUnlock,
   error,
   onErrorChanged: setError,
+  onSavingChanged = () => undefined,
   onChangeStarted,
+  otherActionRunning = false,
 }: BiometricUnlockSettingViewProps) {
-  const [saving, setSaving] = useState(false);
+  const [saving, setLocalSaving] = useState(false);
+  const setSaving = (next: boolean) => {
+    setLocalSaving(next);
+    onSavingChanged(next);
+  };
   const kind = setting?.kind ?? "biometrics";
   const copy = biometricCopy[kind];
 
@@ -77,7 +88,7 @@ export function BiometricUnlockSetting({
 
   const available = setting?.available === true;
   const on = available && setting.on;
-  const disabled = !available || saving;
+  const disabled = !available || saving || otherActionRunning;
   return (
     <View style={styles.item}>
       <Pressable
@@ -92,7 +103,7 @@ export function BiometricUnlockSetting({
         <Text
           importantForAccessibility="no"
           accessibilityElementsHidden
-          style={available ? styles.label : [styles.label, { color: colours.textSecondary }]}>
+          style={disabled ? [styles.label, { color: colours.textSecondary }] : styles.label}>
           {copy.toggleLabel}
         </Text>
         <Switch
