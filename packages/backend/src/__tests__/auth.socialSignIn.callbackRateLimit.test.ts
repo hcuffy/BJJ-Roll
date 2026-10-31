@@ -1,3 +1,4 @@
+import type * as BetterAuth from "better-auth";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { MAX_VERIFIES_PER_IP_PER_WINDOW } from "../auth/authLimits.js";
 import { authIpRateLimitCustomRules } from "../auth/authRateLimits.js";
@@ -8,7 +9,7 @@ import { createFakeSocialProviderConfig } from "./socialSignInTestDoubles.js";
 const RAISED_GLOBAL_MAX = 1000;
 
 vi.mock("better-auth", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("better-auth")>();
+  const actual = await importOriginal<typeof BetterAuth>();
   return {
     ...actual,
     betterAuth: ((options: Parameters<typeof actual.betterAuth>[0]) =>

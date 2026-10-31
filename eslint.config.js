@@ -21,6 +21,12 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
+      "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports", fixStyle: "inline-type-imports" }],
+      "@typescript-eslint/no-import-type-side-effects": "error",
+      "no-restricted-syntax": [
+        "error",
+        { selector: "TSModuleDeclaration[kind='global']", message: "Global augmentation goes only in the package's globals.d.ts." },
+      ],
       "@typescript-eslint/naming-convention": [
         "error",
         { selector: "default", format: ["camelCase"], leadingUnderscore: "allow" },
@@ -50,6 +56,10 @@ export default tseslint.config(
       "require-await": "error",
       "no-console": ["error", { allow: ["warn", "error"] }],
     },
+  },
+  {
+    files: ["**/globals.d.ts"],
+    rules: { "no-restricted-syntax": "off" },
   },
   {
     files: ["**/*.config.{js,ts}", "packages/mobile/app/**/_layout.tsx"],

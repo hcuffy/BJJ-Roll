@@ -1,3 +1,4 @@
+import type * as ReactModule from "react";
 import { vi } from "vitest";
 
 vi.mock("react-native", async () => ({
@@ -25,7 +26,7 @@ vi.mock("react-native-safe-area-context", async () => {
 });
 vi.mock("react", async (importOriginal) => {
   const { harnessUseEffect, harnessUseReference, harnessUseState } = await import("./screenHarness");
-  return { ...(await importOriginal<typeof import("react")>()), useState: harnessUseState, useEffect: harnessUseEffect, useRef: harnessUseReference };
+  return { ...(await importOriginal<typeof ReactModule>()), useState: harnessUseState, useEffect: harnessUseEffect, useRef: harnessUseReference };
 });
 vi.mock("expo-constants", () => ({ default: { expoConfig: { scheme: "bjjroll" } } }));
 vi.mock("expo-linking", async () => {

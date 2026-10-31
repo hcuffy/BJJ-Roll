@@ -2,6 +2,7 @@ import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
+import type * as SignInActions from "../auth/signInActions";
 import { colours } from "../theme/tokens";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
@@ -17,7 +18,7 @@ vi.mock("../auth/appAuthClient", () => ({
   appBackendUrl: "http://backend.test",
 }));
 vi.mock("../auth/signInActions", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../auth/signInActions")>();
+  const actual = await importOriginal<typeof SignInActions>();
   return { ...actual, completeMagicLink: vi.fn(actual.completeMagicLink), signOut: vi.fn(actual.signOut) };
 });
 
