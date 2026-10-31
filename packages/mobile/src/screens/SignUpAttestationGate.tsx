@@ -13,7 +13,7 @@ import {
 import { spacing, textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
-import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
+import { DeleteAccountCodeStep, type DeleteAccountCodeStepProps } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { useExportDataFirst } from "./ExportDataFirstAction";
 import { LoadingScreen } from "./LoadingScreen";
@@ -30,7 +30,7 @@ export interface SignUpAttestationGateProps {
   readonly onSignOut: () => void;
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
-  readonly onAccountDeleted: () => void;
+  readonly onAccountDeleted: DeleteAccountCodeStepProps["onAccountDeleted"];
   readonly onExportData?: () => Promise<AccountExportResult>;
   readonly children?: ReactNode;
 }
