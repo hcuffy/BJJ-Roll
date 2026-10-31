@@ -26,7 +26,8 @@ const globalAugmentationBan = {
 const rawDateMessage = "Use the package's src/dates.ts (dayjs) instead of the raw Date clock or constructor.";
 const rawDateBan = [
   { selector: "NewExpression[callee.name='Date']", message: rawDateMessage },
-  { selector: "MemberExpression[object.name='Date'][property.name='now']", message: rawDateMessage },
+  { selector: "MemberExpression[object.name='Date'][property.name=/^(now|parse|UTC)$/]", message: rawDateMessage },
+  { selector: "MemberExpression[object.name='globalThis'][property.name='Date']", message: rawDateMessage },
 ];
 const dateBoundaryFiles = ["packages/*/src/dates.ts", "**/__tests__/**", "**/*.test.{ts,tsx}"];
 
