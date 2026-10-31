@@ -2,6 +2,12 @@ packages:
   - "packages/*"
 # Build scripts stay disabled (pnpm default). These come in via testcontainers (ssh2) and the Modal SDK (cbor-extract, HEN-227) and are optional or check-only.
 minimumReleaseAge: 20160
+# HEN-337: Henry approved 31 Oct; remove this exclusion on 10 Nov, when these releases pass the 14-day age.
+minimumReleaseAgeExclude:
+  - glob
+  - minimatch
+  - node-forge
+  - path-scurry
 allowBuilds:
   cbor-extract: false
   cpu-features: false
@@ -13,3 +19,4 @@ overrides:
   xcode>uuid: 11.1.1
   # @expo/ui pulls vaul (web drawer); keep its react-dom peer on React 19.2.3 from Expo SDK 57 (HEN-46).
   vaul>react-dom: 19.2.3
+  node-forge@<1.4.1: 1.4.1
