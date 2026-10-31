@@ -1,11 +1,6 @@
 # OSV-Scanner exceptions (HEN-222). Each one needs a reason and an ignoreUntil at most 30 days out.
 
 [[IgnoredVulns]]
-id = "GHSA-86w9-cpqp-85rv"
-ignoreUntil = 2026-11-20T00:00:00Z
-reason = "node-forge 1.4.0 comes in via @expo/cli (dev tooling). No fixed version exists yet. Recheck by the date."
-
-[[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
 ignoreUntil = 2026-11-20T00:00:00Z
 reason = "zod 3.25.76: tooling only via @expo/cli, no 3.x fix, Expo SDK 57 pinned."
