@@ -361,3 +361,13 @@ Renumbered from D22 on 2026-10-22 (collided with planning D22, masking).
   - Keyboard (`AuthScreenLayout.tsx`): iOS pads, Android shrinks the view by the keyboard height (edge-to-edge apps cannot rely on
     adjustResize alone). Dragging the content closes the keyboard because the iOS number pad has no Done key. On iOS the keyboard covers the
     home indicator, so while it is open the bottom gap is 24 only.
+
+## D36: knip checks dependencies, with two ignored (HEN-353)
+
+- **Decision:** CI knip also checks unused and unlisted dependencies. `ignoreDependencies` in `knip.json` lists only these two:
+  - `@expo/ui`: the approved UI kit (HEN-46, `docs/ARCHITECTURE.md` §8). It is declared ahead of the screens that use it.
+  - `expo-updates`: knip's Expo plugin expects it unless `app.json` turns updates off, and whether to use OTA updates is HEN-271's call.
+    HEN-271 removes this entry.
+- **Date:** 2026-10-31
+- **Decided by:** Sara (HEN-353)
+- **Consequences:** `pnpm knip` fails CI on an unused dependency or devDependency, or on an unlisted one.
