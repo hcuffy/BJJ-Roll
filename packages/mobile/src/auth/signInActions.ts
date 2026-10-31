@@ -223,7 +223,7 @@ async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeySt
   }
   const deletes = await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
   if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
-    await dropPendingSignOut(secureStore, attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
+    await dropPendingSignOut(secureStore, attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
   }
 }
 
@@ -234,14 +234,14 @@ async function revokeOldSession(
 ): Promise<void> {
   const confirmed = await signOutOnServer(client, attempt);
   if (confirmed && !attempt.signal?.aborted) {
-    await dropPendingSignOut(secureStore, attempt.oldSessionCookie);
+    await dropPendingSignOut(secureStore, attempt.oldSessionCookie).catch(() => undefined);
   }
 }
 
 export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
   await endLeftoverSessions(client, secureStore, signal);
   const sessionCookie = await readSessionCookie(client);
-  await addPendingSignOut(secureStore, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE);
+  await addPendingSignOut(secureStore, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
   await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
   await finishSignOut(client, secureStore, { oldSessionCookie: sessionCookie, signal });
 }
@@ -255,7 +255,7 @@ async function endLeftoverSessions(client: MobileAuthClient, secureStore: Sessio
   for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
     const oldSessionCookie = oldSessionCookieOf(marker);
     if (oldSessionCookie === null || oldSessionCookie === storedSessionCookie) {
-      await dropPendingSignOut(secureStore, marker);
+      await dropPendingSignOut(secureStore, marker).catch(() => undefined);
     } else {
       await revokeOldSession(client, secureStore, { oldSessionCookie, signal });
     }
