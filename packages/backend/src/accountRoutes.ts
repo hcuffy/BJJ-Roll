@@ -12,6 +12,7 @@ import {
   type SocialProviderName,
 } from "@bjj-roll/shared";
 import { randomUUID } from "node:crypto";
+import { uniq } from "es-toolkit";
 import { Hono, type Context } from "hono";
 import type { Kysely } from "kysely";
 import { handleDeleteAccount, handleSendAccountDeletionCode } from "./accountDeletion.js";
@@ -72,7 +73,9 @@ async function handleExportAccount(context: Context, options: AccountRoutesOptio
   const providerRows = await withUserContext(options.db, authenticatedUserId, (transaction) =>
     transaction.selectFrom("accounts").select(["providerId"]).where("userId", "=", authenticatedUserId).execute(),
   );
-  const linkedProviders = [...new Set(providerRows.map((providerRow) => providerRow.providerId))].filter(isSocialProviderName).sort();
+  const linkedProviders = uniq(providerRows.map((providerRow) => providerRow.providerId))
+    .filter(isSocialProviderName)
+    .sort();
   const exported: AccountExport = accountExportSchema.parse({
     exportedAt: toIsoString(currentDate()),
     user: {

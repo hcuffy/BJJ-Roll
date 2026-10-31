@@ -30,6 +30,24 @@ const rawDateBan = [
 ];
 const dateBoundaryFiles = ["packages/*/src/dates.ts", "**/__tests__/**", "**/*.test.{ts,tsx}"];
 
+const utilityLibraryMessage = "Use per-function named imports from es-toolkit instead.";
+const utilityImportBans = {
+  paths: [{ name: "es-toolkit", importNames: ["default"], message: "Import es-toolkit functions by name: import { groupBy } from 'es-toolkit'." }],
+  patterns: [
+    { group: ["lodash", "lodash/*", "lodash-es", "lodash-es/*", "lodash.*", "underscore", "underscore/*"], message: utilityLibraryMessage },
+    { group: ["es-toolkit/*"], message: "Import es-toolkit functions by name from 'es-toolkit' itself." },
+  ],
+};
+const serverOnlyImportBans = {
+  paths: [{ name: "@bjj-roll/shared/encryption", message: "Server-only module (HEN-63). Do not import it in client code." }],
+  patterns: [
+    {
+      group: ["@bjj-roll/shared/encryption/*", "**/shared/src/encryption", "**/shared/src/encryption/*"],
+      message: "Server-only module (HEN-63).",
+    },
+  ],
+};
+
 const unlintedFiles = ["**/vitest.config.ts", "**/vite.config.ts", "**/scripts/**", "**/babel.config.js", "**/metro.config.js"];
 
 export default tseslint.config(
@@ -50,6 +68,7 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports", fixStyle: "inline-type-imports" }],
       "@typescript-eslint/no-import-type-side-effects": "error",
       "no-restricted-syntax": ["error", globalAugmentationBan, ...rawDateBan],
+      "no-restricted-imports": ["error", utilityImportBans],
       "@typescript-eslint/naming-convention": ["error", ...namingConvention],
       "unicorn/name-replacements": [
         "error",
@@ -94,13 +113,8 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [{ name: "@bjj-roll/shared/encryption", message: "Server-only module (HEN-63). Do not import it in client code." }],
-          patterns: [
-            {
-              group: ["@bjj-roll/shared/encryption/*", "**/shared/src/encryption", "**/shared/src/encryption/*"],
-              message: "Server-only module (HEN-63).",
-            },
-          ],
+          paths: [...serverOnlyImportBans.paths, ...utilityImportBans.paths],
+          patterns: [...serverOnlyImportBans.patterns, ...utilityImportBans.patterns],
         },
       ],
     },
