@@ -28,7 +28,7 @@ const { App } = await import("../App");
 const { STARTUP_REQUEST_TIMEOUT_MS } = await import("../auth/startupTimeout");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 
-const UNREADABLE_STORES = [
+const unreadableStores = [
   {
     name: "the read rejects",
     break: (read: (key: string) => Promise<string | null>) => async (key: string) => {
@@ -66,7 +66,7 @@ describe("App: Try again with an unreadable biometric store while the launch's r
     vi.restoreAllMocks();
   });
 
-  it.each(UNREADABLE_STORES)("$name: Try again lands on the lock, never signed in, with one revoke at a time", async ({ break: breakRead }) => {
+  it.each(unreadableStores)("$name: Try again lands on the lock, never signed in, with one revoke at a time", async ({ break: breakRead }) => {
     await phone.queueOldSession();
     setUpEnrolledPhone();
     localAuthenticationFake.answers.push("user_cancel", "user_cancel");
