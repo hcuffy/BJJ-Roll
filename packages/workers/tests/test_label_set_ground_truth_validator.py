@@ -151,6 +151,8 @@ def test_ground_truth_rejects_unknown_variant(fields: dict) -> None:
         pytest.param(("positions", 2, "end"), "$.positions[2].end", id="segment-end"),
         pytest.param(("positions", 0, "start"), "$.positions[0].start", id="segment-start"),
         pytest.param(("events", 0, "time"), "$.events[0].time", id="event-time"),
+        pytest.param(("events", 1, "start"), "$.events[1].start", id="event-start"),
+        pytest.param(("events", 1, "end"), "$.events[1].end", id="event-end"),
     ],
 )
 def test_ground_truth_rejects_non_finite_times(value: float, location: tuple, path: str) -> None:
