@@ -88,6 +88,7 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
   let server: ReturnType<typeof createSessionServer>;
   let secureStore: ReturnType<typeof createMemorySecureStore>;
   let unhandled: unknown[];
+  let consoleCalls: unknown[][];
   const recordUnhandled = (reason: unknown) => unhandled.push(reason);
 
   const launchApp = async () => {
@@ -110,6 +111,14 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     await settle();
   };
   const marker = () => secureStore.items.get(PENDING_SIGN_OUT_KEY) ?? "";
+  const expectNoSecretsLogged = (storedValues: readonly string[]) => {
+    const logged = JSON.stringify(consoleCalls);
+    expect(logged).not.toContain("session-token");
+    expect(logged).not.toContain(".signature");
+    for (const value of storedValues.filter((stored) => stored.length > 8)) {
+      expect(logged).not.toContain(value);
+    }
+  };
   const signedInWithOldSessionQueued = async () => {
     server.state.failFor.add(FIRST);
     const screen = await launchApp();
@@ -140,7 +149,10 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     unhandled = [];
     process.on("unhandledRejection", recordUnhandled);
     setUpEnrolledPhone();
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    consoleCalls = [];
+    for (const method of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, method).mockImplementation((...callArguments: unknown[]) => consoleCalls.push(callArguments));
+    }
   });
   afterEach(async () => {
     await settle();
@@ -162,6 +174,7 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     expect(server.inFlight.get(FIRST)).toBe(1);
     expect(secureStore.items.get("bjjroll_cookie") ?? "").toContain("session-token-3");
+    const storedValues = [...secureStore.items.values()];
     expect(marker()).toContain(FIRST);
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -173,6 +186,7 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     await settle();
     expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(marker()).toContain(FIRST);
+    expectNoSecretsLogged([...storedValues, ...secureStore.items.values()]);
   });
 
   it("a cancel whose queue write fails rejects nothing: the lock stays up, Unlock signs in, and the old session stays queued", async () => {
@@ -190,5 +204,6 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
 
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
     expect(unhandled).toEqual([]);
+    expectNoSecretsLogged([...secureStore.items.values()]);
   });
 });
