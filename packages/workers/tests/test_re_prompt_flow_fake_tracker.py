@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from bjj_roll_workers.geometry import FrameSize
 from bjj_roll_workers.re_prompt_flow import (
     DriftEvent,
     KeepTrack,
@@ -16,6 +17,7 @@ from bjj_roll_workers.re_prompt_flow import (
     run_re_prompt_flow,
 )
 
+FRAME_SIZE = FrameSize(width=640, height=360)
 JOB_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 FIRST_VIDEO_ID = "3f1c2b7e-8a4d-4c6b-9e2f-1a2b3c4d5e6f"
 SECOND_VIDEO_ID = "7c2d4e6f-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
@@ -70,7 +72,7 @@ def test_re_prompt_flow_one_drift_gives_one_prompt_with_the_drift_frame() -> Non
     frame_source = FakeFrameSource()
     prompter = ScriptedPrompter([KeepTrack()])
 
-    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP), tracker, prompter, frame_source)
+    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), tracker, prompter, frame_source)
 
     assert prompter.shown == [(drift, b"synthetic-frame-120")]
     assert frame_source.requested_frames == [120]
@@ -81,7 +83,7 @@ def test_re_prompt_flow_yes_keeps_the_track_without_re_anchoring() -> None:
     tracker = FakeTracker([DriftEvent(frame_index=120, reason="mask_jump")])
     prompter = ScriptedPrompter([KeepTrack()])
 
-    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP), tracker, prompter)
+    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), tracker, prompter)
 
     assert tracker.anchors == [FIRST_TAP]
     assert result.corrections == ()
@@ -93,7 +95,7 @@ def test_re_prompt_flow_re_tap_re_anchors_at_the_drift_frame_and_resumes_there()
     tracker = FakeTracker([DriftEvent(frame_index=120, reason="mask_jump"), later_drift])
     prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3), KeepTrack()])
 
-    result = _run(VideoRun(FIRST_VIDEO_ID, "no-gi", FIRST_TAP), tracker, prompter)
+    result = _run(VideoRun(FIRST_VIDEO_ID, "no-gi", FIRST_TAP, FRAME_SIZE), tracker, prompter)
 
     assert tracker.anchors == [FIRST_TAP, TapPoint(frame_index=120, x=0.7, y=0.3)]
     assert tracker.tracked_from_frames == [0, 120]
@@ -105,7 +107,7 @@ def test_re_prompt_flow_same_drift_reported_twice_gives_one_prompt() -> None:
     tracker = FakeTracker([DriftEvent(frame_index=120, reason="mask_jump"), DriftEvent(frame_index=120, reason="mask_jump")])
     prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3), ReTap(x=0.1, y=0.1)])
 
-    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP), tracker, prompter)
+    result = _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), tracker, prompter)
 
     assert len(prompter.shown) == 1
     assert result.re_prompt_count == 1
@@ -115,12 +117,12 @@ def test_re_prompt_flow_same_drift_reported_twice_gives_one_prompt() -> None:
 
 def test_re_prompt_flow_counts_per_video_and_per_style_for_three_drifts_over_two_videos() -> None:
     first_result = _run(
-        VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP),
+        VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE),
         FakeTracker([DriftEvent(frame_index=50, reason="mask_jump"), DriftEvent(frame_index=90, reason="mask_lost")]),
         ScriptedPrompter([ReTap(x=0.2, y=0.8), KeepTrack()]),
     )
     second_result = _run(
-        VideoRun(SECOND_VIDEO_ID, "no-gi", SECOND_VIDEO_FIRST_TAP),
+        VideoRun(SECOND_VIDEO_ID, "no-gi", SECOND_VIDEO_FIRST_TAP, FRAME_SIZE),
         FakeTracker([DriftEvent(frame_index=40, reason="mask_jump")]),
         ScriptedPrompter([ReTap(x=0.5, y=0.5)]),
     )
@@ -138,10 +140,10 @@ def test_re_prompt_flow_counts_per_video_and_per_style_for_three_drifts_over_two
 
 def test_re_prompt_flow_second_video_starts_with_nothing_from_the_first() -> None:
     shared_prompter = ScriptedPrompter([ReTap(x=0.2, y=0.8), KeepTrack()])
-    _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP), FakeTracker([DriftEvent(frame_index=50, reason="mask_jump")]), shared_prompter)
+    _run(VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), FakeTracker([DriftEvent(frame_index=50, reason="mask_jump")]), shared_prompter)
     second_tracker = FakeTracker([DriftEvent(frame_index=50, reason="mask_jump")])
 
-    second_result = _run(VideoRun(SECOND_VIDEO_ID, "gi", SECOND_VIDEO_FIRST_TAP), second_tracker, shared_prompter)
+    second_result = _run(VideoRun(SECOND_VIDEO_ID, "gi", SECOND_VIDEO_FIRST_TAP, FRAME_SIZE), second_tracker, shared_prompter)
 
     assert second_tracker.anchors == [SECOND_VIDEO_FIRST_TAP]
     assert second_result.re_prompt_count == 1
@@ -150,17 +152,17 @@ def test_re_prompt_flow_second_video_starts_with_nothing_from_the_first() -> Non
 
 def test_re_prompt_flow_rejects_an_unknown_style() -> None:
     with pytest.raises(ValueError):
-        VideoRun(FIRST_VIDEO_ID, "nogi", FIRST_TAP)  # type: ignore[arg-type]
+        VideoRun(FIRST_VIDEO_ID, "nogi", FIRST_TAP, FRAME_SIZE)  # type: ignore[arg-type]
 
 
 def test_re_prompt_flow_counts_per_style_sum_two_videos_of_the_same_style() -> None:
     first_result = _run(
-        VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP),
+        VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE),
         FakeTracker([DriftEvent(frame_index=50, reason="mask_jump"), DriftEvent(frame_index=90, reason="mask_lost")]),
         ScriptedPrompter([ReTap(x=0.2, y=0.8), KeepTrack()]),
     )
     second_result = _run(
-        VideoRun(SECOND_VIDEO_ID, "gi", SECOND_VIDEO_FIRST_TAP),
+        VideoRun(SECOND_VIDEO_ID, "gi", SECOND_VIDEO_FIRST_TAP, FRAME_SIZE),
         FakeTracker([DriftEvent(frame_index=40, reason="mask_jump")]),
         ScriptedPrompter([ReTap(x=0.5, y=0.5)]),
     )
@@ -191,7 +193,7 @@ def test_re_prompt_flow_stops_when_the_tracker_repeats_a_drift_frame() -> None:
     tracker = StuckTracker(DriftEvent(frame_index=120, reason="mask_jump"))
     prompter = ScriptedPrompter([ReTap(x=0.7, y=0.3)])
 
-    result = run_re_prompt_flow(JOB_ID, VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP), tracker, FakeFrameSource(), prompter)
+    result = run_re_prompt_flow(JOB_ID, VideoRun(FIRST_VIDEO_ID, "gi", FIRST_TAP, FRAME_SIZE), tracker, FakeFrameSource(), prompter)
 
     assert tracker.calls == 2
     assert result.re_prompt_count == 1

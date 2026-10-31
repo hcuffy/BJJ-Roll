@@ -113,14 +113,14 @@ class _NoFrames:
 def test_tracker_runner_refuses_a_batch_run_without_a_tap_for_each_video() -> None:
     fake = LabelFakeTracker()
     frames = make_clip(5, drifting_self_layout)
-    untapped_video = VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None)  # type: ignore[arg-type]
-    batch = [VideoRun(video_id=FIRST_VIDEO_ID, style="gi", first_tap=self_tap(0)), untapped_video]
-    adapters = [RePromptTrackerAdapter(JOB_ID, video.video_id, frames, fake, load_tracker_config(), rss_reader=lambda: 0) for video in batch]
+    first_video = VideoRun(video_id=FIRST_VIDEO_ID, style="gi", first_tap=self_tap(0), frame_size=frames[0].size)
+    video_ids = (FIRST_VIDEO_ID, SECOND_VIDEO_ID)
+    adapters = [RePromptTrackerAdapter(JOB_ID, video_id, frames, fake, load_tracker_config(), rss_reader=lambda: 0) for video_id in video_ids]
 
-    first_result = run_re_prompt_flow(JOB_ID, batch[0], adapters[0], _NoFrames(), _KeepEveryTrack())
+    first_result = run_re_prompt_flow(JOB_ID, first_video, adapters[0], _NoFrames(), _KeepEveryTrack())
     first_video_calls = len(fake.calls)
     with pytest.raises(TypeError):
-        run_re_prompt_flow(JOB_ID, batch[1], adapters[1], _NoFrames(), _KeepEveryTrack())
+        VideoRun(video_id=SECOND_VIDEO_ID, style="gi", first_tap=None, frame_size=frames[0].size)  # type: ignore[arg-type]
 
     assert first_result.video_id == FIRST_VIDEO_ID
     assert len(fake.calls) == first_video_calls
