@@ -16,7 +16,7 @@ export function SignInHeader({ linkError, linkErrorReason, accountNotice }: Sign
       {linkError ? <LinkErrorCard message={linkError} reason={linkErrorReason} /> : null}
       {accountNotice ? (
         <View style={authStyles.card}>
-          <StatusText message={accountNotice} style={authStyles.notice} />
+          <StatusText message={accountNotice} style={authStyles.notice} announce="polite" />
         </View>
       ) : null}
       <View style={authStyles.heading}>

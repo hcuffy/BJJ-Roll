@@ -7,7 +7,7 @@ import { type AdultStatus, AdultStatusItem } from "./AdultStatusItem";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
 import { BiometricUnlockSetting, type BiometricUnlockSettingProps, useBiometricUnlockSetting } from "./BiometricUnlockSetting";
-import { DeleteAccountCodeStep } from "./DeleteAccountCodeStep";
+import { DeleteAccountCodeStep, type DeleteAccountCodeStepProps } from "./DeleteAccountCodeStep";
 import { DeleteAccountConfirmStep } from "./DeleteAccountConfirmStep";
 import { ExportDataFirstAction, shareAccountExport } from "./ExportDataFirstAction";
 import { ServerUnreachableNote } from "./ServerUnreachableNote";
@@ -23,7 +23,7 @@ export interface SignedInScreenProps extends BiometricUnlockSettingProps {
   readonly onExportData: () => Promise<AccountExportResult>;
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
-  readonly onAccountDeleted: () => void;
+  readonly onAccountDeleted: DeleteAccountCodeStepProps["onAccountDeleted"];
   readonly onReadAgeConfirmation: () => Promise<AgeConfirmationResult>;
   readonly onConfirmAdult: () => Promise<AgeConfirmationResult>;
 }

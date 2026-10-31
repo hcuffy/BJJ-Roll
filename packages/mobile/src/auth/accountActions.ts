@@ -19,25 +19,30 @@ export interface AccountSession {
 
 interface AccountFailure {
   readonly ok: false;
-  readonly reason: "network" | "unknown" | "invalidCode" | "rateLimited";
+  readonly reason: "network" | "unknown" | "invalidCode" | "rateLimited" | "signedOut";
   readonly message: string;
 }
 export type AccountCodeResult = { readonly ok: true } | AccountFailure;
 export type AccountDeletionResult = { readonly ok: true } | AccountFailure;
+export type AccountDeletionExit = "deleted" | "signedOut";
 export type AccountExportResult = { readonly ok: true; readonly json: string } | AccountFailure;
 export type AgeConfirmationResult = { readonly ok: true; readonly status: AgeConfirmationStatus } | AccountFailure;
 export type SignUpAttestationResult = { readonly ok: true; readonly status: SignUpAttestationStatus } | AccountFailure;
 
-function failure(reason: AccountFailure["reason"]): AccountFailure {
+function failure(reason: Exclude<AccountFailure["reason"], "signedOut">): AccountFailure {
   return { ok: false, reason, message: failureMessages[reason] };
 }
 
 type AccountResponse = { readonly ok: true; readonly data: unknown } | AccountFailure;
 
+const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 const HTTP_TOO_MANY_REQUESTS = 429;
 
 function failureForStatus(status: number | undefined): AccountFailure {
+  if (status === HTTP_UNAUTHORIZED) {
+    return { ok: false, reason: "signedOut", message: failureMessages.unknown };
+  }
   if (status === HTTP_FORBIDDEN) {
     return failure("invalidCode");
   }
@@ -124,6 +129,9 @@ export async function deleteAccount(session: AccountSession, code: string): Prom
   if (!accountDeletionResponseSchema.safeParse(response.data).success) {
     return failure("unknown");
   }
-  await Promise.all(sessionStorageKeys.map((key) => session.secureStore.deleteItemAsync(key)));
+  const clearSession = () => Promise.all(sessionStorageKeys.map((key) => session.secureStore.deleteItemAsync(key)));
+  await clearSession().catch(() => {
+    void clearSession().catch(() => undefined);
+  });
   return { ok: true };
 }

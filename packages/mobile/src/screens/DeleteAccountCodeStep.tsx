@@ -1,6 +1,6 @@
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Text, View } from "react-native";
-import type { AccountCodeResult, AccountDeletionResult } from "../auth/accountActions";
+import type { AccountCodeResult, AccountDeletionExit, AccountDeletionResult } from "../auth/accountActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
@@ -15,7 +15,7 @@ const CODE_LENGTH = 6;
 export interface DeleteAccountCodeStepProps {
   readonly onRequestDeleteCode: () => Promise<AccountCodeResult>;
   readonly onDeleteAccount: (code: string) => Promise<AccountDeletionResult>;
-  readonly onAccountDeleted: () => void;
+  readonly onAccountDeleted: (exit: AccountDeletionExit) => void;
   readonly onCancel: () => void;
 }
 
@@ -64,7 +64,9 @@ export function DeleteAccountCodeStep({ onRequestDeleteCode, onDeleteAccount, on
     runOnce("delete", async () => {
       const result = await onDeleteAccount(code);
       if (result.ok) {
-        onAccountDeleted();
+        onAccountDeleted("deleted");
+      } else if (result.reason === "signedOut") {
+        onAccountDeleted("signedOut");
       } else if (result.reason === "invalidCode") {
         setCodeError(result.message);
       } else {

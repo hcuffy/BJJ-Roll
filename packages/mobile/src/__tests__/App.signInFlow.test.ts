@@ -157,7 +157,8 @@ describe("App sign-in flow (Android, fake backend)", () => {
     expect(screen.text()).toContain("Sign in to BJJ Roll");
     expect(screen.text()).toContain(DELETED_NOTICE);
     const notice = screen.queryByText(DELETED_NOTICE);
-    expect(notice?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
+    expect(notice?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
+    expect(notice?.props.accessibilityRole).toBeUndefined();
     expect(flattenStyle(notice?.props.style)).toMatchObject({ color: colours.textPrimary });
     const card = screen.findAllByType("View").find((node) => node.children.includes(notice as HostNode));
     expect(flattenStyle(card?.props.style)).toMatchObject({ backgroundColor: colours.surface, borderRadius: 16, padding: 16 });

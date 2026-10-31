@@ -10,6 +10,7 @@ import {
   readAgeConfirmation,
   readSignUpAttestation,
   requestAccountDeletionCode,
+  type AccountDeletionExit,
   type AccountSession,
   type SignUpAttestationResult,
 } from "./auth/accountActions";
@@ -38,6 +39,11 @@ type AuthScreen =
   | { readonly name: "locked"; readonly kind: BiometricKind }
   | { readonly name: "signedIn" }
   | { readonly name: "signingOut" };
+
+const accountExitNotices: Record<AccountDeletionExit, string> = {
+  deleted: "Your account was deleted. If you sign up again, you get a new, empty account.",
+  signedOut: "You're signed out. We couldn't confirm the delete. If you sign in and your data is still there, delete it again under Account.",
+};
 
 export function App() {
   const [screen, setScreen] = useState<AuthScreen>({ name: "loading" });
@@ -149,10 +155,14 @@ export function App() {
       .finally(() => setScreen({ name: "email" }));
   };
 
-  const handleAccountDeleted = () => {
+  const handleAccountDeleted = (exit: AccountDeletionExit) => {
+    setAccountNotice(accountExitNotices[exit]);
+    if (exit === "signedOut") {
+      handleSignOut();
+      return;
+    }
     void clearBiometricUnlock(appSecureStore, { resetOffer: true }).catch(() => undefined);
     setServerUnreachable(false);
-    setAccountNotice("Your account was deleted. If you sign up again, you get a new, empty account.");
     setScreen({ name: "email" });
   };
 
