@@ -37,6 +37,7 @@ describe("the browser pages for a sign-in link are locked down and never show ra
     expect(response.headers.get("location")).toBeNull();
     expectLockedDownPage(response);
     const html = await response.text();
+    expect(html).toContain("<title>This BJJ Roll sign-in link doesn't work</title>");
     expect(html).toContain("<h1>This link doesn't work</h1>");
     expect(html).toContain("<p>Open BJJ Roll and send a new sign-in link.</p>");
     expect(html).toContain('<meta name="color-scheme" content="dark">');

@@ -8,9 +8,15 @@ const magicLinkContinueCopy = {
 } as const;
 
 const magicLinkInvalidCopy = {
-  pageTitle: "This link doesn't work - BJJ Roll",
+  pageTitle: "This BJJ Roll sign-in link doesn't work",
   heading: "This link doesn't work",
   body: "Open BJJ Roll and send a new sign-in link.",
+} as const;
+
+const magicLinkTroubleCopy = {
+  pageTitle: "BJJ Roll: Something went wrong",
+  heading: "Something went wrong",
+  body: "Open BJJ Roll and try again in a minute.",
 } as const;
 
 interface BrowserPageContent {
@@ -66,6 +72,7 @@ const continuePageHtml = browserPageHtml({
 });
 
 const invalidLinkPageHtml = browserPageHtml(magicLinkInvalidCopy);
+const troublePageHtml = browserPageHtml(magicLinkTroubleCopy);
 
 function browserPageResponse(html: string, status: number): Response {
   return new Response(html, {
@@ -86,4 +93,8 @@ export function magicLinkContinuePage(): Response {
 
 export function magicLinkInvalidPage(): Response {
   return browserPageResponse(invalidLinkPageHtml, 400);
+}
+
+export function magicLinkTroublePage(status: number): Response {
+  return browserPageResponse(troublePageHtml, status);
 }

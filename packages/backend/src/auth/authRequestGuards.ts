@@ -9,7 +9,7 @@ import {
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
-import { magicLinkContinuePage, magicLinkInvalidPage } from "./magicLinkContinuePage.js";
+import { magicLinkContinuePage, magicLinkInvalidPage, magicLinkTroublePage } from "./magicLinkContinuePage.js";
 
 export const trustableProxyIpHeaders = ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] as const;
 export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
@@ -142,6 +142,9 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
   const headers = new Headers(response.headers);
   headers.delete("set-cookie");
   const location = headers.get("location");
+  if (location === null && (response.status === 429 || response.status >= 500)) {
+    return magicLinkTroublePage(response.status);
+  }
   if (location === null) {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
