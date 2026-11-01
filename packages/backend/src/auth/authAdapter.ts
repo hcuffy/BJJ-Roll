@@ -3,7 +3,7 @@ import type { DBAdapter, Where } from "better-auth/adapters";
 import type { BetterAuthOptions } from "better-auth/types";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import type { Pool } from "pg";
-import { decodeDatabaseRow, encodeCreateData, encodeUpdateData, normalizeModelKey } from "./authCodecTransform.js";
+import { decodeDatabaseRow, encodeCreateData, encodeRateLimitWhere, encodeUpdateData, normalizeModelKey } from "./authCodecTransform.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import {
   applyScopeSettings,
@@ -68,7 +68,7 @@ export function createEncryptedRlsAuthAdapter(
         operation: (adapter: DBAdapter<BetterAuthOptions>, scope: ResolvedWhereScope) => Promise<TResult>,
       ): Promise<TResult> =>
         run(async (transaction) => {
-          const scope = await resolveWhereScope(transaction, { model, where }, codec);
+          const scope = await resolveWhereScope(transaction, { model, where: encodeRateLimitWhere(model, where, codec) }, codec);
           return await operation(kyselyAdapter(transaction, { type: "postgres" })(options), scope);
         });
 

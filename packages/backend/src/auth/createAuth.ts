@@ -211,7 +211,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     codec,
     keyring,
     accountDeletionCodes: createAccountDeletionCodes(betterAuthInstance.api),
-    accountDeletionAttempts: createAccountDeletionAttempts(options.pool),
+    accountDeletionAttempts: createAccountDeletionAttempts(options.pool, codec),
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
     emailQueue: options.emailQueue,

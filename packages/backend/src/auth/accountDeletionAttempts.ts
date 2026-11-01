@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { MAX_VERIFIES_PER_IP_PER_WINDOW, OTP_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECONDS } from "./authLimits.js";
 import { incrementRateLimitCounter, resetRateLimitCounter } from "./authRateLimits.js";
+import type { AuthCryptoCodec } from "./authSecrets.js";
 
 export interface AccountDeletionAttempts {
   take(userId: string, clientIp: string): Promise<"allowed" | "rate_limited">;
@@ -8,9 +9,9 @@ export interface AccountDeletionAttempts {
 }
 
 const userKey = (userId: string): string => `account-delete:user:${userId}`;
-const ipKey = (clientIp: string): string => `account-delete:ip:${clientIp}`;
 
-export function createAccountDeletionAttempts(pool: Pool): AccountDeletionAttempts {
+export function createAccountDeletionAttempts(pool: Pool, codec: AuthCryptoCodec): AccountDeletionAttempts {
+  const ipKey = (clientIp: string): string => `account-delete:ip:${codec.hashClientIp(clientIp)}`;
   return {
     async take(userId, clientIp) {
       const [userCount, ipCount] = await Promise.all([

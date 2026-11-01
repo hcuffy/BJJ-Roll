@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Where } from "better-auth/adapters";
 import { APPLE_REFRESH_TOKEN_ENVELOPE_PREFIX, sealAppleRefreshToken } from "./appleTokens.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 
@@ -24,6 +25,23 @@ export function normalizeModelKey(model: string): string {
     return "rateLimit";
   }
   return model;
+}
+
+export function encodeRateLimitKey(rawKey: string, codec: AuthCryptoCodec): string {
+  const separator = rawKey.indexOf("|");
+  if (separator < 0) {
+    return codec.hashClientIp(rawKey);
+  }
+  return `${codec.hashClientIp(rawKey.slice(0, separator))}${rawKey.slice(separator)}`;
+}
+
+export function encodeRateLimitWhere(model: string, where: Where[] | undefined, codec: AuthCryptoCodec): Where[] | undefined {
+  if (normalizeModelKey(model) !== "rateLimit" || where === undefined) {
+    return where;
+  }
+  return where.map((clause) =>
+    clause.field === "key" && typeof clause.value === "string" ? { ...clause, value: encodeRateLimitKey(clause.value, codec) } : clause,
+  );
 }
 
 export function transformVerificationIdentifier(rawIdentifier: string, codec: AuthCryptoCodec): string {
@@ -122,6 +140,8 @@ export function encodeCreateData(
     }
   } else if (modelKey === "account") {
     encodeAccountTokens(encoded, codec);
+  } else if (modelKey === "rateLimit" && typeof encoded.key === "string") {
+    encoded.key = encodeRateLimitKey(encoded.key, codec);
   }
   return { encoded, emailHmac };
 }
