@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -106,6 +106,7 @@ describe("Sign-out right after a sign-in (HEN-315)", () => {
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     consoleSpies = (["log", "info", "warn", "error", "debug"] as const).map((method) =>
       vi.spyOn(console, method).mockImplementation(() => undefined),
@@ -140,11 +141,11 @@ describe("Sign-out right after a sign-in (HEN-315)", () => {
     await settle();
 
     expect(server.peakInFlight.get(FIRST)).toBe(1);
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
     await vi.advanceTimersByTimeAsync(STARTUP_REQUEST_TIMEOUT_MS - 1);
-    expect(screen.text()).not.toContain(SIGN_IN_SCREEN);
+    expect(server.inFlight.get(FIRST)).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
     await settle();
-    expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(server.peakInFlight.get(FIRST)).toBe(1);
     expect(server.inFlight.get(FIRST)).toBe(0);
     expect(secureStore.items.has("bjjroll_cookie")).toBe(false);

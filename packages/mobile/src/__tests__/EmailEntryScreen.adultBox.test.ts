@@ -31,6 +31,7 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
   const render = (linkError: string | null = null, linkErrorReason: FailureReason | null = null) =>
     renderScreen(
       createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
         linkError,
         linkErrorReason,
         client: createMobileAuthClient({

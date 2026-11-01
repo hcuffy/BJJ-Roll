@@ -29,7 +29,7 @@ describe("age confirmation gate", () => {
     });
 
     const codeResult = await sendEmailCode(client, { email: "member@example.test", age16Confirmed: false });
-    const linkResult = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: false });
+    const linkResult = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: false }, createMemorySecureStore());
 
     expect(codeResult).toEqual({ ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE });
     expect(linkResult).toEqual({ ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE });

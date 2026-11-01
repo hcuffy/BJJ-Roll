@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone, setUpPhoneWithoutBiometrics } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
@@ -26,6 +26,7 @@ const FAKE_BACKEND_SESSION_COOKIE = "better-auth.session_token=signed-session-va
 const sessionCookiePattern = /better-auth\.session_token=([^;]+)/u;
 const MEMBER_EMAIL = "member@example.test";
 const OLD_SESSION = "session-token-1";
+const REPLACED_SESSION = "session-token-2";
 
 function createSessionServer() {
   const backend = createFakeBackend();
@@ -113,6 +114,7 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     setUpPhoneWithoutBiometrics();
   });
@@ -120,7 +122,7 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
     deepLinkState.url = null;
   });
 
-  it("old session left pending, biometric unlock on, magic link opens: lock shows and only the old cookie is sent to sign-out", async () => {
+  it("old session left pending, biometric unlock on, magic link opens: lock shows and only queued and replaced cookies go to sign-out", async () => {
     const screen = await launchApp();
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);
@@ -151,16 +153,16 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
     const signOutsBefore = server.signOutRequests.length;
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
-    await screen.rerender();
-    await settle();
+    const linked = await launchApp();
 
-    expect(screen.text()).toContain(LOCKED_TITLE);
+    expect(linked.text()).toContain(LOCKED_TITLE);
     const requests = server.signOutRequests.slice(signOutsBefore);
     expect(requests.length).toBeGreaterThan(0);
     for (const request of requests) {
-      expect(request.session).toBe(OLD_SESSION);
+      expect([OLD_SESSION, REPLACED_SESSION]).toContain(request.session);
     }
     expect(server.liveSessions.has(OLD_SESSION)).toBe(false);
+    expect(server.liveSessions.has(REPLACED_SESSION)).toBe(false);
     expect(server.liveSessions.has("session-token-3")).toBe(true);
     expect(marker()).toBeNull();
   });

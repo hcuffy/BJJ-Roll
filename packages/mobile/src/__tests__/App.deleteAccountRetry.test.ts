@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE, seedPendingSignIn } from "./authTestDoubles";
 import { resetBackListeners } from "./backHandlerHarness";
 import { deepLinkState, flattenStyle, renderScreen, settle } from "./screenHarness";
 
@@ -95,6 +95,7 @@ describe("App: account delete 401, lost response and a failing session clear (HE
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     resetBackListeners();
     logged = [];
@@ -203,6 +204,7 @@ describe("App: account delete 401, lost response and a failing session clear (HE
     await pressDelete(retry);
     await pressDelete(retry);
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     const sessionLeft = await signInAndOpenCodeStep();
     secureStore.failingKeys.add("bjjroll_cookie");
     await pressDelete(sessionLeft);

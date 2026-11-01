@@ -37,7 +37,8 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     Platform.OS = "android";
   });
 
-  const renderEmailEntry = () => renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: (email) => codesSentTo.push(email) }));
+  const renderEmailEntry = () =>
+    renderScreen(createElement(EmailEntryScreen, { secureStore: createMemorySecureStore(), client, onCodeSent: (email) => codesSentTo.push(email) }));
   const renderCodeEntry = () =>
     renderScreen(
       createElement(CodeEntryScreen, { client, email: "member@example.test", onSignedIn: () => (signedIn += 1), onBack: () => undefined }),
@@ -79,7 +80,9 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
   });
 
   it("a retry that fails offline again keeps the calm note, not red (startup note → failed Continue)", async () => {
-    const screen = await renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, serverUnreachable: true }));
+    const screen = await renderScreen(
+      createElement(EmailEntryScreen, { secureStore: createMemorySecureStore(), client, onCodeSent: () => undefined, serverUnreachable: true }),
+    );
     expectCalmNote(screen);
     await fillEmailForm(screen);
     await screen.press("Continue with email");

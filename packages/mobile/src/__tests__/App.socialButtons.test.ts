@@ -34,7 +34,15 @@ describe("HEN-239 sign-in buttons in the shipped config (Apple off)", () => {
       storage: createMemorySecureStore(),
       fetchImplementation: backend.fetchImplementation,
     });
-    return await renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, socialProviders: providers, socialSignIn }));
+    return await renderScreen(
+      createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
+        client,
+        onCodeSent: () => undefined,
+        socialProviders: providers,
+        socialSignIn,
+      }),
+    );
   };
 
   it("iOS never shows Google without Apple: with Apple off, iOS shows no social buttons", async () => {

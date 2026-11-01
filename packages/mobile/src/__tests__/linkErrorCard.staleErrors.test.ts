@@ -30,9 +30,16 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
   const renderEmailEntry = async (withGoogle = false) => {
     const client = newClient();
     const browser = { openAuthSessionAsync: () => Promise.resolve({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time` }) };
-    const socialSignIn = { client, backendUrl: TEST_BACKEND_URL, platform: "android" as const, browser };
+    const socialSignIn = { client, secureStore: createMemorySecureStore(), backendUrl: TEST_BACKEND_URL, platform: "android" as const, browser };
     const google = { socialProviders: ["google" as const], socialSignIn };
-    const hostScreen = () => createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, ...linkProps(), ...(withGoogle ? google : {}) });
+    const hostScreen = () =>
+      createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
+        client,
+        onCodeSent: () => undefined,
+        ...linkProps(),
+        ...(withGoogle ? google : {}),
+      });
     const screen = await renderScreen(createElement(hostScreen), (text) => frames.push(text));
     await screen.pressRole("checkbox");
     await screen.press(SIGN_UP_ATTESTATION_LABEL);

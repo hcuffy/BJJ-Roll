@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone, setUpPhoneWithoutBiometrics } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
@@ -112,6 +112,7 @@ describe("a lock-path revoke that fails keeps the old session queued (HEN-288 x 
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     setUpPhoneWithoutBiometrics();
   });
@@ -145,9 +146,8 @@ describe("a lock-path revoke that fails keeps the old session queued (HEN-288 x 
     const signOutsBefore = server.signOutRequests.length;
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
-    await screen.rerender();
-    await settle();
-    expect(screen.text()).toContain(LOCKED_TITLE);
+    const linked = await launchApp();
+    expect(linked.text()).toContain(LOCKED_TITLE);
     expect(server.signOutRequests.length).toBeGreaterThan(signOutsBefore);
     expect(server.liveSessions.has(OLD_SESSION)).toBe(true);
     expect(marker()).toContain(OLD_SESSION);

@@ -3,7 +3,14 @@ import { createElement } from "react";
 import { Share } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, testAccountExport, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import {
+  createFakeBackend,
+  createMemorySecureStore,
+  testAccountExport,
+  TEST_BACKEND_URL,
+  TEST_DELETE_CODE,
+  seedPendingSignIn,
+} from "./authTestDoubles";
 import { pressHardwareBack, resetBackListeners } from "./backHandlerHarness";
 import { deepLinkState, renderScreen } from "./screenHarness";
 import { deferred } from "./signedInScreenHarness";
@@ -28,6 +35,7 @@ describe("App: delete account from the sign-up attestation gate (HEN-183)", () =
   beforeEach(() => {
     backend = createFakeBackend({ signUpAttestationAcceptedVersion: null });
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     resetBackListeners();
   });

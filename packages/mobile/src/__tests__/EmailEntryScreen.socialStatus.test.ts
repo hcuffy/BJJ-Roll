@@ -33,10 +33,11 @@ function setUp(options: { serverUnreachable?: boolean } = {}) {
   const browser = { openAuthSessionAsync: vi.fn<() => Promise<BrowserResult>>(() => Promise.resolve({ type: "success", url: SIGNED_IN_URL })) };
   const onClearServerUnreachable = vi.fn();
   const element = createElement(EmailEntryScreen, {
+    secureStore: createMemorySecureStore(),
     client,
     onCodeSent: () => undefined,
     socialProviders: ["google"],
-    socialSignIn: { client, backendUrl: TEST_BACKEND_URL, platform: "android", browser },
+    socialSignIn: { client, secureStore: createMemorySecureStore(), backendUrl: TEST_BACKEND_URL, platform: "android", browser },
     serverUnreachable: options.serverUnreachable ?? false,
     onClearServerUnreachable,
   });

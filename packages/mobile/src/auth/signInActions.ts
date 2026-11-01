@@ -1,12 +1,14 @@
-import { MAGIC_LINK_REASON_PARAM, magicLinkReasons, SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
+import { SIGN_UP_ATTESTATION_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, isAgeConfirmed, isEmailAddress, isSignUpAttestationAccepted, type EmailEntry } from "./ageConfirmation";
-import { DEEP_LINK_SCHEME, sessionGoneStatuses, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
+import { DEEP_LINK_SCHEME, SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
+import { beginPendingSignIn } from "./pendingSignIn";
 import {
   addPendingSignOut,
   dropPendingSignOut,
   oldSessionCookieOf,
   PENDING_WITHOUT_SESSION_COOKIE,
   readPendingSignOuts,
+  readSessionCookie,
   type SessionKeyStore,
 } from "./pendingSignOuts";
 
@@ -28,7 +30,7 @@ export type ActionResult = { readonly ok: true } | { readonly ok: false; readonl
 
 export const OTP_EXPIRY_MINUTES = 10;
 
-export const MAGIC_LINK_EXPIRY_MINUTES = 15;
+export { MAGIC_LINK_EXPIRY_MINUTES } from "./pendingSignIn";
 
 export const failureMessages = {
   invalidEmail: "Enter a valid email address.",
@@ -119,14 +121,18 @@ export async function sendEmailCode(client: MobileAuthClient, entry: EmailEntry)
   });
 }
 
-export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry): Promise<ActionResult> {
+export async function sendMagicLink(client: MobileAuthClient, entry: EmailEntry, secureStore: SessionKeyStore): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
     return refused;
   }
+  const verifierHash = await beginPendingSignIn(secureStore).catch(() => null);
+  if (verifierHash === null) {
+    return failure("unknown");
+  }
   return await postAuth(client, {
     path: "/sign-in/magic-link",
-    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ...signUpAnswers(entry) },
+    body: { email: entry.email.trim(), callbackURL: MAGIC_LINK_CALLBACK_URL, ...signUpAnswers(entry), metadata: { verifierHash } },
   });
 }
 
@@ -152,36 +158,6 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
 
 export const SOCIAL_SIGN_IN_CALLBACK_PATH = "/social";
 
-export async function completeMagicLink(client: MobileAuthClient, url: string, signal?: AbortSignal): Promise<ActionResult> {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return { ok: false, reason: "ignored", message: null };
-  }
-  if (parsed.protocol !== `${DEEP_LINK_SCHEME}:` || parsed.host !== "auth" || parsed.pathname === SOCIAL_SIGN_IN_CALLBACK_PATH) {
-    return { ok: false, reason: "ignored", message: null };
-  }
-  const reason = parsed.searchParams.get(MAGIC_LINK_REASON_PARAM);
-  if (reason === magicLinkReasons.ageRefused) {
-    return { ok: false, reason: "ageRequired", message: AGE_GATE_REFUSAL_MESSAGE };
-  }
-  if (reason === magicLinkReasons.attestationRefused) {
-    return attestationRequired;
-  }
-  if (reason === magicLinkReasons.linkInvalid) {
-    return failure("invalidLink");
-  }
-  if (reason !== null || parsed.searchParams.has("error")) {
-    return failure("unknown");
-  }
-  const code = parsed.searchParams.get("code");
-  if (!code) {
-    return { ok: false, reason: "ignored", message: null };
-  }
-  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink", signal });
-}
-
 export async function readSignedInUserId(client: MobileAuthClient, signal?: AbortSignal): Promise<string | null> {
   const { data } = await client.getSession({ fetchOptions: { signal } });
   return data?.user.id ?? null;
@@ -191,14 +167,6 @@ export const sessionStorageKeys = [`${SESSION_STORAGE_PREFIX}_cookie`, `${SESSIO
 
 export { PENDING_SIGN_OUT_KEY, type SessionKeyStore } from "./pendingSignOuts";
 
-async function readSessionCookie(client: MobileAuthClient): Promise<string | null> {
-  try {
-    return (await client.getCookie()).split("; ").find((cookie) => cookie.split("=")[0]?.endsWith("session_token")) ?? null;
-  } catch {
-    return null;
-  }
-}
-
 interface SignOutAttempt {
   readonly oldSessionCookie: string | null;
   readonly signal?: AbortSignal;
@@ -206,25 +174,29 @@ interface SignOutAttempt {
 
 async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, signal }: SignOutAttempt): Promise<boolean> {
   try {
-    if (oldSessionCookie !== null) {
-      return await client.signOutSessionCookie(oldSessionCookie, signal);
-    }
-    const { error } = await client.signOut({ fetchOptions: { signal } });
-    return !error || sessionGoneStatuses.has(error.status);
+    return await client.signOutSessionCookie(oldSessionCookie ?? "", signal);
   } catch {
     return false;
   }
 }
 
-async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: SignOutAttempt): Promise<void> {
-  const serverSignedOut = await signOutOnServer(client, attempt);
-  if (attempt.signal?.aborted) {
-    return;
-  }
+async function deleteSessionKeys(secureStore: SessionKeyStore): Promise<boolean> {
   const deletes = await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
-  if (serverSignedOut && deletes.every((result) => result.status === "fulfilled")) {
-    await dropPendingSignOut(secureStore, attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
+  return deletes.every((result) => result.status === "fulfilled");
+}
+
+async function confirmSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: ServerSignOut) {
+  const serverSignedOut = await signOutOnServer(client, attempt);
+  if (serverSignedOut && attempt.keysDeleted && !attempt.signal?.aborted) {
+    await dropPendingSignOut(secureStore, attempt.marker).catch(() => undefined);
   }
+}
+
+async function finishSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, attempt: SignOutAttempt): Promise<void> {
+  const oldSessionCookie = attempt.oldSessionCookie ?? (await readSessionCookie(client));
+  const marker = attempt.oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE;
+  const keysDeleted = await deleteSessionKeys(secureStore);
+  await confirmSignOut(client, secureStore, { oldSessionCookie, marker, keysDeleted, signal: attempt.signal });
 }
 
 async function revokeOldSession(
@@ -238,22 +210,47 @@ async function revokeOldSession(
   }
 }
 
+export interface PhoneSignOut {
+  readonly oldSessionCookie: string | null;
+  readonly marker: string;
+  readonly keysDeleted: boolean;
+}
+
+export interface ServerSignOut extends PhoneSignOut {
+  readonly signal?: AbortSignal;
+}
+
+export async function signOutOnPhone(client: MobileAuthClient, secureStore: SessionKeyStore): Promise<PhoneSignOut> {
+  const oldSessionCookie = await readSessionCookie(client);
+  const marker = oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE;
+  await addPendingSignOut(secureStore, marker).catch(() => undefined);
+  return { oldSessionCookie, marker, keysDeleted: await deleteSessionKeys(secureStore) };
+}
+
+export async function signOutOnServerAfterPhone(client: MobileAuthClient, secureStore: SessionKeyStore, signedOut: ServerSignOut): Promise<void> {
+  await endLeftoverSessions(client, secureStore, { signal: signedOut.signal, currentMarker: signedOut.marker });
+  await confirmSignOut(client, secureStore, signedOut);
+}
+
 export async function signOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
-  await endLeftoverSessions(client, secureStore, signal);
-  const sessionCookie = await readSessionCookie(client);
-  await addPendingSignOut(secureStore, sessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE).catch(() => undefined);
-  await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
-  await finishSignOut(client, secureStore, { oldSessionCookie: sessionCookie, signal });
+  await signOutOnServerAfterPhone(client, secureStore, { ...(await signOutOnPhone(client, secureStore)), signal });
 }
 
 export async function cancelPendingSignOut(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
-  await endLeftoverSessions(client, secureStore, signal);
+  await endLeftoverSessions(client, secureStore, { signal });
 }
 
-async function endLeftoverSessions(client: MobileAuthClient, secureStore: SessionKeyStore, signal?: AbortSignal): Promise<void> {
+async function endLeftoverSessions(
+  client: MobileAuthClient,
+  secureStore: SessionKeyStore,
+  { signal, currentMarker }: { readonly signal?: AbortSignal; readonly currentMarker?: string },
+): Promise<void> {
   const storedSessionCookie = await readSessionCookie(client);
-  for (const marker of (await readPendingSignOuts(secureStore)) ?? []) {
+  for (const marker of ((await readPendingSignOuts(secureStore)) ?? []).filter((queued) => queued !== currentMarker)) {
     const oldSessionCookie = oldSessionCookieOf(marker);
+    if (signal?.aborted) {
+      return;
+    }
     if (oldSessionCookie === null || oldSessionCookie === storedSessionCookie) {
       await dropPendingSignOut(secureStore, marker).catch(() => undefined);
     } else {

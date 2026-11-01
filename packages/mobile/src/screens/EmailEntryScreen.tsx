@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { isEmailAddress, missingHint } from "../auth/ageConfirmation";
 import type { MobileAuthClient } from "../auth/authClient";
-import { failureMessages, sendEmailCode, sendMagicLink, type ActionResult } from "../auth/signInActions";
+import { failureMessages, sendEmailCode, sendMagicLink, type ActionResult, type SessionKeyStore } from "../auth/signInActions";
 import { signInWithProvider, socialFailureMessage, type SocialProvider, type SocialSignInDependencies } from "../auth/socialSignIn";
 import { SIGN_UP_ATTESTATION_REFUSAL_MESSAGE } from "../auth/signUpAttestation";
 import { AgeConfirmationFields } from "./AgeConfirmationFields";
@@ -24,6 +24,7 @@ export { SERVER_UNREACHABLE_NOTE } from "./ServerUnreachableNote";
 
 export interface EmailEntryScreenProps extends StartupRetryProps {
   readonly client: MobileAuthClient;
+  readonly secureStore: SessionKeyStore;
   readonly onCodeSent: (email: string, age18Confirmed: boolean) => void;
   readonly linkError?: string | null;
   readonly linkErrorReason?: LinkErrorCardProps["reason"];
@@ -42,6 +43,7 @@ type Sending = "code" | "link" | SocialProvider | null;
 
 export function EmailEntryScreen({
   client,
+  secureStore,
   onCodeSent,
   linkError = null,
   linkErrorReason = null,
@@ -119,7 +121,8 @@ export function EmailEntryScreen({
       return;
     }
     setSending(kind);
-    const result = await (kind === "code" ? sendEmailCode : sendMagicLink)(client, { email, ...answers });
+    const entry = { email, ...answers };
+    const result = await (kind === "code" ? sendEmailCode(client, entry) : sendMagicLink(client, entry, secureStore));
     setSending(null);
     if (!result.ok) {
       showFailure(result);

@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen, settle, textOf } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -85,6 +85,7 @@ describe("Startup Try again for screen readers (HEN-310)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     hangingPaths = new Set();
     held = new Map();
     holdInsteadOfHang = false;

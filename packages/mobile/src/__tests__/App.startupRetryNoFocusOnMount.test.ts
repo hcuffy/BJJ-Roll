@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -56,6 +56,7 @@ describe("Startup Try again: a fresh sign-in screen keeps focus and announces th
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     unreachablePaths = new Set();
     deepLinkState.url = null;
     vi.mocked(AccessibilityInfo.announceForAccessibility).mockClear();

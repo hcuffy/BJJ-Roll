@@ -36,6 +36,7 @@ describe("EmailEntryScreen", () => {
   const renderEmailEntry = () =>
     renderScreen(
       createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
         client,
         onCodeSent: (email, age18Confirmed) => {
           sentTo.push(email);
@@ -205,6 +206,7 @@ describe("EmailEntryScreen", () => {
         age16Confirmed: true,
         age18Confirmed: true,
         signUpAttestationTextVersionId: signUpAttestationVersion.id,
+        metadata: { verifierHash: expect.any(String) as unknown },
       },
       {
         email: "member@example.test",
@@ -232,8 +234,7 @@ describe("EmailEntryScreen", () => {
   });
 
   it("announces errors: polite live region on Android, an announcement on iOS", async () => {
-    const rateLimited = () => Promise.resolve(Response.json({ message: "Too many requests" }, { status: 429 }));
-    backend.fetchImplementation.mockImplementation(rateLimited);
+    backend.fetchImplementation.mockImplementation(() => Promise.resolve(Response.json({ message: "Too many requests" }, { status: 429 })));
     const screen = await renderEmailEntry();
     await tickRequiredBoxes(screen);
     await screen.changeText("Email", "member@example.test");

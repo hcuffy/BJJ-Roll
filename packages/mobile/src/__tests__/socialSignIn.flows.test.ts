@@ -3,7 +3,7 @@ import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/sh
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
-import { completeMagicLink } from "../auth/signInActions";
+import { completeMagicLink } from "../auth/magicLinkReturn";
 import {
   readSocialSignInConfig,
   signInWithProvider,
@@ -12,7 +12,14 @@ import {
   type AppleNativeSignIn,
   type AuthBrowser,
 } from "../auth/socialSignIn";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_PROVIDER_AUTHORIZATION_URL } from "./authTestDoubles";
+import {
+  createFakeBackend,
+  createMemorySecureStore,
+  PENDING_SIGN_IN_KEY,
+  TEST_BACKEND_URL,
+  TEST_PROVIDER_AUTHORIZATION_URL,
+  TEST_SIGN_IN_VERIFIER,
+} from "./authTestDoubles";
 import appConfig from "../../app.json";
 
 const sha256Hex = (value: string): string => createHash("sha256").update(value).digest("hex");
@@ -40,7 +47,14 @@ function createTestDependencies(
       Promise.resolve(options.browserResult ?? { type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code` }),
     ),
   };
-  const dependencies = { client, backendUrl: TEST_BACKEND_URL, platform: options.platform ?? "android", browser, appleNative: options.appleNative };
+  const dependencies = {
+    client,
+    secureStore: storage,
+    backendUrl: TEST_BACKEND_URL,
+    platform: options.platform ?? "android",
+    browser,
+    appleNative: options.appleNative,
+  };
   return { backend, storage, browser, dependencies };
 }
 
@@ -68,12 +82,22 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       { ok: true },
     );
     expect(backend.requests[0]?.body).toMatchObject({
-      additionalData: { age16Confirmed: true, age18Confirmed: true, signUpAttestationTextVersionId: signUpAttestationVersion.id },
+      additionalData: {
+        age16Confirmed: true,
+        age18Confirmed: true,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
+        verifierHash: expect.any(String) as unknown,
+      },
     });
   });
 
   it("Google: sends the 16+ and 18+ answers, opens the provider URL through the Expo proxy, and swaps the returned code for a session", async () => {
     const { backend, browser, storage, dependencies } = createTestDependencies();
+    const verifiers: string[] = [];
+    browser.openAuthSessionAsync.mockImplementationOnce(() => {
+      verifiers.push((JSON.parse(storage.items.get(PENDING_SIGN_IN_KEY) ?? "{}") as { verifier: string }).verifier);
+      return Promise.resolve({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code` });
+    });
 
     expect(await signInWithProvider(dependencies, "google", age16)).toEqual({ ok: true });
 
@@ -83,16 +107,23 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
       callbackURL: "bjjroll://auth/social",
       errorCallbackURL: "bjjroll://auth/social",
       disableRedirect: true,
-      additionalData: { age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: signUpAttestationVersion.id },
+      additionalData: {
+        age16Confirmed: true,
+        age18Confirmed: false,
+        signUpAttestationTextVersionId: signUpAttestationVersion.id,
+        verifierHash: sha256Hex(verifiers[0] ?? ""),
+      },
     });
+    expect(verifiers[0]).toMatch(/^[\da-f]{64}$/u);
     const [proxyUrl, redirectUrl] = browser.openAuthSessionAsync.mock.calls[0] ?? [];
     const proxy = new URL(proxyUrl ?? "");
     expect(`${proxy.origin}${proxy.pathname}`).toBe(`${TEST_BACKEND_URL}/api/auth/expo-authorization-proxy`);
     expect(proxy.searchParams.get("authorizationURL")).toBe(`${TEST_PROVIDER_AUTHORIZATION_URL}&provider=google`);
     expect(redirectUrl).toBe("bjjroll://auth");
     expect(backend.requests[1]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/magic-link/exchange`);
-    expect(backend.requests[1]?.body).toEqual({ code: "one-time-code" });
+    expect(backend.requests[1]?.body).toEqual({ code: "one-time-code", verifier: verifiers[0] });
     expect(storage.items.get("bjjroll_cookie")).toContain("signed-session-value");
+    expect(storage.items.has(PENDING_SIGN_IN_KEY)).toBe(false);
   });
 
   it("shows the 16+ message, the neutral not-linked message, or nothing (closed browser) from the browser's return", async () => {
@@ -180,7 +211,9 @@ describe("HEN-239 Apple and Google sign-in on the phone", () => {
   it("the deep-link handler leaves the social return to the browser session, so a code is never exchanged twice", async () => {
     const { backend, dependencies } = createTestDependencies();
 
-    expect(await completeMagicLink(dependencies.client, `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code`)).toEqual({
+    expect(
+      await completeMagicLink(dependencies.client, `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code`, { verifier: TEST_SIGN_IN_VERIFIER }),
+    ).toEqual({
       ok: false,
       reason: "ignored",
       message: null,

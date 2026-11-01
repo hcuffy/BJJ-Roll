@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { appAuthClient, appSecureStore } from "./auth/appAuthClient";
-import { cancelPendingSignOut } from "./auth/signInActions";
+import { cancelPendingSignOut, signOutOnPhone, signOutOnServerAfterPhone } from "./auth/signInActions";
+import { startupDeadline } from "./auth/startupTimeout";
 
 interface TrackedRevoke {
   readonly stop: AbortController;
@@ -9,7 +10,10 @@ interface TrackedRevoke {
 
 export function useLeftoverRevoke() {
   const current = useRef<TrackedRevoke | null>(null);
-  const start = (deadline?: AbortSignal) => {
+  const start = (
+    deadline?: AbortSignal,
+    revoke: (signal: AbortSignal) => Promise<void> = (signal) => cancelPendingSignOut(appAuthClient, appSecureStore, signal),
+  ) => {
     const previous = current.current;
     previous?.stop.abort();
     const stop = new AbortController();
@@ -17,15 +21,17 @@ export function useLeftoverRevoke() {
     const revokeAfterPrevious = async () => {
       await previous?.done;
       if (!stop.signal.aborted) {
-        await cancelPendingSignOut(appAuthClient, appSecureStore, stop.signal);
+        await revoke(stop.signal);
       }
     };
     current.current = { stop, done: revokeAfterPrevious() };
   };
-  const take = () => {
-    const taken = current.current;
-    current.current = null;
-    return taken;
+  const signOutStarted = useRef(new AbortController());
+  const signOut = async () => {
+    signOutStarted.current.abort();
+    signOutStarted.current = new AbortController();
+    const signedOut = await signOutOnPhone(appAuthClient, appSecureStore);
+    start(startupDeadline(), (signal) => signOutOnServerAfterPhone(appAuthClient, appSecureStore, { ...signedOut, signal }));
   };
-  return { start, take };
+  return { start, signOut, signOutStarted };
 }

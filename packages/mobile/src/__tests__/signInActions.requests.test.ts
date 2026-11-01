@@ -1,17 +1,21 @@
 import { AGE_GATE_REFUSAL_MESSAGE, signUpAttestationVersion } from "@bjj-roll/shared";
+/// <reference types="node" />
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createMobileAuthClient } from "../auth/authClient";
-import { completeMagicLink, failureMessages, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { completeMagicLink } from "../auth/magicLinkReturn";
+import { failureMessages, sendEmailCode, sendMagicLink, verifyEmailCode } from "../auth/signInActions";
+import { createFakeBackend, createMemorySecureStore, PENDING_SIGN_IN_KEY, TEST_BACKEND_URL, TEST_SIGN_IN_VERIFIER } from "./authTestDoubles";
 
 function createTestClient() {
   const backend = createFakeBackend();
+  const secureStore = createMemorySecureStore();
   const client = createMobileAuthClient({
     backendUrl: TEST_BACKEND_URL,
-    storage: createMemorySecureStore(),
+    storage: secureStore,
     fetchImplementation: backend.fetchImplementation,
   });
-  return { backend, client };
+  return { backend, client, secureStore };
 }
 
 describe("sign-in requests", () => {
@@ -61,12 +65,14 @@ describe("sign-in requests", () => {
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 
-  it("asks for a magic link that comes back to the bjjroll deep link", async () => {
-    const { backend, client } = createTestClient();
+  it("asks for a magic link that comes back to the bjjroll deep link, bound to a verifier kept on this phone", async () => {
+    const { backend, client, secureStore } = createTestClient();
 
-    const result = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true });
+    const result = await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true }, secureStore);
 
     expect(result).toEqual({ ok: true });
+    const { verifier } = JSON.parse(secureStore.items.get(PENDING_SIGN_IN_KEY) ?? "{}") as { verifier?: string };
+    expect(verifier).toMatch(/^[\da-f]{64}$/u);
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/sign-in/magic-link`);
     expect(backend.requests[0]?.body).toEqual({
       email: "member@example.test",
@@ -74,21 +80,42 @@ describe("sign-in requests", () => {
       age16Confirmed: true,
       age18Confirmed: false,
       signUpAttestationTextVersionId: signUpAttestationVersion.id,
+      metadata: {
+        verifierHash: createHash("sha256")
+          .update(verifier ?? "")
+          .digest("hex"),
+      },
     });
+  });
+
+  it("a second send keeps the same verifier, so an earlier link from this phone still works", async () => {
+    const { backend, client, secureStore } = createTestClient();
+    const entry = { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true };
+
+    await sendMagicLink(client, entry, secureStore);
+    await sendMagicLink(client, entry, secureStore);
+
+    const hashes = backend.requests.map((request) => (request.body?.metadata as { verifierHash?: string } | undefined)?.verifierHash);
+    expect(hashes[0]).toMatch(/^[\da-f]{64}$/u);
+    expect(hashes[1]).toBe(hashes[0]);
   });
 
   it("passes the optional 18+ answer on with both sends, as a plain boolean (HEN-263)", async () => {
     const { backend, client } = createTestClient();
 
     await sendEmailCode(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true });
-    await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true });
+    await sendMagicLink(
+      client,
+      { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true, age18Confirmed: true },
+      createMemorySecureStore(),
+    );
 
     expect(backend.requests.map((request) => request.body?.age18Confirmed)).toEqual([true, true]);
   });
 
   it("shows the 16+ refusal, not the invalid-link copy, when a link comes back with r=age_refused (HEN-263)", async () => {
     const { client } = createTestClient();
-    expect(await completeMagicLink(client, "bjjroll://auth?r=age_refused")).toEqual({
+    expect(await completeMagicLink(client, "bjjroll://auth?r=age_refused", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
@@ -97,7 +124,7 @@ describe("sign-in requests", () => {
 
   it("maps r=link_invalid to the app's invalid-link copy (HEN-263)", async () => {
     const { client } = createTestClient();
-    expect(await completeMagicLink(client, "bjjroll://auth?r=link_invalid")).toEqual({
+    expect(await completeMagicLink(client, "bjjroll://auth?r=link_invalid", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
       ok: false,
       reason: "invalidLink",
       message: failureMessages.invalidLink,
@@ -110,7 +137,7 @@ describe("sign-in requests", () => {
     "bjjroll://auth?error=AGE_CONFIRMATION_REQUIRED&error_description=You%20must%20be%2016",
   ])("shows only the generic error for an unknown reason code or a legacy error param, never URL text: %s", async (url) => {
     const { backend, client } = createTestClient();
-    const result = await completeMagicLink(client, url);
+    const result = await completeMagicLink(client, url, { verifier: TEST_SIGN_IN_VERIFIER });
     expect(result).toEqual({ ok: false, reason: "unknown", message: failureMessages.unknown });
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
@@ -118,20 +145,32 @@ describe("sign-in requests", () => {
   it("exchanges the code from a bjjroll://auth deep link for a session", async () => {
     const { backend, client } = createTestClient();
 
-    const result = await completeMagicLink(client, "bjjroll://auth?code=exchange-code-1");
+    const result = await completeMagicLink(client, "bjjroll://auth?code=exchange-code-1", { verifier: TEST_SIGN_IN_VERIFIER });
 
     expect(result).toEqual({ ok: true });
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/magic-link/exchange`);
-    expect(backend.requests[0]?.body).toEqual({ code: "exchange-code-1" });
+    expect(backend.requests[0]?.body).toEqual({ code: "exchange-code-1", verifier: TEST_SIGN_IN_VERIFIER });
   });
 
   it("ignores links that are not bjjroll://auth or carry no code", async () => {
     const { backend, client } = createTestClient();
 
-    expect(await completeMagicLink(client, "https://evil.test/auth?code=exchange-code-1")).toEqual({ ok: false, reason: "ignored", message: null });
-    expect(await completeMagicLink(client, "bjjroll://other?code=exchange-code-1")).toEqual({ ok: false, reason: "ignored", message: null });
-    expect(await completeMagicLink(client, "bjjroll://auth")).toEqual({ ok: false, reason: "ignored", message: null });
-    expect((await completeMagicLink(client, "bjjroll://auth?r=link_invalid")).ok).toBe(false);
+    expect(await completeMagicLink(client, "https://evil.test/auth?code=exchange-code-1", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
+      ok: false,
+      reason: "ignored",
+      message: null,
+    });
+    expect(await completeMagicLink(client, "bjjroll://other?code=exchange-code-1", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
+      ok: false,
+      reason: "ignored",
+      message: null,
+    });
+    expect(await completeMagicLink(client, "bjjroll://auth", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
+      ok: false,
+      reason: "ignored",
+      message: null,
+    });
+    expect((await completeMagicLink(client, "bjjroll://auth?r=link_invalid", { verifier: TEST_SIGN_IN_VERIFIER })).ok).toBe(false);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
   });
 
@@ -146,7 +185,9 @@ describe("sign-in requests", () => {
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
     });
-    expect(await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
+    expect(
+      await sendMagicLink(client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true }, createMemorySecureStore()),
+    ).toEqual({
       ok: false,
       reason: "ageRequired",
       message: AGE_GATE_REFUSAL_MESSAGE,
@@ -173,7 +214,7 @@ describe("sign-in requests", () => {
     backend.fetchImplementation.mockImplementation(() =>
       Promise.resolve(Response.json({ code: "INVALID_TOKEN", message: "Invalid token" }, { status: 401 })),
     );
-    expect(await completeMagicLink(client, "bjjroll://auth?code=used-code")).toEqual({
+    expect(await completeMagicLink(client, "bjjroll://auth?code=used-code", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
       ok: false,
       reason: "invalidLink",
       message: "This sign-in link has expired or was already used. Send a new one.",
@@ -193,7 +234,13 @@ describe("sign-in requests", () => {
     limited.backend.fetchImplementation.mockImplementation(() =>
       Promise.resolve(Response.json({ code: "TOO_MANY_REQUESTS", message: "Too many verification emails requested" }, { status: 429 })),
     );
-    expect(await sendMagicLink(limited.client, { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true })).toEqual({
+    expect(
+      await sendMagicLink(
+        limited.client,
+        { email: "member@example.test", age16Confirmed: true, signUpAttestationAccepted: true },
+        createMemorySecureStore(),
+      ),
+    ).toEqual({
       ok: false,
       reason: "rateLimited",
       message: "Too many tries. Wait a minute and try again.",
