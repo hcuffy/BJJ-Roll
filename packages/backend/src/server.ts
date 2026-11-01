@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createAppFromEnvironment } from "./app.js";
 
-const { app, config, emailQueue } = createAppFromEnvironment();
+const { app, config, emailQueue } = await createAppFromEnvironment();
 
 await emailQueue.start();
 

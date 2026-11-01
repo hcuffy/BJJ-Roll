@@ -3,6 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sql, type Kysely } from "kysely";
 import { Migrator, type Migration, type MigrationProvider, type MigrationResult } from "kysely/migration";
+import { Pool } from "pg";
+import { DATABASE_URL_ENV } from "../serverConfig.js";
+import { createDatabase } from "./connection.js";
 
 function resolveDefaultMigrationsDirectory(): string {
   const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -44,15 +47,15 @@ class SqlFileMigrationProvider implements MigrationProvider {
   }
 }
 
+export function createSqlFileMigrator<DatabaseType>(db: Kysely<DatabaseType>, migrationsDirectory: string = defaultMigrationsDirectory): Migrator {
+  return new Migrator({ db, provider: new SqlFileMigrationProvider(migrationsDirectory) });
+}
+
 export async function runDatabaseMigrations<DatabaseType>(
   db: Kysely<DatabaseType>,
   migrationsDirectory: string = defaultMigrationsDirectory,
 ): Promise<MigrationResult[]> {
-  const migrator = new Migrator({
-    db,
-    provider: new SqlFileMigrationProvider(migrationsDirectory),
-  });
-  const { error, results } = await migrator.migrateToLatest();
+  const { error, results } = await createSqlFileMigrator(db, migrationsDirectory).migrateToLatest();
   if (error instanceof Error) {
     throw error;
   }
@@ -60,4 +63,22 @@ export async function runDatabaseMigrations<DatabaseType>(
     throw new Error(`Database migration failed: ${JSON.stringify(error)}`);
   }
   return results ?? [];
+}
+
+export async function migrateDatabaseFromEnvironment(env: NodeJS.ProcessEnv): Promise<void> {
+  const databaseUrl = env[DATABASE_URL_ENV];
+  if (!databaseUrl) {
+    throw new Error(`${DATABASE_URL_ENV} is required to run migrations`);
+  }
+  const db = createDatabase(new Pool({ connectionString: databaseUrl }));
+  try {
+    const results = await runDatabaseMigrations(db);
+    console.warn(JSON.stringify({ event: "migrations_applied", migrations: results.map((result) => result.migrationName) }));
+  } finally {
+    await db.destroy();
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await migrateDatabaseFromEnvironment(process.env);
 }

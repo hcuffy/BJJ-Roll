@@ -160,7 +160,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-65 DELETE /account n
       body: { email: user.email, type: "email-verification", otp: code },
       ipAddress: "198.51.100.131",
     });
-    expect(publicCheck.status).toBe(400);
+    expect(publicCheck.status).toBe(404);
     expect((await deleteWith(user, { code })).status).toBe(200);
   });
 
