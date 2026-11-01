@@ -23,7 +23,7 @@ const CODE_LENGTH = 6;
 export const CODE_SCREEN_INVALID_LINK =
   "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
 
-const CODE_SCREEN_NOT_STARTED_HERE = "This sign-in link wasn't started on this phone. Enter the code from your email, or send a new one.";
+const CODE_SCREEN_NOT_STARTED_HERE = "This sign-in link can't be used on this phone. Enter the code from your email, or send a new one.";
 const codeScreenLinkMessages: Partial<Record<FailureReason, string>> = {
   invalidLink: CODE_SCREEN_INVALID_LINK,
   linkNotStartedHere: CODE_SCREEN_NOT_STARTED_HERE,

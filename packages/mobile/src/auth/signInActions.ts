@@ -37,7 +37,7 @@ export const failureMessages = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
   invalidLink: "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.",
-  linkNotStartedHere: "This sign-in link wasn't started on this phone. Enter your email below to get a new one.",
+  linkNotStartedHere: "This sign-in link can't be used on this phone. Enter your email below to get a new one.",
   accountNotLinked: "We couldn't sign you in this way. Sign in with your email instead.",
   network: "No connection. Check your internet and try again.",
   rateLimited: "Too many tries. Wait a minute and try again.",
