@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { RATE_LIMIT_WINDOW_SECONDS } from "../auth/authLimits.js";
+import { RATE_LIMIT_WINDOW_SECONDS, SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS, SESSION_SLIDING_EXPIRY_SECONDS } from "../auth/authLimits.js";
 import { currentMs, secondsAfter, currentDate } from "../dates.js";
 import { AUTH_PRUNE_CRON, AUTH_PRUNE_QUEUE_NAME, pruneExpiredAuthRows } from "../jobs/pruneJob.js";
 import { BackgroundJobs } from "../jobs/backgroundJobs.js";
@@ -60,6 +60,22 @@ describeWithPostgres("hourly prune of expired sign-in rows, sessions and old rat
     expect(await ids("verifications")).toEqual([userAlpha.verificationByEmailHashId, userAlpha.verificationByUserId].sort());
     expect(await ids("sessions")).toEqual([userAlpha.sessionId]);
     expect(await ids("rate_limits")).toEqual(["rate-live"]);
+  });
+
+  it("never deletes a live session, even one about to expire or near its absolute cap", async () => {
+    const now = currentDate();
+    const longAgo = secondsAfter(now, -(SESSION_ABSOLUTE_MAX_LIFETIME_SECONDS - 60));
+    await database.pool.query(
+      `INSERT INTO public.sessions (id, user_id, token, expires_at, created_at, updated_at) VALUES` +
+        ` ('session-live-soon', $1, 'token-live-soon', $2, $3, $3),` +
+        ` ('session-live-month', $1, 'token-live-month', $4, $3, $3),` +
+        ` ('session-live-old', $1, 'token-live-old', $2, $5, $5)`,
+      [userAlpha.id, secondsAfter(now, 60), now, secondsAfter(now, SESSION_SLIDING_EXPIRY_SECONDS), longAgo],
+    );
+
+    await pruneExpiredAuthRows(appLogin.pool);
+
+    expect(await ids("sessions")).toEqual([userAlpha.sessionId, "session-live-month", "session-live-old", "session-live-soon"].sort());
   });
 
   it("the app role still cannot read or delete another user's live rows directly", async () => {
