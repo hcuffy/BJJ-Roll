@@ -6,7 +6,6 @@ export const AGE_CONFIRMATION_LABEL = AGE16_CONFIRMATION_LABEL;
 export const AGE_ADULT_CONFIRMATION_LABEL = AGE18_CONFIRMATION_LABEL;
 export const AGE_ADULT_CONFIRMATION_NOTE = "Only needed to buy things later. Already have an account? Confirm in Account.";
 export const AGE_ADULT_NEEDS_16_HINT = "Tick I am 16 or older first.";
-export const AGE_LINK_REFUSAL_NEXT_STEP = "Tick I am 16 or older and send a new link.";
 
 export interface AgeAnswers {
   readonly age16Confirmed: boolean;

@@ -39,6 +39,22 @@ export async function lookupUserIdByEmailHmacInTransaction(transaction: AuthTran
   return result.rows[0]?.userId ?? null;
 }
 
+async function lookupUserIdByProviderAccountInTransaction(
+  transaction: AuthTransaction,
+  providerId: string,
+  accountId: string,
+): Promise<string | null> {
+  const result = await sql<{
+    userId: string | null;
+  }>`SELECT public.app_user_id_by_provider_account(${providerId}, ${accountId}) AS user_id`.execute(transaction);
+  return result.rows[0]?.userId ?? null;
+}
+
+function readEqualsValue(where: Where[] | undefined, field: string): string | null {
+  const clause = where?.find((entry) => entry.field === field && (entry.operator ?? "eq") === "eq");
+  return typeof clause?.value === "string" ? clause.value : null;
+}
+
 function isHashedSessionToken(value: string): boolean {
   return hashedSessionTokenPattern.test(value);
 }
@@ -113,6 +129,12 @@ export async function resolveWhereScope(
       }
     }
     transformed.push(clause);
+  }
+
+  const providerId = readEqualsValue(where, "providerId");
+  const accountId = readEqualsValue(where, "accountId");
+  if (modelKey === "account" && settings.userId === null && providerId !== null && accountId !== null) {
+    settings.userId = await lookupUserIdByProviderAccountInTransaction(transaction, providerId, accountId);
   }
 
   await applyScopeSettings(transaction, settings);

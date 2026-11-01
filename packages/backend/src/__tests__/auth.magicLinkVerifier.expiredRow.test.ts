@@ -40,7 +40,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("an expired phone verifie
       expect(aged.rowCount).toBe(1);
     }
     const continued = await continueMagicLink(app, message.url, { ipAddress });
-    expect(continued.status).toBe(302);
+    expect(continued.status).toBe(303);
     const code = new URL(continued.headers.get("location") ?? "").searchParams.get("code") ?? "";
     return await postAuthJson(app, "/magic-link/exchange", { body: { code, verifier: testSignInVerifier }, ipAddress });
   };

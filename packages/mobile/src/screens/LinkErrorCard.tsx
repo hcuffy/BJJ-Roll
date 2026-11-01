@@ -1,5 +1,4 @@
-import { Text, View } from "react-native";
-import { AGE_LINK_REFUSAL_NEXT_STEP } from "../auth/ageConfirmation";
+import { View } from "react-native";
 import type { FailureReason } from "../auth/signInActions";
 import { ATTESTATION_LINK_REFUSAL_NEXT_STEP } from "../auth/signUpAttestation";
 import { textStyles } from "../theme/tokens";
@@ -18,9 +17,7 @@ export function LinkErrorCard({ message, reason }: LinkErrorCardProps) {
   return (
     <View style={[authStyles.card, authStyles.errorCard]}>
       <View style={authStyles.cardBody}>
-        <StatusText message={message} style={authStyles.cardError} />
-        {reason === "ageRequired" ? <Text style={textStyles.body}>{AGE_LINK_REFUSAL_NEXT_STEP}</Text> : null}
-        {reason === "attestationRequired" ? <Text style={textStyles.body}>{ATTESTATION_LINK_REFUSAL_NEXT_STEP}</Text> : null}
+        <StatusText message={reason === "attestationRequired" ? ATTESTATION_LINK_REFUSAL_NEXT_STEP : message} style={authStyles.cardError} />
       </View>
     </View>
   );

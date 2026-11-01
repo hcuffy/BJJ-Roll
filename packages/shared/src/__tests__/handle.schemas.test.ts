@@ -58,7 +58,7 @@ describe("handleSchema and reservedHandles (HEN-64)", () => {
   });
 
   it("rejects every name in reservedHandles across lowercase, uppercase, mixed case, and padded inputs", () => {
-    expect(reservedHandles.length).toBe(20);
+    expect(reservedHandles.length).toBe(36);
 
     for (const reserved of reservedHandles) {
       const variants = [reserved, reserved.toUpperCase(), alternateCase(reserved), `  ${reserved.toUpperCase()}  `];
@@ -68,6 +68,16 @@ describe("handleSchema and reservedHandles (HEN-64)", () => {
         expect(handleSchema.safeParse(variant).success, `expected handleSchema to reject reserved handle "${variant}"`).toBe(false);
       }
     }
+  });
+
+  it("rejects reserved names written with underscores or lookalike digits", () => {
+    const lookalikes = ["4dm1n", "a_d_m_i_n", "Supp0rt", "r00t", "5y5t3m", "m0d_", "bjj_r0ll", "nu11", "h3lp", "0ff1c1al", "_staff_"];
+
+    for (const candidate of lookalikes) {
+      expect(isReservedHandle(candidate), `expected isReservedHandle("${candidate}") to be true`).toBe(true);
+      expect(handleSchema.safeParse(candidate).success, `expected handleSchema to reject "${candidate}"`).toBe(false);
+    }
+    expect(handleSchema.parse("admiral_7")).toBe("admiral_7");
   });
 
   it("keeps the Placeholder suffix on both handle constants in limits.ts", () => {

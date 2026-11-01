@@ -3,8 +3,10 @@ import { HTTPException } from "hono/http-exception";
 import type { Kysely } from "kysely";
 import type { Pool } from "pg";
 import { mountAccountRoutes, type AppleRevokeRetries } from "./accountRoutes.js";
+import { MAGIC_LINK_VERIFY_PATH } from "./auth/authRequestGuards.js";
 import { mountAuthRoutes, readSocketAddress } from "./auth/authRoutes.js";
 import { createAuth, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
+import { magicLinkTroublePage } from "./auth/magicLinkContinuePage.js";
 import { createDatabase } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
 import { readSchemaVersion } from "./database/schemaVersion.js";
@@ -23,6 +25,7 @@ export interface CreateAppOptions {
         | "codec"
         | "accountDeletionCodes"
         | "accountDeletionAttempts"
+        | "handleAvailabilityAttempts"
         | "resolveClientIp"
         | "emailQueue"
         | "revokeAppleRefreshToken"
@@ -39,9 +42,14 @@ export function createApp(options?: CreateAppOptions): Hono {
 
   honoApp.onError((error, context) => {
     if (error instanceof HTTPException) {
-      return error.getResponse();
+      const response = error.getResponse();
+      const failed = response.status === 429 || response.status >= 500;
+      return failed && context.req.path === MAGIC_LINK_VERIFY_PATH ? magicLinkTroublePage(response.status) : response;
     }
     logServerEvent({ event: "request_failed", route: context.req.routePath, errorClass: errorClassName(error) });
+    if (context.req.path === MAGIC_LINK_VERIFY_PATH) {
+      return magicLinkTroublePage(500);
+    }
     return context.json({ error: "internal" }, 500);
   });
 
@@ -58,7 +66,14 @@ export function createApp(options?: CreateAppOptions): Hono {
           throw new HTTPException(503, { res: Response.json({ error: "unavailable" }, { status: 503 }) });
         }
       };
-      mountHandleRoutes(honoApp, { db: options.database, resolveAuthenticatedUserId });
+      mountHandleRoutes(honoApp, {
+        db: options.database,
+        resolveAuthenticatedUserId,
+        takeAvailabilityCheck: (context) =>
+          authInstance.handleAvailabilityAttempts.take(
+            authInstance.resolveClientIp(context.req.raw.headers, { remoteAddress: readSocketAddress(context) }),
+          ),
+      });
       mountAccountRoutes(honoApp, {
         db: options.database,
         resolveAuthenticatedUserId,

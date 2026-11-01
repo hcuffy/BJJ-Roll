@@ -226,12 +226,17 @@ describe.skipIf(!canRunPostgresTests)("database RLS and cascade delete (HEN-58 A
     expect(remainingAlphaAccounts.rows).toEqual([]);
     expect(remainingAlphaVerifications.rows).toEqual([]);
 
+    await pool.query(
+      `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)
+       VALUES ('verif-bravo-tagged', NULL, 'magic-link:bravo-tagged', 'tagged', $1, now() + interval '1 hour', now(), now())`,
+      [userBravo.emailHash],
+    );
     const cascadeResult = await cascadeDeleteUserAccount(db, userBravo.id);
     expect(cascadeResult).toEqual({
       deletedUserCount: 1,
       deletedSessionCount: 1,
       deletedAccountCount: 1,
-      deletedVerificationCount: 2,
+      deletedVerificationCount: 3,
     });
 
     const totalRemaining = await pool.query<{ count: number }>(

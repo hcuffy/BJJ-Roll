@@ -9,6 +9,7 @@ import type { Pool } from "pg";
 import { betterAuthTelemetryDisabledConfig } from "../database/index.js";
 import type { EmailQueue, EmailSender } from "../email/index.js";
 import { createAccountDeletionAttempts, type AccountDeletionAttempts } from "./accountDeletionAttempts.js";
+import { createHandleAvailabilityAttempts, type HandleAvailabilityAttempts } from "./handleAvailabilityAttempts.js";
 import { createAccountDeletionCodes, type AccountDeletionCodes } from "./accountDeletionCodes.js";
 import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
@@ -83,6 +84,7 @@ export interface AuthInstance {
   readonly keyring: Keyring;
   readonly accountDeletionCodes: AccountDeletionCodes;
   readonly accountDeletionAttempts: AccountDeletionAttempts;
+  readonly handleAvailabilityAttempts: HandleAvailabilityAttempts;
   readonly resolveClientIp: (headers: Headers, connection?: AuthConnectionInfo) => string;
   readonly emailSender: EmailSender;
   readonly emailQueue: EmailQueue;
@@ -212,6 +214,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     keyring,
     accountDeletionCodes: createAccountDeletionCodes(betterAuthInstance.api),
     accountDeletionAttempts: createAccountDeletionAttempts(options.pool, codec),
+    handleAvailabilityAttempts: createHandleAvailabilityAttempts(options.pool, codec),
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
     emailQueue: options.emailQueue,
@@ -232,7 +235,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         return prepared;
       }
       const response = await betterAuthInstance.handler(prepared);
-      return normalizeMagicLinkVerifyResponse(prepared, response);
+      return normalizeMagicLinkVerifyResponse(prepared, response, rawRequest.method);
     },
     async resolveSessionUserId(requestHeaders: Headers): Promise<string | null> {
       try {

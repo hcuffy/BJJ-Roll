@@ -49,17 +49,19 @@ describeWithPostgres("hourly prune of expired sign-in rows, sessions and old rat
       [userAlpha.id, past],
     );
     const oldCounter = currentMs() - RATE_LIMIT_WINDOW_SECONDS * 1000 - 1000;
+    const midWindowCounter = currentMs() - (RATE_LIMIT_WINDOW_SECONDS - 60) * 1000;
     await database.pool.query(
       `INSERT INTO public.rate_limits (id, key, count, last_request)` +
-        ` VALUES ('rate-old', 'old|/sign-in/magic-link', 3, $1), ('rate-live', 'live|/sign-in/magic-link', 1, $2)`,
-      [oldCounter, currentMs()],
+        ` VALUES ('rate-old', 'old|/sign-in/magic-link', 3, $1), ('rate-live', 'live|/sign-in/magic-link', 1, $2),` +
+        ` ('rate-mid', 'mid|/sign-in/magic-link', 2, $3)`,
+      [oldCounter, currentMs(), midWindowCounter],
     );
 
     await pruneExpiredAuthRows(appLogin.pool);
 
     expect(await ids("verifications")).toEqual([userAlpha.verificationByEmailHashId, userAlpha.verificationByUserId].sort());
     expect(await ids("sessions")).toEqual([userAlpha.sessionId]);
-    expect(await ids("rate_limits")).toEqual(["rate-live"]);
+    expect(await ids("rate_limits")).toEqual(["rate-live", "rate-mid"]);
   });
 
   it("never deletes a live session, even one about to expire or near its absolute cap", async () => {
