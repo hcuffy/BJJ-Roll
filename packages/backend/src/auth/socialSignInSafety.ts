@@ -5,6 +5,7 @@ import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
 import { currentDate, secondsAfter } from "../dates.js";
 import type { AuthMiddlewareContext } from "./types.js";
+import { withPoolTransaction } from "../database/connection.js";
 
 const MIN_NONCE_LENGTH = 16;
 const MAX_NONCE_LENGTH = 256;
@@ -45,12 +46,10 @@ function sameText(left: string, right: string): boolean {
   return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
 }
 
-export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<boolean> {
+export function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<boolean> {
   const identifier = `${USED_NONCE_IDENTIFIER_PREFIX}${nonceClaim}`;
   const now = currentDate();
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("SELECT set_config('app.verification_identifier', $1, true)", [identifier]);
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [identifier]);
@@ -62,14 +61,8 @@ export async function claimNonceOnce(pool: Pool, nonceClaim: string): Promise<bo
         [randomUUID(), identifier, secondsAfter(now, USED_NONCE_RETENTION_SECONDS), now],
       );
     }
-    await client.query("COMMIT");
     return used.rowCount === 0;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function refuseUnsafeAppleIdToken(middlewareContext: AuthMiddlewareContext, pool: Pool): Promise<void> {

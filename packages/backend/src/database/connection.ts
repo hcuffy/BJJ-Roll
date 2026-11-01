@@ -1,5 +1,5 @@
 import { CamelCasePlugin, Kysely, PostgresDialect, sql, type Transaction } from "kysely";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import type { BjjRollDatabase } from "./schema.js";
 
 export function createDatabase(pool: Pool): Kysely<BjjRollDatabase> {
@@ -41,19 +41,29 @@ export function lookupUserIdByEmailHmac(db: Kysely<BjjRollDatabase>, emailHmac: 
   });
 }
 
-export async function lookupUserIdByEmailHmacFromPool(pool: Pool, emailHmac: string): Promise<string | null> {
+export async function withPoolTransaction<Result>(pool: Pool, operation: (client: PoolClient) => Promise<Result>): Promise<Result> {
   const client = await pool.connect();
+  let brokenClientError: Error | undefined;
   try {
     await client.query("BEGIN");
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch((rollbackError: unknown) => {
+      brokenClientError = rollbackError instanceof Error ? rollbackError : new Error("ROLLBACK failed");
+    });
+    throw error;
+  } finally {
+    client.release(brokenClientError);
+  }
+}
+
+export function lookupUserIdByEmailHmacFromPool(pool: Pool, emailHmac: string): Promise<string | null> {
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("RESET app.user_id");
     const result = await client.query<{ user_id: string | null }>("SELECT public.app_user_id_by_email_hmac($1) AS user_id", [emailHmac]);
-    await client.query("COMMIT");
     return result.rows[0]?.user_id ?? null;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

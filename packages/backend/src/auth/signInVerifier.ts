@@ -3,32 +3,25 @@ import type { Pool, PoolClient } from "pg";
 import { MAGIC_LINK_EXPIRY_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { currentDate, currentMs, secondsAfter, toMs } from "../dates.js";
+import { withPoolTransaction } from "../database/connection.js";
 
 const VERIFIER_IDENTIFIER_PREFIX = "magic-link-verifier:";
 const verifierHashPattern = /^[0-9a-f]{64}$/u;
 
-export async function withVerificationScope<Result>(
+export function withVerificationScope<Result>(
   pool: Pool,
   scope: { readonly identifier: string; readonly userId?: string },
   operation: (client: PoolClient) => Promise<Result>,
 ): Promise<Result> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.verification_identifier', $2, true)", [
       scope.userId ?? "",
       scope.identifier,
     ]);
     const result = await operation(client);
-    await client.query("COMMIT");
     return result;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function insertVerification(
