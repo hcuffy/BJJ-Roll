@@ -69,12 +69,19 @@ export interface ServerApp {
   readonly emailQueue: PgBossEmailQueue;
 }
 
+const safeErrorCodePattern = /^[A-Z0-9_]{1,32}$/u;
+
+function safeErrorCode(error: unknown): string {
+  const code: unknown = error instanceof Object && "code" in error ? error.code : undefined;
+  return typeof code === "string" && safeErrorCodePattern.test(code) ? code : "unknown";
+}
+
 export async function createAppFromEnvironment(env: ServerEnvironment = process.env): Promise<ServerApp> {
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });
   const database = createDatabase(pool);
-  const schemaVersion = await readSchemaVersion(database).catch(async () => {
-    console.error(JSON.stringify({ event: "db_unreachable" }));
+  const schemaVersion = await readSchemaVersion(database).catch(async (error: unknown) => {
+    console.error(JSON.stringify({ event: "db_unreachable", code: safeErrorCode(error) }));
     await pool.end();
     return process.exit(1);
   });

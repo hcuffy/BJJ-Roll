@@ -9,7 +9,7 @@ describe("B1 boot fails fast when the database is unreachable", () => {
     vi.restoreAllMocks();
   });
 
-  it("logs db_unreachable and exits 1, never printing the connection string or password", async () => {
+  it("logs db_unreachable with the safe error code and exits 1, never printing the connection string or password", async () => {
     const passwordMarker = `fake-pw-marker-${randomBytes(6).toString("hex")}`;
     const databaseUrl = `postgres://bjj_boot_user:${passwordMarker}@127.0.0.1:1/bjj_unreachable`;
     const output: string[] = [];
@@ -47,7 +47,7 @@ describe("B1 boot fails fast when the database is unreachable", () => {
     capture(failure);
 
     expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(output.join("\n")).toContain('"event":"db_unreachable"');
+    expect(output.join("\n")).toContain('{"event":"db_unreachable","code":"ECONNREFUSED"}');
     for (const secret of [passwordMarker, databaseUrl, "bjj_boot_user", "127.0.0.1:1", "bjj_unreachable"]) {
       expect(output.join("\n")).not.toContain(secret);
     }
