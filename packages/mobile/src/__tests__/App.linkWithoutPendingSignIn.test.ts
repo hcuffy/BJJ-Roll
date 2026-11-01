@@ -27,6 +27,8 @@ const EXPIRED_MESSAGE = "This sign-in link has expired, was already used, or was
 const NOT_STARTED_NOTE = "This sign-in link wasn't started on this phone. Enter your email below to get a new one.";
 const CODE_SCREEN_EXPIRED =
   "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
+const CODE_SCREEN_NOT_STARTED = "This sign-in link wasn't started on this phone. Enter the code from your email, or send a new one.";
+const WRONG_CODE = "That code didn't work. Check the email or send a new code.";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
 const CODE_LINK = "bjjroll://auth?code=exchange-code-1";
 
@@ -66,6 +68,14 @@ describe("App reads a sign-in link before it asks for a sign-in started on this 
     const card = screen.queryByText(message);
     expect(card?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
     expect(flattenStyle(card?.props.style).color).toBe(colours.danger);
+  };
+
+  const expectGreyNote = (screen: Screen, message: string) => {
+    const note = screen.queryByText(message);
+    expect(note?.props).toMatchObject({ accessibilityLiveRegion: "polite" });
+    expect(note?.props.accessibilityRole).toBeUndefined();
+    expect(flattenStyle(note?.props.style).color).toBe(colours.textSecondary);
+    expect(redTexts(screen)).toEqual([]);
   };
 
   beforeEach(() => {
@@ -165,5 +175,39 @@ describe("App reads a sign-in link before it asks for a sign-in started on this 
     finishCodeSignIn();
     await settle();
     expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+  });
+
+  it("a code link with nothing pending on the code screen shows the code screen grey note and never exchanges the code", async () => {
+    const screen = await startOnCodeScreen();
+
+    await openLink(screen, CODE_LINK);
+
+    expectGreyNote(screen, CODE_SCREEN_NOT_STARTED);
+    expect(screen.text()).not.toContain(NOT_STARTED_NOTE);
+    expect(screen.text()).toContain("Enter your code");
+    expect(exchanges()).toEqual([]);
+  });
+
+  it("typing a code clears the grey note", async () => {
+    const screen = await startOnCodeScreen();
+    await openLink(screen, CODE_LINK);
+    expectGreyNote(screen, CODE_SCREEN_NOT_STARTED);
+
+    await screen.changeText("6-digit code", "1");
+
+    expect(screen.text()).not.toContain(CODE_SCREEN_NOT_STARTED);
+  });
+
+  it("submitting a wrong code clears the grey note so the code error shows", async () => {
+    backend = createFakeBackend({ emailOtpRefusal: { status: 400, body: { code: "INVALID_OTP", message: "Invalid OTP" } } });
+    const screen = await startOnCodeScreen();
+    await openLink(screen, CODE_LINK);
+    expectGreyNote(screen, CODE_SCREEN_NOT_STARTED);
+
+    await screen.changeText("6-digit code", "123456");
+    await settle();
+
+    expect(screen.text()).not.toContain(CODE_SCREEN_NOT_STARTED);
+    expect(redTexts(screen).map((text) => text.props.children)).toContain(WRONG_CODE);
   });
 });
