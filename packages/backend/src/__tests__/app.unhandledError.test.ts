@@ -35,6 +35,7 @@ describe("B14 an unhandled error returns a plain 500 and logs only the route and
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
     const html = await response.text();
+    expect(html).toContain("<title>Something went wrong with BJJ Roll sign-in</title>");
     expect(html).toContain("<h1>Something went wrong</h1>");
     expect(html).toContain("<p>Open BJJ Roll and try again in a minute.</p>");
     expect(html).not.toMatch(/member@example\.test|"error"|<script/iu);

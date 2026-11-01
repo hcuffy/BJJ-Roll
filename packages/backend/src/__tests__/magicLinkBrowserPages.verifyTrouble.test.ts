@@ -34,7 +34,7 @@ describe("a sign-in link the server cannot finish shows a safe browser page, nev
     expect(html).not.toMatch(/<script|<form|<button|detail|"code"/iu);
   });
 
-  it("a link whose redirect is not the app's deep link shows the 'Something went wrong' page, not JSON", async () => {
+  it("a link whose redirect is not the app's deep link shows the 'This link doesn't work' page, not JSON", async () => {
     const offsite = new Response(null, { status: 302, headers: { location: "https://evil.example.com/steal?code=one-time-code" } });
 
     const response = normalizeMagicLinkVerifyResponse(verifyRequest, offsite);
@@ -43,9 +43,10 @@ describe("a sign-in link the server cannot finish shows a safe browser page, nev
     expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(response.headers.get("location")).toBeNull();
     const html = await response.text();
-    expect(html).toContain("<h1>Something went wrong</h1>");
-    expect(html).toContain("<p>Open BJJ Roll and try again in a minute.</p>");
-    expect(html).not.toMatch(/<script|INVALID_CALLBACK_URL|evil\.example\.com|one-time-code/iu);
+    expect(html).toContain("<title>This BJJ Roll sign-in link doesn't work</title>");
+    expect(html).toContain("<h1>This link doesn't work</h1>");
+    expect(html).toContain("<p>Open BJJ Roll and send a new sign-in link.</p>");
+    expect(html).not.toMatch(/<script|Something went wrong|try again|INVALID_CALLBACK_URL|evil\.example\.com|one-time-code/iu);
   });
 
   it("the app's own sign-in request keeps its JSON error", async () => {

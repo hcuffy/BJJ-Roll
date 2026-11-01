@@ -149,7 +149,7 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
   if (!isAllowedDeepLinkCallbackUrl(location)) {
-    return magicLinkTroublePage(400);
+    return magicLinkInvalidPage();
   }
   const redirectUrl = new URL(location);
   redirectUrl.searchParams.delete("cookie");
