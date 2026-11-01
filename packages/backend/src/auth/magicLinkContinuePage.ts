@@ -14,7 +14,7 @@ const magicLinkInvalidCopy = {
 } as const;
 
 const magicLinkTroubleCopy = {
-  pageTitle: "BJJ Roll: Something went wrong",
+  pageTitle: "Something went wrong with BJJ Roll sign-in",
   heading: "Something went wrong",
   body: "Open BJJ Roll and try again in a minute.",
 } as const;

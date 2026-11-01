@@ -27,7 +27,7 @@ describe("a sign-in link the server cannot finish shows a safe browser page, nev
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("location")).toBeNull();
     const html = await response.text();
-    expect(html).toContain("<title>BJJ Roll: Something went wrong</title>");
+    expect(html).toContain("<title>Something went wrong with BJJ Roll sign-in</title>");
     expect(html).toContain("<h1>Something went wrong</h1>");
     expect(html).toContain("<p>Open BJJ Roll and try again in a minute.</p>");
     expect(html).toMatch(/body \{[^}]*background: #111313;[^}]*color: #FFFFFF;/u);
