@@ -42,7 +42,7 @@ export interface ShutdownOptions {
   readonly logEvent?: ServerEventLogger;
 }
 
-export const SHUTDOWN_HARD_CAP_MS = 10_000;
+const SHUTDOWN_HARD_CAP_MS = 10_000;
 
 async function runShutdownSteps(steps: ShutdownSteps, logEvent: ServerEventLogger): Promise<number> {
   let exitCode = 0;

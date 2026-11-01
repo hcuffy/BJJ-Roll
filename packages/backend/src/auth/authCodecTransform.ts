@@ -27,7 +27,7 @@ export function normalizeModelKey(model: string): string {
   return model;
 }
 
-export function encodeRateLimitKey(rawKey: string, codec: AuthCryptoCodec): string {
+function encodeRateLimitKey(rawKey: string, codec: AuthCryptoCodec): string {
   const separator = rawKey.indexOf("|");
   if (separator < 0) {
     return codec.hashClientIp(rawKey);
