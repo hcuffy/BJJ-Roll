@@ -2,7 +2,7 @@ import { AGE_GATE_REFUSAL_MESSAGE } from "@bjj-roll/shared";
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { extractSessionCookie, getAuthPath, postAuthJson } from "./authTestHelper.js";
+import { extractSessionCookie, postAuthJson, continueMagicLink } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (replaces the HEN-77 send-time refusal)", () => {
@@ -95,7 +95,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
       const before = { users: await countRows("users"), sessions: await countRows("sessions") };
       const rateLimitsBefore = await rateLimitCounts();
 
-      const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.182" });
+      const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.182" });
 
       expect(verifyResponse.status).toBe(400);
       expect(await verifyResponse.json()).toMatchObject({ code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });

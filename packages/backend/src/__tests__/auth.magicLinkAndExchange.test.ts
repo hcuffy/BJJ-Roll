@@ -9,6 +9,9 @@ import {
   startAuthTestEnvironment,
   type StartedAuthTestEnvironment,
   currentSignUpAttestation,
+  boundMagicLinkSend,
+  continueMagicLink,
+  testSignInVerifier,
 } from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic link & deep-link exchange code flow", () => {
@@ -46,7 +49,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     const ipAddress = "198.51.100.21";
 
     const sendResponse = await postAuthJson(app, "/sign-in/magic-link", {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation },
+      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation, ...boundMagicLinkSend },
       ipAddress,
     });
     expect(sendResponse.status).toBe(200);
@@ -64,7 +67,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(storedMagicRow.rowCount).toBe(1);
     expect(Math.abs((storedMagicRow.rows[0]?.lifetime ?? 0) - MAGIC_LINK_EXPIRY_SECONDS)).toBeLessThanOrEqual(5);
 
-    const verifyResponse = await getAuthPath(app, magicLinkUrl, { ipAddress });
+    const verifyResponse = await continueMagicLink(app, magicLinkUrl, { ipAddress });
     expect(verifyResponse.status).toBe(302);
     expect(verifyResponse.headers.get("set-cookie")).toBeNull();
 
@@ -76,7 +79,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(exchangeCode.length).toBeGreaterThan(16);
     expect(location).not.toContain(rawToken);
 
-    const replayVerify = await getAuthPath(app, magicLinkUrl, { ipAddress });
+    const replayVerify = await continueMagicLink(app, magicLinkUrl, { ipAddress });
     expect(replayVerify.headers.get("location") ?? "").not.toContain("code=");
 
     const hashedExchangeIdentifier = `magic-link-exchange:${codec.hashExchangeCode(exchangeCode)}`;
@@ -93,7 +96,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(rawDumpBeforeExchange).not.toContain(exchangeCode);
 
     const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", {
-      body: { code: exchangeCode },
+      body: { code: exchangeCode, verifier: testSignInVerifier },
       ipAddress,
     });
     expect(exchangeResponse.status).toBe(200);
@@ -116,7 +119,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(getSessionResponse.status).toBe(200);
 
     const secondExchange = await postAuthJson(app, "/magic-link/exchange", {
-      body: { code: exchangeCode },
+      body: { code: exchangeCode, verifier: testSignInVerifier },
       ipAddress,
     });
     expect(secondExchange.status).toBe(401);
@@ -135,37 +138,37 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       });
       const expiredLink = latestMagicLinkFor("expired.magic.one@example.com");
       vi.setSystemTime(startMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 + 1000);
-      const expiredVerify = await getAuthPath(app, expiredLink, { ipAddress });
+      const expiredVerify = await continueMagicLink(app, expiredLink, { ipAddress });
       expect(expiredVerify.status).toBe(400);
       expect(expiredVerify.headers.get("location") ?? "").not.toContain("code=");
 
       const secondStartMs = startMs + 60 * 60 * 1000;
       vi.setSystemTime(secondStartMs);
       await postAuthJson(app, "/sign-in/magic-link", {
-        body: { email: "expired.magic.two@example.com", age16Confirmed: true, ...currentSignUpAttestation },
+        body: { email: "expired.magic.two@example.com", age16Confirmed: true, ...currentSignUpAttestation, ...boundMagicLinkSend },
         ipAddress,
       });
       const validLink = latestMagicLinkFor("expired.magic.two@example.com");
       vi.setSystemTime(secondStartMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 - 1000);
-      const validVerify = await getAuthPath(app, validLink, { ipAddress });
+      const validVerify = await continueMagicLink(app, validLink, { ipAddress });
       expect(validVerify.status).toBe(302);
       const lateCode = new URL(validVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
       expect(lateCode.length).toBeGreaterThan(16);
 
       vi.setSystemTime(Date.now() + MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS * 1000 + 1000);
-      const expiredExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: lateCode }, ipAddress });
+      const expiredExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: lateCode, verifier: testSignInVerifier }, ipAddress });
       expect(expiredExchange.status).toBe(401);
       expect(extractSessionCookie(expiredExchange)).toBe("");
 
       await postAuthJson(app, "/sign-in/magic-link", {
-        body: { email: "expired.magic.two@example.com", age16Confirmed: true, ...currentSignUpAttestation },
+        body: { email: "expired.magic.two@example.com", age16Confirmed: true, ...currentSignUpAttestation, ...boundMagicLinkSend },
         ipAddress,
       });
       const thirdLink = latestMagicLinkFor("expired.magic.two@example.com");
-      const thirdVerify = await getAuthPath(app, thirdLink, { ipAddress });
+      const thirdVerify = await continueMagicLink(app, thirdLink, { ipAddress });
       const onTimeCode = new URL(thirdVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
       vi.setSystemTime(Date.now() + (MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS - 1) * 1000);
-      const onTimeExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: onTimeCode }, ipAddress });
+      const onTimeExchange = await postAuthJson(app, "/magic-link/exchange", { body: { code: onTimeCode, verifier: testSignInVerifier }, ipAddress });
       expect(onTimeExchange.status).toBe(200);
     } finally {
       vi.useRealTimers();
@@ -241,7 +244,12 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
 
     magicLink.searchParams.set("newUserCallbackURL", "bjjroll://auth/welcome");
     magicLink.searchParams.set("errorCallbackURL", "bjjroll://auth/error");
-    const cleanVerify = await getAuthPath(app, magicLink.toString(), { ipAddress: "198.51.102.201" });
+    const hostilePost = new URL(magicLink);
+    hostilePost.searchParams.set("callbackURL", "https://evil.example.com");
+    const hostileContinue = await continueMagicLink(app, hostilePost.toString(), { ipAddress: "198.51.102.202" });
+    expect(hostileContinue.status).toBe(400);
+    expect(hostileContinue.headers.get("location")).toBeNull();
+    const cleanVerify = await continueMagicLink(app, magicLink.toString(), { ipAddress: "198.51.102.201" });
     expect(cleanVerify.status).toBe(302);
     const location = cleanVerify.headers.get("location") ?? "";
     expect(location.startsWith("bjjroll://auth/welcome?code=")).toBe(true);

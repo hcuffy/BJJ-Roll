@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment, currentSignUpAttestation } from "./authTestHelper.js";
+import {
+  getAuthPath,
+  postAuthJson,
+  startAuthTestEnvironment,
+  type StartedAuthTestEnvironment,
+  currentSignUpAttestation,
+  testSignInVerifier,
+  testSignInVerifierHash,
+} from "./authTestHelper.js";
 import { cookieHeaderFrom, createFakeSocialProviderConfig, fakeGoogleConfig, stubProviderFetch, unsignedIdToken } from "./socialSignInTestDoubles.js";
 
 interface FakeGoogleUser {
@@ -50,7 +58,9 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
         callbackURL: DEEP_LINK_CALLBACK_URL,
         errorCallbackURL: DEEP_LINK_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: age16Confirmed ? { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false } : undefined,
+        additionalData: age16Confirmed
+          ? { verifierHash: testSignInVerifierHash, age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false }
+          : { verifierHash: testSignInVerifierHash },
       },
       ipAddress,
     });
@@ -85,7 +95,10 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google browser f
   };
 
   const exchangeForUserId = async (code: string): Promise<string> => {
-    const response = await postAuthJson(current().app, "/magic-link/exchange", { body: { code }, ipAddress: "198.51.100.9" });
+    const response = await postAuthJson(current().app, "/magic-link/exchange", {
+      body: { code, verifier: testSignInVerifier },
+      ipAddress: "198.51.100.9",
+    });
     expect(response.status).toBe(200);
     return ((await response.json()) as { user: { id: string } }).user.id;
   };

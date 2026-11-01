@@ -7,7 +7,15 @@ import {
 } from "../auth/index.js";
 import { withAppRoleUnscoped, withUserContext } from "../database/index.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
-import { getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment, currentSignUpAttestation } from "./authTestHelper.js";
+import {
+  postAuthJson,
+  startAuthTestEnvironment,
+  type StartedAuthTestEnvironment,
+  currentSignUpAttestation,
+  boundMagicLinkSend,
+  continueMagicLink,
+  testSignInVerifier,
+} from "./authTestHelper.js";
 
 describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, session sliding + 90d cap, RLS lookup, and zero-PII logs", () => {
   let environment: StartedAuthTestEnvironment | undefined;
@@ -171,15 +179,15 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
       };
 
       await postAuthJson(app, "/sign-in/magic-link", {
-        body: { email: emailBravo, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation },
+        body: { email: emailBravo, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation, ...boundMagicLinkSend },
         ipAddress,
       });
       const magicUrlBravo = latestMagicLinkFor(emailBravo);
       const rawMagicToken = new URL(magicUrlBravo).searchParams.get("token") ?? "";
-      const verifyBravo = await getAuthPath(app, magicUrlBravo, { ipAddress });
+      const verifyBravo = await continueMagicLink(app, magicUrlBravo, { ipAddress });
       const exchangeCodeBravo = new URL(verifyBravo.headers.get("location") ?? "").searchParams.get("code") ?? "";
       const exchangeBravo = await postAuthJson(app, "/magic-link/exchange", {
-        body: { code: exchangeCodeBravo },
+        body: { code: exchangeCodeBravo, verifier: testSignInVerifier },
         ipAddress,
       });
       const bravoPayload = (await exchangeBravo.json()) as {
@@ -192,7 +200,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 PG rate limits, s
         ipAddress,
       });
       await postAuthJson(app, "/magic-link/exchange", {
-        body: { code: exchangeCodeBravo },
+        body: { code: exchangeCodeBravo, verifier: testSignInVerifier },
         ipAddress,
       });
 

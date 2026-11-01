@@ -13,6 +13,7 @@ import { createAccountDeletionCodes, type AccountDeletionCodes } from "./account
 import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
+import { storeMagicLinkVerifier } from "./signInVerifier.js";
 import {
   DEEP_LINK_SCHEME,
   MAGIC_LINK_EXPIRY_MINUTES,
@@ -202,7 +203,8 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       magicLink({
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
         storeToken: { type: "custom-hasher", hash: (token) => Promise.resolve(codec.hashMagicLinkToken(token)) },
-        sendMagicLink: async ({ email, url }) => {
+        sendMagicLink: async ({ email, url, token, metadata }) => {
+          await storeMagicLinkVerifier(options.pool, codec, { token, metadata });
           await options.emailQueue.enqueue({ kind: "magic_link", input: { to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES } });
         },
       }),

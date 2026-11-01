@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { signUpAttestationVersion } from "@bjj-roll/shared";
 import type { Hono } from "hono";
 import type { Pool } from "pg";
@@ -21,6 +22,12 @@ export const testBaseUrl = "http://localhost:3000";
 export const defaultTestClientIp = "203.0.113.10";
 
 export const currentSignUpAttestation = { signUpAttestationTextVersionId: signUpAttestationVersion.id } as const;
+
+export const testSignInVerifier = "6f1d2c3b4a5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8";
+
+export const testSignInVerifierHash = createHash("sha256").update(testSignInVerifier).digest("hex");
+
+export const boundMagicLinkSend = { metadata: { verifierHash: testSignInVerifierHash } } as const;
 
 export interface StartedAuthTestEnvironment {
   database: MigratedTestDatabase;
@@ -118,6 +125,20 @@ export function getAuthPath(app: Hono, urlOrPath: string, options?: AuthRequestO
   }
   return Promise.resolve(
     app.request(fullUrl, { method: "GET", headers, redirect: "manual" }, socketEnvironment(options?.ipAddress ?? defaultTestClientIp)),
+  );
+}
+
+export function continueMagicLink(app: Hono, magicLinkUrl: string, options?: AuthRequestOptions): Promise<Response> {
+  const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded", ...options?.headers };
+  if (options?.cookie) {
+    headers.cookie = options.cookie;
+  }
+  return Promise.resolve(
+    app.request(
+      magicLinkUrl,
+      { method: "POST", headers, body: "", redirect: "manual" },
+      socketEnvironment(options?.ipAddress ?? defaultTestClientIp),
+    ),
   );
 }
 

@@ -2,7 +2,14 @@ import { AGE_CONFIRMATION_TEXT_VERSION_ID, accountExportSchema, ageConfirmationS
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { ageConfirmationPath, createAgeGateTestContext, magicLinkSendPath } from "./ageGateTestContext.js";
-import { dumpRawAuthTables, getAuthPath, postAuthJson, currentSignUpAttestation } from "./authTestHelper.js";
+import {
+  dumpRawAuthTables,
+  postAuthJson,
+  currentSignUpAttestation,
+  boundMagicLinkSend,
+  continueMagicLink,
+  testSignInVerifier,
+} from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const ageOrBirthColumnPattern = "(^|_)age($|_)|age_?confirm|age1[68]|birth|dob|adult|minor";
@@ -36,13 +43,23 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age consent reco
       const { app, pool } = current();
       const email = "consent.link@example.com";
       const sendResponse = await postAuthJson(app, magicLinkSendPath, {
-        body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: true },
+        body: {
+          email,
+          callbackURL: DEEP_LINK_CALLBACK_URL,
+          age16Confirmed: true,
+          ...currentSignUpAttestation,
+          age18Confirmed: true,
+          ...boundMagicLinkSend,
+        },
         ipAddress: "198.51.100.186",
       });
       expect(sendResponse.status).toBe(200);
-      const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.186" });
+      const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.186" });
       const exchangeCode = new URL(verifyResponse.headers.get("location") ?? "").searchParams.get("code") ?? "";
-      const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", { body: { code: exchangeCode }, ipAddress: "198.51.100.186" });
+      const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", {
+        body: { code: exchangeCode, verifier: testSignInVerifier },
+        ipAddress: "198.51.100.186",
+      });
       expect(exchangeResponse.status).toBe(200);
       const userId = ((await exchangeResponse.json()) as { user: { id: string } }).user.id;
       expect(await consentRowsFor(userId)).toMatchObject([{ age16_confirmed: true, age18_confirmed: true }]);

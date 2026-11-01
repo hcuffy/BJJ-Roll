@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { recordPendingAgeAnswers } from "../auth/ageGate.js";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { getAuthPath, postAuthJson, currentSignUpAttestation } from "./authTestHelper.js";
+import { postAuthJson, currentSignUpAttestation, continueMagicLink } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const failConsentInsertSql = [
@@ -55,7 +55,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
         name: "magic link",
         signUp: async (email: string, ipAddress: string): Promise<Response> => {
           expect((await sendMagicLink(email, ipAddress, { age16Confirmed: true })).status).toBe(200);
-          return await getAuthPath(current().app, latestMagicLinkFor(email), { ipAddress });
+          return await continueMagicLink(current().app, latestMagicLinkFor(email), { ipAddress });
         },
       },
     ])("$name: when the consent insert fails, neither the user row nor a consent record exists", async ({ name, signUp }) => {
@@ -93,11 +93,11 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       const email = "replay.link@example.com";
       expect((await sendMagicLink(email, "198.51.100.192", {})).status).toBe(200);
       const link = latestMagicLinkFor(email);
-      const refused = await getAuthPath(current().app, link, { ipAddress: "198.51.100.192" });
+      const refused = await continueMagicLink(current().app, link, { ipAddress: "198.51.100.192" });
       expect(new URL(refused.headers.get("location") ?? "").searchParams.get(MAGIC_LINK_REASON_PARAM)).toBe(magicLinkReasons.ageRefused);
 
       await tickLater(email);
-      const replay = await getAuthPath(current().app, link, { ipAddress: "198.51.100.192" });
+      const replay = await continueMagicLink(current().app, link, { ipAddress: "198.51.100.192" });
 
       expect(replay.status).toBe(400);
       expect(replay.headers.get("location")).toBe(`${DEEP_LINK_CALLBACK_URL}?${MAGIC_LINK_REASON_PARAM}=${magicLinkReasons.linkInvalid}`);
@@ -119,7 +119,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
     it("age refusal: Location is bjjroll://auth?r=age_refused and nothing else", async () => {
       const email = "reason.age@example.com";
       expect((await sendMagicLink(email, "198.51.100.193", {})).status).toBe(200);
-      const response = await getAuthPath(current().app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
+      const response = await continueMagicLink(current().app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
       expect(response.status).toBe(400);
       expectCodeOnlyLocation(response, magicLinkReasons.ageRefused);
     });
@@ -129,7 +129,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       expect((await sendMagicLink(email, "198.51.100.194", { age16Confirmed: true })).status).toBe(200);
       const tampered = new URL(latestMagicLinkFor(email));
       tampered.searchParams.set("token", "not-a-real-token");
-      const response = await getAuthPath(current().app, tampered.toString(), { ipAddress: "198.51.100.194" });
+      const response = await continueMagicLink(current().app, tampered.toString(), { ipAddress: "198.51.100.194" });
       expect(response.status).toBe(400);
       expectCodeOnlyLocation(response, magicLinkReasons.linkInvalid);
     });

@@ -2,7 +2,7 @@ import { AGE_GATE_REFUSAL_MESSAGE, magicLinkReasons, SIGN_UP_ATTESTATION_REFUSAL
 import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { getAuthPath, postAuthJson } from "./authTestHelper.js";
+import { postAuthJson, boundMagicLinkSend, continueMagicLink, testSignInVerifier } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const currentVersionId = signUpAttestationVersion.id;
@@ -84,7 +84,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
       ipAddress: "198.51.100.192",
     });
     expect(sendResponse.status).toBe(200);
-    const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.192" });
+    const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.192" });
     const location = new URL(verifyResponse.headers.get("location") ?? "");
     expect(location.searchParams.get("r")).toBe(magicLinkReasons.attestationRefused);
     expect(await countRows("users")).toBe(usersBefore);
@@ -94,12 +94,21 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 sign-up attestat
     const { app } = current();
     const email = "attested.link@example.com";
     await postAuthJson(app, magicLinkSendPath, {
-      body: { email, callbackURL: DEEP_LINK_CALLBACK_URL, age16Confirmed: true, signUpAttestationTextVersionId: currentVersionId },
+      body: {
+        email,
+        callbackURL: DEEP_LINK_CALLBACK_URL,
+        age16Confirmed: true,
+        signUpAttestationTextVersionId: currentVersionId,
+        ...boundMagicLinkSend,
+      },
       ipAddress: "198.51.100.193",
     });
-    const verifyResponse = await getAuthPath(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
+    const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
     const exchangeCode = new URL(verifyResponse.headers.get("location") ?? "").searchParams.get("code") ?? "";
-    const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", { body: { code: exchangeCode }, ipAddress: "198.51.100.193" });
+    const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", {
+      body: { code: exchangeCode, verifier: testSignInVerifier },
+      ipAddress: "198.51.100.193",
+    });
     expect(exchangeResponse.status).toBe(200);
     const userId = ((await exchangeResponse.json()) as { user: { id: string } }).user.id;
     expect(await attestationRowsFor(userId)).toMatchObject([{ text_version_id: currentVersionId }]);
