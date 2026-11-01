@@ -1,4 +1,7 @@
 import type * as BetterAuthModule from "better-auth";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
@@ -48,6 +51,22 @@ const closedRoutes = [
   "/email-otp/verify-email",
   "/link-social",
 ];
+
+const mobileSourceRoot = fileURLToPath(new URL("../../../mobile/src/", import.meta.url));
+
+function mobileAuthPaths(): string[] {
+  const sources = readdirSync(mobileSourceRoot, { recursive: true, encoding: "utf8" })
+    .filter((file) => /\.tsx?$/u.test(file) && !file.startsWith("__tests__"))
+    .map((file) => readFileSync(join(mobileSourceRoot, file), "utf8"))
+    .join("\n");
+  const literalPaths = [...sources.matchAll(/(?:path: |\$fetch(?:<[^>]*>)?\()"(\/[^"]+)"/gu)].map((match) => match[1] ?? "");
+  const authUrlPaths = [...sources.matchAll(/\/api\/auth(\/[a-z/-]+)/gu)].map((match) => match[1] ?? "");
+  const clientMethodPaths = [...sources.matchAll(/client\.(getSession|signOut)\(/gu)].map((match) =>
+    (match[1] ?? "").replaceAll(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`),
+  );
+  const paths = [...literalPaths, ...authUrlPaths, ...clientMethodPaths.map((name) => `/${name}`)];
+  return [...new Set(paths.filter((routePath) => !routePath.startsWith("/account")))].sort();
+}
 
 function concretePath(routePath: string): string {
   return routePath.replaceAll(/:[^/]+/gu, "sample-value");
@@ -113,6 +132,30 @@ describe("B1 auth route allow-list", () => {
       const method = methodsOf(endpoint).at(0) ?? "GET";
       const response = await send(method, concretePath(endpoint.path ?? ""));
       expect({ path: endpoint.path, served: response.status !== 404 }).toEqual({ path: endpoint.path, served: true });
+    }
+  });
+
+  it("every auth path the mobile app calls is allow-listed and served, never 404, sign-out included", async () => {
+    const appPaths = mobileAuthPaths();
+    expect(appPaths).toEqual([
+      "/email-otp/send-verification-otp",
+      "/expo-authorization-proxy",
+      "/get-session",
+      "/magic-link/exchange",
+      "/sign-in/email-otp",
+      "/sign-in/magic-link",
+      "/sign-in/social",
+      "/sign-out",
+    ]);
+    for (const routePath of appPaths) {
+      const endpoint = routerEndpoints.find((candidate) => candidate.path === routePath);
+      const method = endpoint ? (methodsOf(endpoint).at(0) ?? "GET") : "POST";
+      const response = await send(method, routePath);
+      expect({ routePath, allowListed: allowList.includes(routePath), served: response.status !== 404 }).toEqual({
+        routePath,
+        allowListed: true,
+        served: true,
+      });
     }
   });
 

@@ -160,6 +160,7 @@ describe("App: account delete 401, lost response and a failing session clear (HE
 
   it.each([
     [500, failureMessages.unknown],
+    [503, failureMessages.unknown],
     [429, failureMessages.rateLimited],
   ])("a %i on the first delete stays red on the code step", async (code, message) => {
     const screen = await signInAndOpenCodeStep([status(code)]);

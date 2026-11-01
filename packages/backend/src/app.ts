@@ -73,7 +73,11 @@ export async function createAppFromEnvironment(env: ServerEnvironment = process.
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });
   const database = createDatabase(pool);
-  const schemaVersion = await readSchemaVersion(database);
+  const schemaVersion = await readSchemaVersion(database).catch(async () => {
+    console.error(JSON.stringify({ event: "db_unreachable" }));
+    await pool.end();
+    return process.exit(1);
+  });
   if (schemaVersion.latestApplied !== schemaVersion.newestBundled) {
     console.error(JSON.stringify({ event: "schema_out_of_date", ...schemaVersion }));
     await pool.end();
