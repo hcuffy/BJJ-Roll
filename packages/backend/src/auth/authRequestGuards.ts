@@ -9,7 +9,7 @@ import {
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
-import { magicLinkContinuePage } from "./magicLinkContinuePage.js";
+import { magicLinkContinuePage, magicLinkInvalidPage } from "./magicLinkContinuePage.js";
 
 export const trustableProxyIpHeaders = ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] as const;
 export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
@@ -71,9 +71,8 @@ function verifyRequestFromContinuePost(url: URL, request: Request): Request {
 export async function prepareMagicLinkRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
   if ((request.method === "GET" || request.method === "POST") && url.pathname === MAGIC_LINK_VERIFY_PATH) {
-    const invalid = findInvalidRedirectParameters((name) => url.searchParams.get(name) ?? undefined);
-    if (invalid.length > 0) {
-      return invalidCallbackResponse(invalid);
+    if (findInvalidRedirectParameters((name) => url.searchParams.get(name) ?? undefined).length > 0) {
+      return magicLinkInvalidPage();
     }
     if (request.method === "GET") {
       return magicLinkContinuePage();
