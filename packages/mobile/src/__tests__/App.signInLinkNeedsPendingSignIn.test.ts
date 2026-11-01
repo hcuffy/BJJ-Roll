@@ -62,7 +62,7 @@ describe("App opens a sign-in link only for a sign-in this phone started (A1, M1
     deepLinkState.url = null;
   });
 
-  it("a link with no sign-in started on this phone is ignored: no exchange, the sign-in screen stays", async () => {
+  it("a link with no sign-in started on this phone is not exchanged: the sign-in screen stays", async () => {
     deepLinkState.url = MAGIC_LINK;
 
     const screen = await startApp();

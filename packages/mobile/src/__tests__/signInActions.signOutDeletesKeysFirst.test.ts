@@ -13,7 +13,11 @@ describe("sign-out deletes the phone's keys before it calls the server (M8, D31)
       return backend.fetchImplementation(input, init);
     });
     const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation });
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true });
+    await verifyEmailCode(
+      client,
+      { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true },
+      secureStore,
+    );
     secureStore.deleteItemAsync.mockImplementation((key: string) => {
       calls.push(`delete ${key}`);
       secureStore.items.delete(key);

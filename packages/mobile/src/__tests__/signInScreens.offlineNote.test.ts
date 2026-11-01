@@ -41,7 +41,13 @@ describe("sign-in screens when the server cannot be reached (HEN-287)", () => {
     renderScreen(createElement(EmailEntryScreen, { secureStore: createMemorySecureStore(), client, onCodeSent: (email) => codesSentTo.push(email) }));
   const renderCodeEntry = () =>
     renderScreen(
-      createElement(CodeEntryScreen, { client, email: "member@example.test", onSignedIn: () => (signedIn += 1), onBack: () => undefined }),
+      createElement(CodeEntryScreen, {
+        secureStore: createMemorySecureStore(),
+        client,
+        email: "member@example.test",
+        onSignedIn: () => (signedIn += 1),
+        onBack: () => undefined,
+      }),
     );
   const fillEmailForm = async (screen: Screen) => {
     await screen.pressRole("checkbox");

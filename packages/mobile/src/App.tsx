@@ -218,6 +218,7 @@ export function App() {
         return (
           <CodeEntryScreen
             client={appAuthClient}
+            secureStore={appSecureStore}
             email={screen.email}
             age18Confirmed={screen.age18Confirmed}
             linkError={linkError?.message ?? null}

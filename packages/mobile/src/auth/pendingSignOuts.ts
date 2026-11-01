@@ -115,6 +115,19 @@ export async function addPendingSignOut(secureStore: SessionKeyStore, marker: st
   );
 }
 
+export async function signInReplacingSession<Result extends { readonly ok: boolean }>(
+  client: MobileAuthClient,
+  secureStore: SessionKeyStore,
+  signIn: () => Promise<Result>,
+): Promise<Result> {
+  const replacedSessionCookie = await readSessionCookie(client);
+  const result = await signIn();
+  if (result.ok && replacedSessionCookie !== null && replacedSessionCookie !== (await readSessionCookie(client))) {
+    await addPendingSignOut(secureStore, replacedSessionCookie).catch(() => undefined);
+  }
+  return result;
+}
+
 export async function dropPendingSignOut(secureStore: SessionKeyStore, marker: string): Promise<void> {
   await changeQueue(secureStore, (entries) =>
     entries.some((entry) => entry.marker === marker) ? entries.filter((entry) => entry.marker !== marker) : null,

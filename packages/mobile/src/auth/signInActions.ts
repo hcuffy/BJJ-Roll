@@ -9,6 +9,7 @@ import {
   PENDING_WITHOUT_SESSION_COOKIE,
   readPendingSignOuts,
   readSessionCookie,
+  signInReplacingSession,
   type SessionKeyStore,
 } from "./pendingSignOuts";
 
@@ -20,6 +21,7 @@ export type FailureReason =
   | "invalidEmail"
   | "invalidCode"
   | "invalidLink"
+  | "linkNotStartedHere"
   | "accountNotLinked"
   | "network"
   | "rateLimited"
@@ -35,7 +37,8 @@ export { MAGIC_LINK_EXPIRY_MINUTES } from "./pendingSignIn";
 export const failureMessages = {
   invalidEmail: "Enter a valid email address.",
   invalidCode: "That code didn't work. Check the email or send a new code.",
-  invalidLink: "This sign-in link has expired or was already used. Send a new one.",
+  invalidLink: "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.",
+  linkNotStartedHere: "This sign-in link wasn't started on this phone. Enter your email below to get a new one.",
   accountNotLinked: "We couldn't sign you in this way. Sign in with your email instead.",
   network: "No connection. Check your internet and try again.",
   rateLimited: "Too many tries. Wait a minute and try again.",
@@ -140,7 +143,7 @@ export interface CodeEntry extends EmailEntry {
   readonly code: string;
 }
 
-export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry): Promise<ActionResult> {
+export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry, secureStore: SessionKeyStore): Promise<ActionResult> {
   const refused = checkEntry(entry);
   if (refused) {
     return refused;
@@ -149,11 +152,13 @@ export async function verifyEmailCode(client: MobileAuthClient, entry: CodeEntry
   if (!otpPattern.test(code)) {
     return { ok: false, reason: "invalidCode", message: "Enter the 6-digit code from the email." };
   }
-  return await postAuth(client, {
-    path: "/sign-in/email-otp",
-    body: { email: entry.email.trim(), otp: code, age16Confirmed: true },
-    clientErrorReason: "invalidCode",
-  });
+  return await signInReplacingSession(client, secureStore, () =>
+    postAuth(client, {
+      path: "/sign-in/email-otp",
+      body: { email: entry.email.trim(), otp: code, age16Confirmed: true },
+      clientErrorReason: "invalidCode",
+    }),
+  );
 }
 
 export const SOCIAL_SIGN_IN_CALLBACK_PATH = "/social";

@@ -3,7 +3,7 @@ import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed, isSignUpAtte
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import type { ExpoConfigWithExtra } from "./authConfig";
 import { beginPendingSignIn, exchangeForPendingSignIn } from "./pendingSignIn";
-import type { SessionKeyStore } from "./pendingSignOuts";
+import { signInReplacingSession, type SessionKeyStore } from "./pendingSignOuts";
 import {
   AGE_CONFIRMATION_REQUIRED_CODE,
   attestationRequired,
@@ -106,7 +106,7 @@ export async function signInWithProvider(
 }
 
 async function signInWithAppleNative(
-  { client, onReturned }: SocialSignInDependencies,
+  { client, secureStore, onReturned }: SocialSignInDependencies,
   appleNative: AppleNativeSignIn,
   ages: SocialAgeAnswers,
 ): Promise<ActionResult> {
@@ -121,14 +121,18 @@ async function signInWithAppleNative(
     return failure("unknown");
   }
   onReturned?.();
-  return await postAuth(client, {
-    path: "/sign-in/social",
-    body: {
-      provider: "apple",
-      idToken: { token: credential.identityToken, nonce },
-      additionalData: { ...ages, ...(credential.authorizationCode ? { appleAuthorizationCode: credential.authorizationCode } : {}) },
-    },
-  });
+  const identityToken = credential.identityToken;
+  const appleAuthorizationCode = credential.authorizationCode;
+  return await signInReplacingSession(client, secureStore, () =>
+    postAuth(client, {
+      path: "/sign-in/social",
+      body: {
+        provider: "apple",
+        idToken: { token: identityToken, nonce },
+        additionalData: { ...ages, ...(appleAuthorizationCode ? { appleAuthorizationCode } : {}) },
+      },
+    }),
+  );
 }
 
 async function signInWithGoogle(dependencies: SocialSignInDependencies, ages: SocialAgeAnswers): Promise<ActionResult> {

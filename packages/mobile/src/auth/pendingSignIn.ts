@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
-import { addPendingSignOut, readSessionCookie, type SessionKeyStore } from "./pendingSignOuts";
+import { signInReplacingSession, type SessionKeyStore } from "./pendingSignOuts";
 import type { ActionResult } from "./signInActions";
 import { currentMs } from "../dates";
 
@@ -53,13 +53,9 @@ export async function exchangeForPendingSignIn(
   if (verifier === null) {
     return { ok: false, reason: "ignored", message: null };
   }
-  const replacedSessionCookie = await readSessionCookie(client);
-  const result = await exchange(verifier);
+  const result = await signInReplacingSession(client, secureStore, () => exchange(verifier));
   if (result.ok) {
     await secureStore.deleteItemAsync(PENDING_SIGN_IN_KEY).catch(() => undefined);
-    if (replacedSessionCookie !== null && replacedSessionCookie !== (await readSessionCookie(client))) {
-      await addPendingSignOut(secureStore, replacedSessionCookie).catch(() => undefined);
-    }
   }
   return result;
 }

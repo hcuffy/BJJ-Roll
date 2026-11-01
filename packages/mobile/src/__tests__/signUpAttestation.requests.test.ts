@@ -26,12 +26,12 @@ function createTestClient(options: Parameters<typeof createFakeBackend>[0] = {})
 
 describe("HEN-183 sign-up attestation requests", () => {
   it("sends no code, link or social request until the duties are accepted", async () => {
-    const { backend, client, social } = createTestClient();
+    const { backend, client, storage, social } = createTestClient();
     const entry = { email: "member@example.test", age16Confirmed: true };
 
     expect(await sendEmailCode(client, entry)).toEqual(attestationRefused);
     expect(await sendMagicLink(client, { ...entry, signUpAttestationAccepted: false }, createMemorySecureStore())).toEqual(attestationRefused);
-    expect(await verifyEmailCode(client, { ...entry, code: "123456" })).toEqual(attestationRefused);
+    expect(await verifyEmailCode(client, { ...entry, code: "123456" }, storage)).toEqual(attestationRefused);
     expect(await signInWithProvider(social, "google", { age16Confirmed: true })).toEqual(attestationRefused);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
     expect(social.browser.openAuthSessionAsync).not.toHaveBeenCalled();
@@ -61,9 +61,9 @@ describe("HEN-183 sign-up attestation requests", () => {
 
   it("reads the backend's refusal code, link reason and social error as the attestation refusal", async () => {
     const refusal = { status: 400, body: { code: "SIGN_UP_ATTESTATION_REQUIRED", message: "raw server text" } };
-    const { client } = createTestClient({ emailOtpRefusal: refusal });
+    const { client, storage } = createTestClient({ emailOtpRefusal: refusal });
 
-    expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted })).toEqual(attestationRefused);
+    expect(await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted }, storage)).toEqual(attestationRefused);
     expect(await completeMagicLink(client, "bjjroll://auth?r=attestation_refused", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual(attestationRefused);
     expect(
       await completeSocialSignIn(client, `${SOCIAL_SIGN_IN_CALLBACK_URL}?error=SIGN_UP_ATTESTATION_REQUIRED`, { verifier: TEST_SIGN_IN_VERIFIER }),
@@ -72,7 +72,7 @@ describe("HEN-183 sign-up attestation requests", () => {
 
   it("reads the attestation status and accepts the shown text version for the signed-in user", async () => {
     const { backend, client, storage } = createTestClient({ signUpAttestationAcceptedVersion: null });
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted });
+    await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted }, storage);
     const session = { client, secureStore: storage, backendUrl: TEST_BACKEND_URL };
 
     expect(await readSignUpAttestation(session)).toEqual({
@@ -88,7 +88,7 @@ describe("HEN-183 sign-up attestation requests", () => {
 
   it("fails closed: a read the app cannot parse is a failure, never a pass", async () => {
     const { client, storage } = createTestClient({ signUpAttestationBadPayload: true });
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted });
+    await verifyEmailCode(client, { email: "member@example.test", code: "123456", ...accepted }, storage);
 
     expect((await readSignUpAttestation({ client, secureStore: storage, backendUrl: TEST_BACKEND_URL })).ok).toBe(false);
   });

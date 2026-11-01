@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { MobileAuthClient } from "../auth/authClient";
-import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode, type ActionResult } from "../auth/signInActions";
+import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode, type ActionResult, type SessionKeyStore } from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
@@ -17,6 +17,7 @@ export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was al
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
+  readonly secureStore: SessionKeyStore;
   readonly email: string;
   readonly age18Confirmed?: boolean;
   readonly linkError?: string | null;
@@ -31,6 +32,7 @@ export interface CodeEntryScreenProps {
 
 export function CodeEntryScreen({
   client,
+  secureStore,
   email,
   age18Confirmed = false,
   linkError = null,
@@ -83,7 +85,7 @@ export function CodeEntryScreen({
     inFlight.current = true;
     setIsVerifying(true);
     startAttempt();
-    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true });
+    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true }, secureStore);
     inFlight.current = false;
     setIsVerifying(false);
     if (result.ok) {

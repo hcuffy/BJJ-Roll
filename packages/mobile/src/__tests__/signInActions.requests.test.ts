@@ -37,14 +37,18 @@ describe("sign-in requests", () => {
   });
 
   it("signs in with the code and age16Confirmed true", async () => {
-    const { backend, client } = createTestClient();
+    const { backend, client, secureStore } = createTestClient();
 
-    const result = await verifyEmailCode(client, {
-      email: "member@example.test",
-      code: " 123456 ",
-      age16Confirmed: true,
-      signUpAttestationAccepted: true,
-    });
+    const result = await verifyEmailCode(
+      client,
+      {
+        email: "member@example.test",
+        code: " 123456 ",
+        age16Confirmed: true,
+        signUpAttestationAccepted: true,
+      },
+      secureStore,
+    );
 
     expect(result).toEqual({ ok: true });
     expect(backend.requests[0]?.url).toBe(`${TEST_BACKEND_URL}/api/auth/sign-in/email-otp`);
@@ -52,14 +56,18 @@ describe("sign-in requests", () => {
   });
 
   it("rejects a code that is not 6 digits without a request", async () => {
-    const { backend, client } = createTestClient();
+    const { backend, client, secureStore } = createTestClient();
 
-    const result = await verifyEmailCode(client, {
-      email: "member@example.test",
-      code: "12345",
-      age16Confirmed: true,
-      signUpAttestationAccepted: true,
-    });
+    const result = await verifyEmailCode(
+      client,
+      {
+        email: "member@example.test",
+        code: "12345",
+        age16Confirmed: true,
+        signUpAttestationAccepted: true,
+      },
+      secureStore,
+    );
 
     expect(result.ok).toBe(false);
     expect(backend.fetchImplementation).not.toHaveBeenCalled();
@@ -196,11 +204,15 @@ describe("sign-in requests", () => {
 
   it("maps a wrong, expired or used-up code to plain copy instead of the server text", async () => {
     for (const code of ["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]) {
-      const { backend, client } = createTestClient();
+      const { backend, client, secureStore } = createTestClient();
       backend.fetchImplementation.mockImplementation(() => Promise.resolve(Response.json({ code, message: "Invalid OTP" }, { status: 400 })));
 
       expect(
-        await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true }),
+        await verifyEmailCode(
+          client,
+          { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true },
+          secureStore,
+        ),
       ).toEqual({
         ok: false,
         reason: "invalidCode",
@@ -217,7 +229,7 @@ describe("sign-in requests", () => {
     expect(await completeMagicLink(client, "bjjroll://auth?code=used-code", { verifier: TEST_SIGN_IN_VERIFIER })).toEqual({
       ok: false,
       reason: "invalidLink",
-      message: "This sign-in link has expired or was already used. Send a new one.",
+      message: "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.",
     });
   });
 

@@ -12,6 +12,9 @@ export interface LinkErrorCardProps {
 }
 
 export function LinkErrorCard({ message, reason }: LinkErrorCardProps) {
+  if (reason === "linkNotStartedHere") {
+    return <StatusText message={message} style={textStyles.bodyMuted} announce="polite" />;
+  }
   return (
     <View style={[authStyles.card, authStyles.errorCard]}>
       <View style={authStyles.cardBody}>

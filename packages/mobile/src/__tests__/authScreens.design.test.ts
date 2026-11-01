@@ -22,7 +22,13 @@ const client = createMobileAuthClient({
 
 const emailEntry = () => createElement(EmailEntryScreen, { secureStore: createMemorySecureStore(), client, onCodeSent: () => undefined });
 const codeEntry = () =>
-  createElement(CodeEntryScreen, { client, email: "member@example.test", onSignedIn: () => undefined, onBack: () => undefined });
+  createElement(CodeEntryScreen, {
+    secureStore: createMemorySecureStore(),
+    client,
+    email: "member@example.test",
+    onSignedIn: () => undefined,
+    onBack: () => undefined,
+  });
 const signedIn = () =>
   createElement(SignedInScreen, {
     onSignOut: () => undefined,

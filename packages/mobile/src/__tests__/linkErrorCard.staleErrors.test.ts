@@ -49,7 +49,14 @@ describe("sign-in screens hide stale red errors while the link-error card is sho
   const renderCodeEntry = () => {
     const client = newClient();
     const hostScreen = () =>
-      createElement(CodeEntryScreen, { client, email: EMAIL, onSignedIn: () => undefined, onBack: () => undefined, ...linkProps() });
+      createElement(CodeEntryScreen, {
+        secureStore: createMemorySecureStore(),
+        client,
+        email: EMAIL,
+        onSignedIn: () => undefined,
+        onBack: () => undefined,
+        ...linkProps(),
+      });
     return renderScreen(createElement(hostScreen), (text) => frames.push(text));
   };
   const redTexts = (screen: Screen) =>

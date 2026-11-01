@@ -16,7 +16,11 @@ describe("a sign-in link that replaces a session queues the old one to be ended 
         ? Promise.resolve(Response.json({ token: "old", user: { id: "user-1" } }, { headers: { "set-cookie": `${OLD_SESSION_COOKIE}; Path=/` } }))
         : backend.fetchImplementation(input, init);
     const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation });
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true });
+    await verifyEmailCode(
+      client,
+      { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true },
+      secureStore,
+    );
     seedPendingSignIn(secureStore);
 
     const result = await exchangeForPendingSignIn(client, secureStore, (verifier) =>

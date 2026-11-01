@@ -143,7 +143,9 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(flattenStyle(refused.queryByText(LINK_NEXT_STEP)?.props.style).color).toBe(colours.textPrimary);
 
     const invalid = await render(failureMessages.invalidLink, "invalidLink");
-    expect(invalid.text()).toContain("This sign-in link has expired or was already used. Send a new one.");
+    expect(invalid.text()).toContain(
+      "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.",
+    );
     expect(invalid.queryByText(LINK_NEXT_STEP)).toBeNull();
   });
 
