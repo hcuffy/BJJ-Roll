@@ -42,7 +42,9 @@ export function createApp(options?: CreateAppOptions): Hono {
 
   honoApp.onError((error, context) => {
     if (error instanceof HTTPException) {
-      return error.getResponse();
+      const response = error.getResponse();
+      const failed = response.status === 429 || response.status >= 500;
+      return failed && context.req.path === MAGIC_LINK_VERIFY_PATH ? magicLinkTroublePage(response.status) : response;
     }
     logServerEvent({ event: "request_failed", route: context.req.routePath, errorClass: errorClassName(error) });
     if (context.req.path === MAGIC_LINK_VERIFY_PATH) {

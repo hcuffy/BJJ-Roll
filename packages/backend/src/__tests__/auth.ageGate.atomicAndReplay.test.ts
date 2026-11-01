@@ -99,7 +99,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       await tickLater(email);
       const replay = await continueMagicLink(current().app, link, { ipAddress: "198.51.100.192" });
 
-      expect(replay.status).toBe(400);
+      expect(replay.status).toBe(303);
       expect(replay.headers.get("location")).toBe(`${DEEP_LINK_CALLBACK_URL}?${MAGIC_LINK_REASON_PARAM}=${magicLinkReasons.linkInvalid}`);
       expect(await usersWithEmail(email)).toBe(0);
     });
@@ -120,7 +120,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       const email = "reason.age@example.com";
       expect((await sendMagicLink(email, "198.51.100.193", {})).status).toBe(200);
       const response = await continueMagicLink(current().app, latestMagicLinkFor(email), { ipAddress: "198.51.100.193" });
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(303);
       expectCodeOnlyLocation(response, magicLinkReasons.ageRefused);
     });
 
@@ -130,7 +130,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 atomic sign-up, 
       const tampered = new URL(latestMagicLinkFor(email));
       tampered.searchParams.set("token", "not-a-real-token");
       const response = await continueMagicLink(current().app, tampered.toString(), { ipAddress: "198.51.100.194" });
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(303);
       expectCodeOnlyLocation(response, magicLinkReasons.linkInvalid);
     });
   });

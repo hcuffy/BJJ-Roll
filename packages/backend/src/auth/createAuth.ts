@@ -235,7 +235,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         return prepared;
       }
       const response = await betterAuthInstance.handler(prepared);
-      return normalizeMagicLinkVerifyResponse(prepared, response);
+      return normalizeMagicLinkVerifyResponse(prepared, response, rawRequest.method);
     },
     async resolveSessionUserId(requestHeaders: Headers): Promise<string | null> {
       try {

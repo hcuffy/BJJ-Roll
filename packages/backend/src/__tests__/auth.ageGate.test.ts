@@ -97,8 +97,8 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
 
       const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(email), { ipAddress: "198.51.100.182" });
 
-      expect(verifyResponse.status).toBe(400);
-      expect(await verifyResponse.json()).toMatchObject({ code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
+      expect(verifyResponse.status).toBe(303);
+      expect(await verifyResponse.text()).toBe("");
       expect(new URL(verifyResponse.headers.get("location") ?? "bjjroll://auth").searchParams.get("code")).toBeNull();
       expect(await countRows("users")).toBe(before.users);
       expect(await countRows("sessions")).toBe(before.sessions);

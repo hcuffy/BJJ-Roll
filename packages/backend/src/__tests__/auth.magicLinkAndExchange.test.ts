@@ -139,7 +139,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       const expiredLink = latestMagicLinkFor("expired.magic.one@example.com");
       vi.setSystemTime(startMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 + 1000);
       const expiredVerify = await continueMagicLink(app, expiredLink, { ipAddress });
-      expect(expiredVerify.status).toBe(400);
+      expect(expiredVerify.status).toBe(303);
       expect(expiredVerify.headers.get("location") ?? "").not.toContain("code=");
 
       const secondStartMs = startMs + 60 * 60 * 1000;
