@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Kysely } from "kysely";
 import type { Pool } from "pg";
-import { mountAccountRoutes } from "./accountRoutes.js";
+import { mountAccountRoutes, type AppleRevokeRetries } from "./accountRoutes.js";
 import { mountAuthRoutes, readSocketAddress } from "./auth/authRoutes.js";
 import { createAuth, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
 import { createDatabase } from "./database/connection.js";
@@ -10,6 +10,7 @@ import type { BjjRollDatabase } from "./database/schema.js";
 import { readSchemaVersion } from "./database/schemaVersion.js";
 import { LettermintEmailSender, PgBossEmailQueue } from "./email/index.js";
 import { mountHandleRoutes } from "./handleRoutes.js";
+import { BackgroundJobs } from "./jobs/backgroundJobs.js";
 import { loadServerConfig, type ServerConfig, type ServerEnvironment } from "./serverConfig.js";
 import { createServerPool, errorClassName, logServerEventToStderr, safeErrorCode, type ServerEventLogger } from "./serverProcess.js";
 
@@ -29,6 +30,7 @@ export interface CreateAppOptions {
     | CreateAuthOptions;
   readonly database?: Kysely<BjjRollDatabase>;
   readonly logServerEvent?: ServerEventLogger;
+  readonly appleRevokeRetries?: AppleRevokeRetries;
 }
 
 export function createApp(options?: CreateAppOptions): Hono {
@@ -66,6 +68,7 @@ export function createApp(options?: CreateAppOptions): Hono {
         resolveClientIp: (context) => authInstance.resolveClientIp(context.req.raw.headers, { remoteAddress: readSocketAddress(context) }),
         emailQueue: authInstance.emailQueue,
         revokeAppleRefreshToken: (sealedRefreshToken) => authInstance.revokeAppleRefreshToken(sealedRefreshToken),
+        appleRevokeRetries: options.appleRevokeRetries,
       });
     }
   }
@@ -78,6 +81,7 @@ export interface ServerApp {
   readonly config: ServerConfig;
   readonly pool: Pool;
   readonly emailQueue: PgBossEmailQueue;
+  readonly backgroundJobs: BackgroundJobs;
 }
 
 export async function createAppFromEnvironment(env: ServerEnvironment = process.env): Promise<ServerApp> {
@@ -96,17 +100,20 @@ export async function createAppFromEnvironment(env: ServerEnvironment = process.
   }
   const emailSender = new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress });
   const emailQueue = new PgBossEmailQueue({ connectionString: config.databaseUrl, emailSender, keyring: config.keyring });
-  const app = createApp({
-    auth: {
-      pool,
-      keyring: config.keyring,
-      baseURL: config.authBaseUrl,
-      trustedProxyIpHeaders: config.trustedProxyIpHeaders,
-      socialProviders: config.socialProviders,
-      emailSender,
-      emailQueue,
-    },
-    database,
+  const auth = createAuth({
+    pool,
+    keyring: config.keyring,
+    baseURL: config.authBaseUrl,
+    trustedProxyIpHeaders: config.trustedProxyIpHeaders,
+    socialProviders: config.socialProviders,
+    emailSender,
+    emailQueue,
   });
-  return { app, config, pool, emailQueue };
+  const backgroundJobs = new BackgroundJobs({
+    connectionString: config.databaseUrl,
+    pool,
+    revokeAppleRefreshToken: (sealedRefreshToken) => auth.revokeAppleRefreshToken(sealedRefreshToken),
+  });
+  const app = createApp({ auth, database, appleRevokeRetries: backgroundJobs });
+  return { app, config, pool, emailQueue, backgroundJobs };
 }

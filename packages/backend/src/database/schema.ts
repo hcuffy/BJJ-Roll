@@ -47,6 +47,7 @@ interface VerificationsTable {
   userId: string | null;
   identifier: string;
   value: string;
+  emailHash: string | null;
   expiresAt: RequiredTimestampColumn;
   createdAt: Generated<Date>;
   updatedAt: Generated<Date>;

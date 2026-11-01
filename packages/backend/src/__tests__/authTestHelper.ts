@@ -3,6 +3,7 @@ import { signUpAttestationVersion } from "@bjj-roll/shared";
 import type { Hono } from "hono";
 import type { Pool } from "pg";
 import { createApp } from "../app.js";
+import type { AppleRevokeRetries } from "../accountRoutes.js";
 import { createDatabase } from "../database/connection.js";
 import {
   createAuth,
@@ -46,6 +47,7 @@ export async function startAuthTestEnvironment(
     emailSender?: FakeEmailSender;
     emailQueue?: "inline" | "pg-boss";
     emailQueueWorker?: boolean;
+    appleRevokeRetries?: AppleRevokeRetries;
   },
 ): Promise<StartedAuthTestEnvironment> {
   const database = await startMigratedTestDatabase();
@@ -53,7 +55,13 @@ export async function startAuthTestEnvironment(
   const secrets = generateTestAuthSecrets();
   const keyring = loadAuthKeyringFromEnvironment(secrets);
   const codec = createAuthCryptoCodec(keyring);
-  const { emailSender = new FakeEmailSender(), emailQueue: queueKind = "inline", emailQueueWorker = true, ...authOverrides } = overrides ?? {};
+  const {
+    emailSender = new FakeEmailSender(),
+    emailQueue: queueKind = "inline",
+    emailQueueWorker = true,
+    appleRevokeRetries,
+    ...authOverrides
+  } = overrides ?? {};
   const emailQueueLogLines: EmailQueueLogLine[] = [];
   const pgBossQueue =
     queueKind === "pg-boss"
@@ -74,7 +82,7 @@ export async function startAuthTestEnvironment(
     baseURL: testBaseUrl,
     ...authOverrides,
   });
-  const app = createApp({ auth, database: createDatabase(appLogin.pool) });
+  const app = createApp({ auth, database: createDatabase(appLogin.pool), appleRevokeRetries });
 
   return {
     database,

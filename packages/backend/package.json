@@ -23,7 +23,8 @@
     "kysely": "0.29.6",
     "modal": "0.11.0",
     "pg": "^8.23.1",
-    "pg-boss": "12.37.1"
+    "pg-boss": "12.37.1",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.0",

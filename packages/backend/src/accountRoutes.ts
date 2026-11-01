@@ -24,7 +24,14 @@ import type { EmailQueue } from "./email/index.js";
 import type { AuthenticatedUserIdResolver } from "./handleRoutes.js";
 import { currentDate, toIsoString } from "./dates.js";
 
-type AccountEventName = "account_exported" | "account_deleted" | "account_deletion_email_failed" | "account_apple_revoke_failed";
+type AccountEventName =
+  | "account_exported"
+  | "account_deleted"
+  | "account_deletion_email_failed"
+  | "account_apple_revoke_failed"
+  | "account_apple_revoke_queued"
+  | "account_apple_revoke_not_queued"
+  | "account_apple_revoke_skipped";
 
 type AccountEventLogger = (event: AccountEventName, userId: string, details?: { readonly reason: string }) => void;
 
@@ -38,6 +45,11 @@ export interface AccountRoutesOptions {
   emailQueue: Pick<EmailQueue, "enqueue">;
   logAccountEvent: AccountEventLogger;
   revokeAppleRefreshToken?: (sealedRefreshToken: string) => Promise<void>;
+  appleRevokeRetries?: AppleRevokeRetries;
+}
+
+export interface AppleRevokeRetries {
+  enqueue(sealedRefreshToken: string): Promise<void>;
 }
 
 export type AccountRoutesInput = Omit<AccountRoutesOptions, "logAccountEvent"> & { logAccountEvent?: AccountEventLogger };

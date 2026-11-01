@@ -94,8 +94,8 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
     await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
     const now = currentDate();
     await client.query(
-      `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
-       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $5, $6, $6)`,
+      `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)
+       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $2, $5, $6, $6)`,
       [
         randomUUID(),
         codec.computeEmailHmac(body.email),
