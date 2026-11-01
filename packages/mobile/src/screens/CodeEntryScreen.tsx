@@ -13,7 +13,8 @@ import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 const CODE_LENGTH = 6;
-export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter the code from your email, or send a new one.";
+export const CODE_SCREEN_INVALID_LINK =
+  "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;

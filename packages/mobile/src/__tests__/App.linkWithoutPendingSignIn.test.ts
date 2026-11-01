@@ -25,6 +25,8 @@ const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const EXPIRED_MESSAGE = "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.";
 const NOT_STARTED_NOTE = "This sign-in link wasn't started on this phone. Enter your email below to get a new one.";
+const CODE_SCREEN_EXPIRED =
+  "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
 const CODE_LINK = "bjjroll://auth?code=exchange-code-1";
 
@@ -50,6 +52,21 @@ describe("App reads a sign-in link before it asks for a sign-in started on this 
   };
   const exchanges = () => backend.requests.filter((request) => request.url.endsWith("/magic-link/exchange"));
   const redTexts = (screen: Screen) => screen.findAllByType("Text").filter((text) => flattenStyle(text.props.style).color === colours.danger);
+
+  const startOnCodeScreen = async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
+    await screen.changeText("Email", "member@example.test");
+    await screen.press("Continue with email");
+    expect(screen.text()).toContain("Enter your code");
+    return screen;
+  };
+  const expectRedCard = (screen: Screen, message: string) => {
+    const card = screen.queryByText(message);
+    expect(card?.props).toMatchObject({ accessibilityRole: "alert", accessibilityLiveRegion: "polite" });
+    expect(flattenStyle(card?.props.style).color).toBe(colours.danger);
+  };
 
   beforeEach(() => {
     backend = createFakeBackend();
@@ -116,5 +133,37 @@ describe("App reads a sign-in link before it asks for a sign-in started on this 
     expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
     expect(redTexts(screen)).toEqual([]);
     expect(exchanges()).toHaveLength(1);
+  });
+
+  it("an expired or used link on the code screen shows the code screen copy", async () => {
+    const screen = await startOnCodeScreen();
+
+    await openLink(screen, REJECTED_LINK);
+
+    expectRedCard(screen, CODE_SCREEN_EXPIRED);
+    expect(exchanges()).toEqual([]);
+  });
+
+  it("an error link that arrives during an email-code sign-in still shows its card", async () => {
+    let finishCodeSignIn: () => void = () => undefined;
+    const codeSignInHeld = new Promise<void>((resolve) => {
+      finishCodeSignIn = resolve;
+    });
+    const answer = backend.fetchImplementation.getMockImplementation();
+    backend.fetchImplementation.mockImplementation(async (input, init) => {
+      if (new Request(input).url.endsWith("/sign-in/email-otp")) {
+        await codeSignInHeld;
+      }
+      return await (answer ?? fetch)(input, init);
+    });
+    const screen = await startOnCodeScreen();
+    await screen.changeText("6-digit code", "123456");
+
+    await openLink(screen, REJECTED_LINK);
+
+    expectRedCard(screen, CODE_SCREEN_EXPIRED);
+    finishCodeSignIn();
+    await settle();
+    expect(screen.text()).toContain(SIGNED_IN_SCREEN);
   });
 });
