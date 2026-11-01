@@ -15,11 +15,14 @@ async function renderSignIn(socialProviders: readonly SocialProvider[]) {
   });
   const socialSignIn = {
     client,
+    secureStore: createMemorySecureStore(),
     backendUrl: TEST_BACKEND_URL,
     platform: Platform.OS,
     browser: { openAuthSessionAsync: () => Promise.resolve({ type: "cancel" as const }) },
   };
-  return await renderScreen(createElement(EmailEntryScreen, { client, onCodeSent: () => undefined, socialProviders, socialSignIn }));
+  return await renderScreen(
+    createElement(EmailEntryScreen, { secureStore: createMemorySecureStore(), client, onCodeSent: () => undefined, socialProviders, socialSignIn }),
+  );
 }
 
 const dividerRow = (screen: Awaited<ReturnType<typeof renderSignIn>>) =>

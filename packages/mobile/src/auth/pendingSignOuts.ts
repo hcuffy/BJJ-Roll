@@ -1,4 +1,4 @@
-import { SESSION_STORAGE_PREFIX } from "./authClient";
+import { SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
 import { currentMs } from "../dates";
 
 export interface SessionKeyStore {
@@ -16,6 +16,14 @@ const SESSION_MAX_LIFETIME_MS = SESSION_MAX_LIFETIME_DAYS * 24 * 60 * 60 * 1000;
 interface PendingSignOut {
   readonly marker: string;
   readonly queuedAt: number;
+}
+
+export async function readSessionCookie(client: MobileAuthClient): Promise<string | null> {
+  try {
+    return (await client.getCookie()).split("; ").find((cookie) => cookie.split("=")[0]?.endsWith("session_token")) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function oldSessionCookieOf(marker: string): string | null {
@@ -105,6 +113,19 @@ export async function addPendingSignOut(secureStore: SessionKeyStore, marker: st
   await changeQueue(secureStore, (entries) =>
     entries.some((entry) => entry.marker === marker) ? null : [...entries, { marker, queuedAt: currentMs() }],
   );
+}
+
+export async function signInReplacingSession<Result extends { readonly ok: boolean }>(
+  client: MobileAuthClient,
+  secureStore: SessionKeyStore,
+  signIn: () => Promise<Result>,
+): Promise<Result> {
+  const replacedSessionCookie = await readSessionCookie(client);
+  const result = await signIn();
+  if (result.ok && replacedSessionCookie !== null && replacedSessionCookie !== (await readSessionCookie(client))) {
+    await addPendingSignOut(secureStore, replacedSessionCookie).catch(() => undefined);
+  }
+  return result;
 }
 
 export async function dropPendingSignOut(secureStore: SessionKeyStore, marker: string): Promise<void> {

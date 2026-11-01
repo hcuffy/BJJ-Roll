@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import type { MobileAuthClient } from "../auth/authClient";
-import { OTP_EXPIRY_MINUTES, sendEmailCode, verifyEmailCode, type ActionResult } from "../auth/signInActions";
+import {
+  OTP_EXPIRY_MINUTES,
+  sendEmailCode,
+  verifyEmailCode,
+  type ActionResult,
+  type FailureReason,
+  type SessionKeyStore,
+} from "../auth/signInActions";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";
@@ -13,10 +20,18 @@ import { authStyles } from "./authStyles";
 import { formatCountdown, RESEND_COOLDOWN_SECONDS, useCountdown } from "./useCountdown";
 
 const CODE_LENGTH = 6;
-export const CODE_SCREEN_INVALID_LINK = "This sign-in link has expired or was already used. Enter the code from your email, or send a new one.";
+export const CODE_SCREEN_INVALID_LINK =
+  "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
+
+const CODE_SCREEN_NOT_STARTED_HERE = "This sign-in link wasn't started on this phone. Enter the code from your email, or send a new one.";
+const codeScreenLinkMessages: Partial<Record<FailureReason, string>> = {
+  invalidLink: CODE_SCREEN_INVALID_LINK,
+  linkNotStartedHere: CODE_SCREEN_NOT_STARTED_HERE,
+};
 
 export interface CodeEntryScreenProps {
   readonly client: MobileAuthClient;
+  readonly secureStore: SessionKeyStore;
   readonly email: string;
   readonly age18Confirmed?: boolean;
   readonly linkError?: string | null;
@@ -31,6 +46,7 @@ export interface CodeEntryScreenProps {
 
 export function CodeEntryScreen({
   client,
+  secureStore,
   email,
   age18Confirmed = false,
   linkError = null,
@@ -83,7 +99,7 @@ export function CodeEntryScreen({
     inFlight.current = true;
     setIsVerifying(true);
     startAttempt();
-    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true });
+    const result = await verifyEmailCode(client, { email, code: candidate, age16Confirmed: true, signUpAttestationAccepted: true }, secureStore);
     inFlight.current = false;
     setIsVerifying(false);
     if (result.ok) {
@@ -135,6 +151,9 @@ export function CodeEntryScreen({
           latestCode.current = text;
           setCode(text);
           setCodeError(null);
+          if (linkErrorReason === "linkNotStartedHere") {
+            onClearLinkError?.();
+          }
           if (text.trim().length === CODE_LENGTH) {
             void verify(text);
           }
@@ -143,7 +162,7 @@ export function CodeEntryScreen({
       />
       <ServerUnreachableNote visible={serverUnreachable || (offline && !linkError)} />
       {linkError ? (
-        <LinkErrorCard message={linkErrorReason === "invalidLink" ? CODE_SCREEN_INVALID_LINK : linkError} reason={linkErrorReason} />
+        <LinkErrorCard message={(linkErrorReason && codeScreenLinkMessages[linkErrorReason]) ?? linkError} reason={linkErrorReason} />
       ) : null}
       <StatusText message={linkError ? null : formError} style={authStyles.fieldError} />
       <View style={authStyles.actions}>

@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-import { appAuthClient, appBackendUrl } from "./appAuthClient";
+import { appAuthClient, appBackendUrl, appSecureStore } from "./appAuthClient";
 import { readSocialSignInConfig, visibleSocialProviders, type SocialSignInDependencies } from "./socialSignIn";
 
 const NONCE_BYTES = 32;
@@ -12,6 +12,7 @@ export const appSocialProviders = visibleSocialProviders(readSocialSignInConfig(
 
 export const appSocialSignIn: SocialSignInDependencies = {
   client: appAuthClient,
+  secureStore: appSecureStore,
   backendUrl: appBackendUrl,
   platform: Platform.OS,
   browser: WebBrowser,

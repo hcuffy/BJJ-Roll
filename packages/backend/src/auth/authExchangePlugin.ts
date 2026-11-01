@@ -1,12 +1,13 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { createAuthEndpoint, createAuthMiddleware, APIError } from "better-auth/api";
+import { randomBytes } from "node:crypto";
+import { createAuthEndpoint, createAuthMiddleware, APIError, getOAuthState } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth/types";
 import type { Pool } from "pg";
 import { MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS } from "./authLimits.js";
 import { isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
-import { currentDate, currentMs, secondsAfter, toMs } from "../dates.js";
+import { currentMs, toMs } from "../dates.js";
+import { insertVerification, readVerifierHash, takeMagicLinkVerifierHash, verifierMatches, withVerificationScope } from "./signInVerifier.js";
 
 const EXCHANGE_IDENTIFIER_PREFIX = "magic-link-exchange:";
 
@@ -42,89 +43,49 @@ function extractRawSessionTokenFromSetCookie(setCookieHeader: string | null): st
 async function storeExchangeCodeInDatabase(
   pool: Pool,
   codec: AuthCryptoCodec,
-  exchangeParameters: { rawCode: string; userId: string },
+  exchangeParameters: { rawCode: string; userId: string; verifierHash: string | null },
 ): Promise<void> {
-  const hashedCode = codec.hashExchangeCode(exchangeParameters.rawCode);
-  const identifier = `${EXCHANGE_IDENTIFIER_PREFIX}${hashedCode}`;
-  const encryptedValue = codec.encryptVerificationPayload(JSON.stringify({ userId: exchangeParameters.userId }));
-  const now = currentDate();
-  const expiresAt = secondsAfter(now, MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS);
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL ROLE bjj_app");
-    await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.verification_identifier', $2, true)", [
-      exchangeParameters.userId,
+  const identifier = `${EXCHANGE_IDENTIFIER_PREFIX}${codec.hashExchangeCode(exchangeParameters.rawCode)}`;
+  const payload = { userId: exchangeParameters.userId, verifierHash: exchangeParameters.verifierHash };
+  await withVerificationScope(pool, { identifier, userId: exchangeParameters.userId }, async (client) => {
+    await insertVerification(client, {
       identifier,
-    ]);
-    await client.query(
-      `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), exchangeParameters.userId, identifier, encryptedValue, expiresAt, now, now],
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+      userId: exchangeParameters.userId,
+      value: codec.encryptVerificationPayload(JSON.stringify(payload)),
+      lifetimeSeconds: MAGIC_LINK_EXCHANGE_CODE_EXPIRY_SECONDS,
+    });
+  });
 }
 
-async function consumeExchangeCodeFromDatabase(pool: Pool, codec: AuthCryptoCodec, rawCode: string): Promise<{ userId: string }> {
-  const hashedCode = codec.hashExchangeCode(rawCode);
-  const identifier = `${EXCHANGE_IDENTIFIER_PREFIX}${hashedCode}`;
+function invalidExchangeCode(): APIError {
+  return new APIError("UNAUTHORIZED", { message: "Invalid or already used magic link exchange code" });
+}
 
-  const client = await pool.connect();
-  let consumedRow: StoredExchangeCodeRow | undefined;
-  try {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL ROLE bjj_app");
-    await client.query("SELECT set_config('app.verification_identifier', $1, true)", [identifier]);
-    const deleted = await client.query<StoredExchangeCodeRow>(
-      `DELETE FROM public.verifications
-       WHERE identifier = $1
-       RETURNING id, value, user_id, expires_at`,
+async function consumeExchangeCodeFromDatabase(
+  pool: Pool,
+  codec: AuthCryptoCodec,
+  exchange: { rawCode: string; verifier: unknown },
+): Promise<{ userId: string }> {
+  const identifier = `${EXCHANGE_IDENTIFIER_PREFIX}${codec.hashExchangeCode(exchange.rawCode)}`;
+  const userId = await withVerificationScope(pool, { identifier }, async (client) => {
+    const selected = await client.query<StoredExchangeCodeRow>(
+      "SELECT id, value, user_id, expires_at FROM public.verifications WHERE identifier = $1 FOR UPDATE",
       [identifier],
     );
-    await client.query("COMMIT");
-    consumedRow = deleted.rows[0];
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (!consumedRow) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "Invalid or already used magic link exchange code",
-    });
-  }
-
-  const expiresAtMilliseconds = toMs(consumedRow.expires_at);
-  if (currentMs() >= expiresAtMilliseconds) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "Magic link exchange code has expired",
-    });
-  }
-
-  const decryptedJson = codec.decryptVerificationPayload(consumedRow.value);
-  const parsed = JSON.parse(decryptedJson) as { userId?: unknown };
-  let userId: string | null = null;
-  if (typeof parsed.userId === "string") {
-    userId = parsed.userId;
-  } else if (typeof consumedRow.user_id === "string") {
-    userId = consumedRow.user_id;
-  }
-
+    const row = selected.rows[0];
+    if (!row || currentMs() >= toMs(row.expires_at)) {
+      return null;
+    }
+    const parsed = JSON.parse(codec.decryptVerificationPayload(row.value)) as { userId?: unknown; verifierHash?: unknown };
+    if (!verifierMatches(readVerifierHash(parsed), exchange.verifier)) {
+      return null;
+    }
+    await client.query("DELETE FROM public.verifications WHERE id = $1", [row.id]);
+    return typeof parsed.userId === "string" ? parsed.userId : row.user_id;
+  });
   if (!userId) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "Invalid exchange code payload",
-    });
+    throw invalidExchangeCode();
   }
-
   return { userId };
 }
 
@@ -134,10 +95,10 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
   const { pool, codec } = pluginOptions;
 
   const executeExchange = async (context: AuthEndpointContext) => {
-    let bodyObject = context.body as { code?: unknown } | undefined;
+    let bodyObject = context.body as { code?: unknown; verifier?: unknown } | undefined;
     if (!bodyObject && context.request) {
       try {
-        bodyObject = (await context.request.clone().json()) as { code?: unknown };
+        bodyObject = (await context.request.clone().json()) as { code?: unknown; verifier?: unknown };
       } catch {
         bodyObject = undefined;
       }
@@ -149,7 +110,7 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
       });
     }
 
-    const { userId } = await consumeExchangeCodeFromDatabase(pool, codec, rawCode);
+    const { userId } = await consumeExchangeCodeFromDatabase(pool, codec, { rawCode, verifier: bodyObject?.verifier });
     const user = await context.context.internalAdapter.findUserById(userId);
     if (!user) {
       throw new APIError("UNAUTHORIZED", {
@@ -207,10 +168,14 @@ export function createMagicLinkExchangePlugin(pluginOptions: CreateMagicLinkExch
               return;
             }
 
+            const verifierHash = middlewareContext.path.startsWith("/callback/")
+              ? readVerifierHash(await getOAuthState())
+              : await takeMagicLinkVerifierHash(pool, codec, (middlewareContext.query as Record<string, unknown> | undefined)?.token);
             const rawExchangeCode = generateRawExchangeCode();
             await storeExchangeCodeInDatabase(pool, codec, {
               rawCode: rawExchangeCode,
               userId,
+              verifierHash,
             });
 
             responseHeaders?.delete("set-cookie");

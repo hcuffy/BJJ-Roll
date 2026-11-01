@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
@@ -120,6 +120,7 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     setUpEnrolledPhone();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -164,19 +165,18 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
     server.state.hangFor.add(FIRST);
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = SIGN_IN_LINK;
-    await screen.rerender();
-    await settle();
-    expect(screen.text()).toContain(LOCKED_TITLE);
+    const linked = await launchApp();
+    expect(linked.text()).toContain(LOCKED_TITLE);
     expect(server.inFlight.get(FIRST)).toBe(1);
 
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    await screen.press("Sign out");
+    await linked.press("Sign out");
     await settle();
     expect(server.peakInFlight.get(FIRST)).toBe(1);
 
     await vi.advanceTimersByTimeAsync(STARTUP_REQUEST_TIMEOUT_MS);
     await settle();
-    expect(screen.text()).toContain(SIGN_IN_SCREEN);
+    expect(linked.text()).toContain(SIGN_IN_SCREEN);
     expect(marker()).toContain(FIRST);
   });
 

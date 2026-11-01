@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, expect, vi } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
-import { extractSessionCookie, getAuthPath, postAuthJson, startAuthTestEnvironment, type StartedAuthTestEnvironment } from "./authTestHelper.js";
+import {
+  extractSessionCookie,
+  getAuthPath,
+  postAuthJson,
+  startAuthTestEnvironment,
+  testSignInVerifier,
+  testSignInVerifierHash,
+  type StartedAuthTestEnvironment,
+} from "./authTestHelper.js";
 import { cookieHeaderFrom, createFakeSocialProviderConfig, fakeGoogleConfig, stubProviderFetch, unsignedIdToken } from "./socialSignInTestDoubles.js";
 
 export interface FakeGoogleUser {
@@ -41,7 +49,7 @@ export function createGoogleSignInTestContext() {
         callbackURL: DEEP_LINK_CALLBACK_URL,
         errorCallbackURL: DEEP_LINK_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: options.additionalData,
+        additionalData: { verifierHash: testSignInVerifierHash, ...options.additionalData },
       },
       ipAddress,
     });
@@ -61,7 +69,10 @@ export function createGoogleSignInTestContext() {
   };
 
   const exchangeForSession = async (code: string): Promise<{ userId: string; cookie: string }> => {
-    const exchangeResponse = await postAuthJson(current().app, "/magic-link/exchange", { body: { code }, ipAddress: "198.51.100.201" });
+    const exchangeResponse = await postAuthJson(current().app, "/magic-link/exchange", {
+      body: { code, verifier: testSignInVerifier },
+      ipAddress: "198.51.100.201",
+    });
     expect(exchangeResponse.status).toBe(200);
     const payload = (await exchangeResponse.json()) as { user: { id: string } };
     return { userId: payload.user.id, cookie: extractSessionCookie(exchangeResponse) };

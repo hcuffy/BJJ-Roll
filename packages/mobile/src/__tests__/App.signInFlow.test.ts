@@ -2,7 +2,14 @@ import { SIGN_UP_ATTESTATION_LABEL, signUpAttestationVersion } from "@bjj-roll/s
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import {
+  createFakeBackend,
+  createMemorySecureStore,
+  seedPendingSignIn,
+  TEST_BACKEND_URL,
+  TEST_DELETE_CODE,
+  TEST_SIGN_IN_VERIFIER,
+} from "./authTestDoubles";
 import { colours } from "../theme/tokens";
 import { deepLinkState, flattenStyle, type HostNode, renderScreen, textOf } from "./screenHarness";
 
@@ -42,6 +49,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
   });
 
@@ -183,12 +191,13 @@ describe("App sign-in flow (Android, fake backend)", () => {
       age16Confirmed: true,
       age18Confirmed: false,
       signUpAttestationTextVersionId: signUpAttestationVersion.id,
+      metadata: { verifierHash: expect.any(String) as unknown },
     });
 
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     await screen.rerender();
 
-    expect(lastBodyFor("/magic-link/exchange")).toEqual({ code: "one-time-exchange-code" });
+    expect(lastBodyFor("/magic-link/exchange")).toEqual({ code: "one-time-exchange-code", verifier: TEST_SIGN_IN_VERIFIER });
     expect(screen.text()).toContain("You are signed in");
     expect(secureStore.items.get("bjjroll_cookie")).toContain("signed-session-value");
   });
@@ -196,7 +205,7 @@ describe("App sign-in flow (Android, fake backend)", () => {
   it("an expired magic link keeps the user signed out and shows an announced error card above the title, cleared by the next action", async () => {
     deepLinkState.url = "bjjroll://auth?r=link_invalid";
     const screen = await startApp();
-    const message = "This sign-in link has expired or was already used. Send a new one.";
+    const message = "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.";
 
     const [scrollView] = screen.findAllByType("ScrollView");
     const screenText = textOf(scrollView ?? "");

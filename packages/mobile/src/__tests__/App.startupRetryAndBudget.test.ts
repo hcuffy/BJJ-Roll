@@ -2,7 +2,7 @@ import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -84,6 +84,7 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     hangingPaths = new Set();
     held = new Map();
     holdInsteadOfHang = false;
@@ -255,10 +256,10 @@ describe("Startup offline note: Try again and one shared 10 s budget (HEN-310)",
       await screen.press("Sign out");
       expect(sessionStorageKeys.some((key) => secureStore.items.has(key))).toBe(false);
       await advance(STARTUP_REQUEST_TIMEOUT_MS - 1);
-      expect(screen.text()).toContain("Loading");
+      expect(screen.text()).toContain(SIGN_IN_SCREEN);
+      expect(abortedRequests).toBe(0);
       await advance(1);
 
-      expect(screen.text()).toContain(SIGN_IN_SCREEN);
       expect(abortedRequests).toBe(1);
       expect(secureStore.items.has(PENDING_SIGN_OUT_KEY)).toBe(true);
     });

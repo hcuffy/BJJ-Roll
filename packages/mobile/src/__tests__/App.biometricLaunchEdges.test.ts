@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
 import { emitAppState } from "./appStateHarness";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen } from "./screenHarness";
 
@@ -54,6 +54,7 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     setUpEnrolledPhone();
   });
   afterEach(() => {

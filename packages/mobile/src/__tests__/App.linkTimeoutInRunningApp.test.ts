@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { failureMessages } from "../auth/signInActions";
 import { colours } from "../theme/tokens";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -35,6 +35,7 @@ describe("App: a link opened in the running app that times out replaces the last
 
   const startOnLinkSent = async () => {
     appClient.store = createMemorySecureStore();
+    seedPendingSignIn(appClient.store);
     appClient.current = createMobileAuthClient({
       backendUrl: TEST_BACKEND_URL,
       storage: appClient.store,

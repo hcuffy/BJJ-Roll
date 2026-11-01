@@ -5,7 +5,7 @@ import * as Linking from "expo-linking";
 export const DEEP_LINK_SCHEME = "bjjroll";
 export const SESSION_STORAGE_PREFIX = "bjjroll";
 
-export const sessionGoneStatuses: ReadonlySet<number> = new Set([401, 404, 410]);
+const sessionGoneStatuses: ReadonlySet<number> = new Set([401, 404, 410]);
 
 type ExpoClientOptions = Parameters<typeof expoClient>[0];
 

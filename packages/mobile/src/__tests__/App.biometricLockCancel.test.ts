@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
@@ -134,17 +134,18 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
     server.state.failFor.clear();
     return screen;
   };
-  const openLinkToLock = async (screen: Awaited<ReturnType<typeof launchApp>>) => {
+  const openLinkToLock = async () => {
     localAuthenticationFake.answers.push("user_cancel");
     deepLinkState.url = SIGN_IN_LINK;
-    await screen.rerender();
-    await settle();
+    const screen = await launchApp();
     expect(screen.text()).toContain(LOCKED_TITLE);
+    return screen;
   };
 
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     unhandled = [];
     process.on("unhandledRejection", recordUnhandled);
@@ -163,9 +164,9 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
   });
 
   it("unlock after the cancel started leaves it running once, keeps the new session, and the next sign-out stops and waits for it", async () => {
-    const screen = await signedInWithOldSessionQueued();
+    await signedInWithOldSessionQueued();
     server.state.hangFor.add(FIRST);
-    await openLinkToLock(screen);
+    const screen = await openLinkToLock();
     expect(server.inFlight.get(FIRST)).toBe(1);
 
     await screen.press("Unlock");
@@ -190,9 +191,9 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
   });
 
   it("a cancel whose queue write fails rejects nothing: the lock stays up, Unlock signs in, and the old session stays queued", async () => {
-    const screen = await signedInWithOldSessionQueued();
+    await signedInWithOldSessionQueued();
     secureStore.failingKeys.add(PENDING_SIGN_OUT_KEY);
-    await openLinkToLock(screen);
+    const screen = await openLinkToLock();
     await settle();
 
     expect(screen.text()).toContain(LOCKED_TITLE);

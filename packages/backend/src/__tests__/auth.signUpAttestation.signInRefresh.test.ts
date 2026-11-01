@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEEP_LINK_CALLBACK_URL } from "../auth/index.js";
 import type { SignedInUser } from "./accountTestFlow.js";
 import { createAgeGateTestContext, magicLinkSendPath, otpSendPath, otpSignInPath } from "./ageGateTestContext.js";
-import { extractSessionCookie, getAuthPath, postAuthJson } from "./authTestHelper.js";
+import { extractSessionCookie, postAuthJson, boundMagicLinkSend, continueMagicLink, testSignInVerifier } from "./authTestHelper.js";
 import { isPostgresTestEnvironmentAvailable } from "./databaseTestHarness.js";
 
 const currentVersionId = signUpAttestationVersion.id;
@@ -66,13 +66,16 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-183 the sign-in tick
     const user = await existingUser("refresh.link.old@example.com", "198.51.100.241", oldVersionId);
     const { app } = current();
     const send = await postAuthJson(app, magicLinkSendPath, {
-      body: { email: user.email, callbackURL: DEEP_LINK_CALLBACK_URL, ...ticked },
+      body: { email: user.email, callbackURL: DEEP_LINK_CALLBACK_URL, ...ticked, ...boundMagicLinkSend },
       ipAddress: user.ipAddress,
     });
     expect(send.status).toBe(200);
-    const verifyResponse = await getAuthPath(app, latestMagicLinkFor(user.email), { ipAddress: user.ipAddress });
+    const verifyResponse = await continueMagicLink(app, latestMagicLinkFor(user.email), { ipAddress: user.ipAddress });
     const exchangeCode = new URL(verifyResponse.headers.get("location") ?? "").searchParams.get("code") ?? "";
-    const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", { body: { code: exchangeCode }, ipAddress: user.ipAddress });
+    const exchangeResponse = await postAuthJson(app, "/magic-link/exchange", {
+      body: { code: exchangeCode, verifier: testSignInVerifier },
+      ipAddress: user.ipAddress,
+    });
     expect(exchangeResponse.status).toBe(200);
     expect(await attestationVersionsFor(user.userId)).toEqual([oldVersionId, currentVersionId]);
     expect((await readStatus({ ...user, cookie: extractSessionCookie(exchangeResponse) })).required).toBe(false);

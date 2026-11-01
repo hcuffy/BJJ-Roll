@@ -2,6 +2,8 @@ import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { AGE_GATE_REFUSAL_MESSAGE, type AgeAnswers, isAgeConfirmed, isSignUpAttestationAccepted } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import type { ExpoConfigWithExtra } from "./authConfig";
+import { beginPendingSignIn, exchangeForPendingSignIn } from "./pendingSignIn";
+import { signInReplacingSession, type SessionKeyStore } from "./pendingSignOuts";
 import {
   AGE_CONFIRMATION_REQUIRED_CODE,
   attestationRequired,
@@ -56,6 +58,7 @@ export function socialNotLinked(provider: SocialProvider | null): ActionResult {
 
 export interface SocialSignInDependencies {
   readonly client: MobileAuthClient;
+  readonly secureStore: SessionKeyStore;
   readonly backendUrl: string;
   readonly platform: string;
   readonly browser: AuthBrowser;
@@ -103,7 +106,7 @@ export async function signInWithProvider(
 }
 
 async function signInWithAppleNative(
-  { client, onReturned }: SocialSignInDependencies,
+  { client, secureStore, onReturned }: SocialSignInDependencies,
   appleNative: AppleNativeSignIn,
   ages: SocialAgeAnswers,
 ): Promise<ActionResult> {
@@ -118,17 +121,25 @@ async function signInWithAppleNative(
     return failure("unknown");
   }
   onReturned?.();
-  return await postAuth(client, {
-    path: "/sign-in/social",
-    body: {
-      provider: "apple",
-      idToken: { token: credential.identityToken, nonce },
-      additionalData: { ...ages, ...(credential.authorizationCode ? { appleAuthorizationCode: credential.authorizationCode } : {}) },
-    },
-  });
+  const identityToken = credential.identityToken;
+  const appleAuthorizationCode = credential.authorizationCode;
+  return await signInReplacingSession(client, secureStore, () =>
+    postAuth(client, {
+      path: "/sign-in/social",
+      body: {
+        provider: "apple",
+        idToken: { token: identityToken, nonce },
+        additionalData: { ...ages, ...(appleAuthorizationCode ? { appleAuthorizationCode } : {}) },
+      },
+    }),
+  );
 }
 
 async function signInWithGoogle(dependencies: SocialSignInDependencies, ages: SocialAgeAnswers): Promise<ActionResult> {
+  const verifierHash = await beginPendingSignIn(dependencies.secureStore).catch(() => null);
+  if (verifierHash === null) {
+    return failure("unknown");
+  }
   let authorizationUrl: unknown;
   try {
     const { data, error } = await dependencies.client.$fetch<{ url?: unknown }>("/sign-in/social", {
@@ -138,7 +149,7 @@ async function signInWithGoogle(dependencies: SocialSignInDependencies, ages: So
         callbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         errorCallbackURL: SOCIAL_SIGN_IN_CALLBACK_URL,
         disableRedirect: true,
-        additionalData: ages,
+        additionalData: { ...ages, verifierHash },
       },
     });
     if (error) {
@@ -158,10 +169,19 @@ async function signInWithGoogle(dependencies: SocialSignInDependencies, ages: So
     return ignored;
   }
   dependencies.onReturned?.();
-  return await completeSocialSignIn(dependencies.client, result.url, "google");
+  const { client, secureStore } = dependencies;
+  const returnedUrl = result.url;
+  return await exchangeForPendingSignIn(client, secureStore, (verifier) =>
+    completeSocialSignIn(client, returnedUrl, { verifier, provider: "google" }),
+  );
 }
 
-export async function completeSocialSignIn(client: MobileAuthClient, url: string, provider: SocialProvider | null = null): Promise<ActionResult> {
+interface SocialReturn {
+  readonly verifier: string;
+  readonly provider?: SocialProvider;
+}
+
+export async function completeSocialSignIn(client: MobileAuthClient, url: string, { verifier, provider }: SocialReturn): Promise<ActionResult> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -179,11 +199,11 @@ export async function completeSocialSignIn(client: MobileAuthClient, url: string
     return attestationRequired;
   }
   if (error === ACCOUNT_NOT_LINKED_ERROR) {
-    return socialNotLinked(provider);
+    return socialNotLinked(provider ?? null);
   }
   const code = parsed.searchParams.get("code");
   if (error || !code) {
     return failure("unknown");
   }
-  return await postAuth(client, { path: "/magic-link/exchange", body: { code }, clientErrorReason: "invalidLink" });
+  return await postAuth(client, { path: "/magic-link/exchange", body: { code, verifier }, clientErrorReason: "invalidLink" });
 }

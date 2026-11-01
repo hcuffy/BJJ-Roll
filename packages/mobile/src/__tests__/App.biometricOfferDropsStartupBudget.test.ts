@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
@@ -98,6 +98,7 @@ describe("biometric lock with the startup Try again, abort-and-wait and the star
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     setUpEnrolledPhone();
     vi.spyOn(console, "error").mockImplementation(() => undefined);

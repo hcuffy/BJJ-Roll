@@ -9,6 +9,7 @@ import {
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
+import { magicLinkContinuePage } from "./magicLinkContinuePage.js";
 
 export const trustableProxyIpHeaders = ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] as const;
 export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
@@ -60,18 +61,27 @@ function invalidCallbackResponse(parameterNames: readonly string[]): Response {
   return jsonErrorResponse(400, "INVALID_CALLBACK_URL", `${parameterNames.join(", ")} must be a ${DEEP_LINK_CALLBACK_URL} deep link in M2`);
 }
 
+function verifyRequestFromContinuePost(url: URL, request: Request): Request {
+  const headers = new Headers(request.headers);
+  headers.delete("content-type");
+  headers.delete("content-length");
+  return new Request(url.toString(), { method: "GET", headers });
+}
+
 export async function prepareMagicLinkRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === MAGIC_LINK_VERIFY_PATH) {
+  if ((request.method === "GET" || request.method === "POST") && url.pathname === MAGIC_LINK_VERIFY_PATH) {
     const invalid = findInvalidRedirectParameters((name) => url.searchParams.get(name) ?? undefined);
     if (invalid.length > 0) {
       return invalidCallbackResponse(invalid);
     }
+    if (request.method === "GET") {
+      return magicLinkContinuePage();
+    }
     if (!url.searchParams.has("callbackURL")) {
       url.searchParams.set("callbackURL", DEEP_LINK_CALLBACK_URL);
-      return new Request(url.toString(), request);
     }
-    return request;
+    return verifyRequestFromContinuePost(url, request);
   }
   if (request.method === "POST" && url.pathname === MAGIC_LINK_SIGN_IN_PATH) {
     let body: unknown;

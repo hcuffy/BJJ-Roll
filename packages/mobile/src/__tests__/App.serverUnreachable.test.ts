@@ -2,9 +2,10 @@ import { SIGN_UP_ATTESTATION_LABEL } from "@bjj-roll/shared";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
+import type * as MagicLinkReturn from "../auth/magicLinkReturn";
 import type * as SignInActions from "../auth/signInActions";
 import { colours } from "../theme/tokens";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, flattenStyle, renderScreen } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -19,11 +20,16 @@ vi.mock("../auth/appAuthClient", () => ({
 }));
 vi.mock("../auth/signInActions", async (importOriginal) => {
   const actual = await importOriginal<typeof SignInActions>();
-  return { ...actual, completeMagicLink: vi.fn(actual.completeMagicLink), signOut: vi.fn(actual.signOut) };
+  return { ...actual, signOutOnPhone: vi.fn(actual.signOutOnPhone) };
+});
+vi.mock("../auth/magicLinkReturn", async (importOriginal) => {
+  const actual = await importOriginal<typeof MagicLinkReturn>();
+  return { ...actual, completeMagicLink: vi.fn(actual.completeMagicLink) };
 });
 
 const { App } = await import("../App");
-const { completeMagicLink, signOut } = await import("../auth/signInActions");
+const { signOutOnPhone } = await import("../auth/signInActions");
+const { completeMagicLink } = await import("../auth/magicLinkReturn");
 const { SERVER_UNREACHABLE_NOTE } = await import("../screens/EmailEntryScreen");
 const { AGE_CONFIRMATION_LABEL } = await import("../auth/ageConfirmation");
 
@@ -58,6 +64,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     serverDown = true;
     deepLinkState.url = null;
     unhandledRejections.length = 0;
@@ -259,7 +266,7 @@ describe("App when the server cannot be reached (HEN-285)", () => {
     const screen = await startSignedIn();
     expect(screen.text()).toContain("You are signed in");
 
-    vi.mocked(signOut).mockRejectedValueOnce(new Error("SecureStore unavailable"));
+    vi.mocked(signOutOnPhone).mockRejectedValueOnce(new Error("SecureStore unavailable"));
     await screen.press("Sign out");
 
     expect(screen.text()).toContain("Sign in to BJJ Roll");

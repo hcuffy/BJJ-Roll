@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_UNLOCK_KEY } from "../auth/biometricUnlock";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE, seedPendingSignIn } from "./authTestDoubles";
 import { resetBackListeners } from "./backHandlerHarness";
 import { localAuthenticationFake, setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
@@ -73,6 +73,7 @@ describe("App: sign-out and delete clear biometric unlock (HEN-288 x HEN-314, HE
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     signOutHangs = false;
     signOutFails = false;
     unanswered = [];

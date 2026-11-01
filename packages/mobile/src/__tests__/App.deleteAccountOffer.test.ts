@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
 import { BIOMETRIC_OFFER_BENEFIT } from "../screens/biometricCopy";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, TEST_DELETE_CODE, seedPendingSignIn } from "./authTestDoubles";
 import { resetBackListeners } from "./backHandlerHarness";
 import { setUpEnrolledPhone } from "./localAuthenticationFake";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
@@ -78,6 +78,7 @@ describe("App: the biometric offer after a delete 401 or a failing session clear
   beforeEach(() => {
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     offersSeen = 0;
     deepLinkState.url = null;
     resetBackListeners();

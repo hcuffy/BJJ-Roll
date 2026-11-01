@@ -17,7 +17,8 @@ import {
 import { appAuthClient, appBackendUrl, appSecureStore } from "./auth/appAuthClient";
 import { appSocialProviders, appSocialSignIn } from "./auth/appSocialSignIn";
 import { type BiometricKind, changeBiometricUnlock, clearBiometricUnlock, readBiometricSetting, takeBiometricOffer } from "./auth/biometricUnlock";
-import { completeMagicLink, failureMessages, type FailureReason, signOut } from "./auth/signInActions";
+import { exchangeMagicLink } from "./auth/magicLinkReturn";
+import { failureMessages, type FailureReason } from "./auth/signInActions";
 import { checkStartup, readBiometricLock } from "./auth/startupCheck";
 import { createStartupBudget, type StartupBudget, withStartupTimeout } from "./auth/startupTimeout";
 import { BiometricLockScreen } from "./screens/BiometricLockScreen";
@@ -40,6 +41,8 @@ type AuthScreen =
   | { readonly name: "signedIn" }
   | { readonly name: "signingOut" };
 
+const signedInScreens = new Set<AuthScreen["name"]>(["signedIn", "signingOut", "biometricOffer", "locked"]);
+
 const accountExitNotices: Record<AccountDeletionExit, string> = {
   deleted: "Your account was deleted. If you sign up again, you get a new, empty account.",
   signedOut: "You're signed out. We couldn't confirm the delete. If you sign in and your data is still there, delete it again under Account.",
@@ -54,7 +57,7 @@ export function App() {
   const [startupScreen, setStartupScreen] = useState<AuthScreen | null>(null);
   const deepLinkUrl = Linking.useURL();
   const startupBudget = useRef<StartupBudget | null>(null);
-  const { start: startLeftoverRevoke, take: takeLeftoverRevoke } = useLeftoverRevoke();
+  const { start: startLeftoverRevoke, signOut, signOutStarted } = useLeftoverRevoke();
   const runStartupCheck = () => {
     const budget = createStartupBudget();
     startupBudget.current = budget;
@@ -86,12 +89,13 @@ export function App() {
       return;
     }
     const showStartupScreen = () => setScreen((current) => (current.name === "loading" ? startupScreen : current));
-    if (!deepLinkUrl) {
+    if (!deepLinkUrl || signedInScreens.has(screen.name)) {
       showStartupScreen();
       return;
     }
     const openedInRunningApp = screen.name !== "loading";
-    const exchange = (signal: AbortSignal) => completeMagicLink(appAuthClient, deepLinkUrl, signal);
+    const signedOut = signOutStarted.current.signal;
+    const exchange = (signal: AbortSignal) => exchangeMagicLink(appAuthClient, appSecureStore, { url: deepLinkUrl, signal, signedOut });
     const startupLink = !openedInRunningApp && startupBudget.current;
     void (startupLink ? startupLink.run(exchange) : withStartupTimeout(exchange))
       .then(async (result) => {
@@ -145,12 +149,7 @@ export function App() {
     void clearBiometricUnlock(appSecureStore).catch(() => undefined);
     setScreen({ name: "signingOut" });
     setServerUnreachable(false);
-    const leftover = takeLeftoverRevoke();
-    leftover?.stop.abort();
-    void withStartupTimeout(async (signal) => {
-      await leftover?.done;
-      await signOut(appAuthClient, appSecureStore, signal);
-    })
+    void signOut()
       .catch(() => undefined)
       .finally(() => setScreen({ name: "email" }));
   };
@@ -219,6 +218,7 @@ export function App() {
         return (
           <CodeEntryScreen
             client={appAuthClient}
+            secureStore={appSecureStore}
             email={screen.email}
             age18Confirmed={screen.age18Confirmed}
             linkError={linkError?.message ?? null}
@@ -239,6 +239,7 @@ export function App() {
         return (
           <EmailEntryScreen
             client={appAuthClient}
+            secureStore={appSecureStore}
             linkError={linkError?.message ?? null}
             linkErrorReason={linkError?.reason ?? null}
             onClearLinkError={() => setLinkError(null)}

@@ -9,7 +9,11 @@ async function createSignedInSession() {
   const secureStore = createMemorySecureStore();
   const client = createMobileAuthClient({ backendUrl: TEST_BACKEND_URL, storage: secureStore, fetchImplementation: backend.fetchImplementation });
   expect(
-    await verifyEmailCode(client, { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true }),
+    await verifyEmailCode(
+      client,
+      { email: "member@example.test", code: "123456", age16Confirmed: true, signUpAttestationAccepted: true },
+      secureStore,
+    ),
   ).toEqual({ ok: true });
   backend.requests.length = 0;
   return { backend, secureStore, session: { client, secureStore, backendUrl: TEST_BACKEND_URL } };

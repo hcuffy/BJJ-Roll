@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -113,6 +113,7 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     unhandledRejections.length = 0;
     process.on("unhandledRejection", recordUnhandled);
@@ -169,7 +170,7 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
     expect(secureStore.items.get("bjjroll_cookie") ?? "").not.toContain(SESSION);
   });
 
-  it("the server never answers: Loading, never the signed-in screen, then signed out at the deadline with the phone cleared", async () => {
+  it("the server never answers: the sign-in screen at once, never the signed-in screen, and the marker kept after the deadline", async () => {
     const screen = await launchApp();
     await signIn(screen);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -178,7 +179,7 @@ describe("Sign-out when SecureStore writes fail (HEN-314)", () => {
 
     await screen.press("Sign out");
     await settle();
-    expect(screen.text()).toContain("Loading");
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
     await vi.advanceTimersByTimeAsync(STARTUP_REQUEST_TIMEOUT_MS);
     await settle();
 

@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -123,6 +123,7 @@ describe("Signing out also ends an older session still waiting to be ended (HEN-
   beforeEach(() => {
     server = createSessionServer();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     deepLinkState.url = null;
     consoleSpies = (["log", "info", "warn", "error", "debug"] as const).map((method) =>
       vi.spyOn(console, method).mockImplementation(() => undefined),

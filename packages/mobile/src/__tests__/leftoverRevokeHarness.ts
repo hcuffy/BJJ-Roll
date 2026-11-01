@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { createElement, type ComponentType } from "react";
 import { expect, vi, type MockInstance } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { renderScreen, settle } from "./screenHarness";
 
 export const FIRST = "session-token-1";
@@ -86,6 +86,7 @@ export function createSessionServer() {
 export function createLeftoverRevokePhone(appClient: AppClientSlot, app: ComponentType) {
   const server = createSessionServer();
   const secureStore = createMemorySecureStore();
+  seedPendingSignIn(secureStore);
   const launchApp = async () => {
     appClient.store = secureStore;
     appClient.current = createMobileAuthClient({

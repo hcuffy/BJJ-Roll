@@ -1,8 +1,16 @@
 import { signUpAttestationVersion } from "@bjj-roll/shared";
 import { vi } from "vitest";
+import { currentMs } from "../dates";
 
 export const TEST_BACKEND_URL = "http://backend.test";
 export const TEST_SESSION_COOKIE = "better-auth.session_token=signed-session-value; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800";
+
+export const TEST_SIGN_IN_VERIFIER = "ab".repeat(32);
+export const PENDING_SIGN_IN_KEY = "bjjroll_pending_sign_in";
+
+export function seedPendingSignIn(store: { readonly setItem: (key: string, value: string) => void }) {
+  store.setItem(PENDING_SIGN_IN_KEY, JSON.stringify({ verifier: TEST_SIGN_IN_VERIFIER, startedAt: currentMs() }));
+}
 
 export interface RecordedRequest {
   readonly url: string;

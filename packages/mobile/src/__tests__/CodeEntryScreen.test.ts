@@ -36,6 +36,7 @@ describe("CodeEntryScreen", () => {
   const renderCodeEntry = (age18Confirmed = false) =>
     renderScreen(
       createElement(CodeEntryScreen, {
+        secureStore: createMemorySecureStore(),
         client,
         email: "member@example.test",
         age18Confirmed,

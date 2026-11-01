@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMobileAuthClient, type MobileAuthClient } from "../auth/authClient";
-import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";
+import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL, seedPendingSignIn } from "./authTestDoubles";
 import { deepLinkState, renderScreen, settle } from "./screenHarness";
 
 const appClient = vi.hoisted(() => ({ current: null as MobileAuthClient | null, store: null as ReturnType<typeof createMemorySecureStore> | null }));
@@ -111,6 +111,7 @@ describe("Loading never hangs when the server host does not answer (HEN-303)", (
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     backend = createFakeBackend();
     secureStore = createMemorySecureStore();
+    seedPendingSignIn(secureStore);
     hangingPaths = new Set();
     hangMode = "untilAborted";
     lateAnswers = [];

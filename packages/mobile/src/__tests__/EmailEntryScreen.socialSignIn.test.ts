@@ -21,6 +21,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
     });
     socialSignIn = {
       client,
+      secureStore: createMemorySecureStore(),
       backendUrl: TEST_BACKEND_URL,
       platform: "android",
       browser: { openAuthSessionAsync: vi.fn(() => Promise.resolve({ type: "success", url: `${SOCIAL_SIGN_IN_CALLBACK_URL}?code=one-time-code` })) },
@@ -31,6 +32,7 @@ describe("EmailEntryScreen with Apple and Google (HEN-239)", () => {
   const renderWith = (socialProviders: readonly SocialProvider[]) =>
     renderScreen(
       createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
         client: socialSignIn.client,
         onCodeSent: () => undefined,
         socialProviders,

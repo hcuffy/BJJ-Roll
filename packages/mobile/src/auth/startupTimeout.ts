@@ -20,6 +20,12 @@ export function createStartupBudget(): StartupBudget {
   return { run: (step) => (controller.signal.aborted ? deadline : Promise.race([step(controller.signal), deadline])) };
 }
 
+export function startupDeadline(): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), STARTUP_REQUEST_TIMEOUT_MS);
+  return controller.signal;
+}
+
 export async function withStartupTimeout<T>(step: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;

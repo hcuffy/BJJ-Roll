@@ -33,10 +33,11 @@ describe("EmailEntryScreen sign-up attestation (HEN-183)", () => {
   const render = async () =>
     await renderScreen(
       createElement(EmailEntryScreen, {
+        secureStore: createMemorySecureStore(),
         client,
         onCodeSent: (email) => codesSent.push(email),
         socialProviders: ["google"],
-        socialSignIn: { client, backendUrl: TEST_BACKEND_URL, platform: "android", browser },
+        socialSignIn: { client, secureStore: createMemorySecureStore(), backendUrl: TEST_BACKEND_URL, platform: "android", browser },
       }),
     );
 
@@ -85,6 +86,11 @@ describe("EmailEntryScreen sign-up attestation (HEN-183)", () => {
     await screen.press("Sign in with Google");
 
     const social = backend.requests.find((request) => request.url.endsWith("/sign-in/social"));
-    expect(social?.body?.additionalData).toEqual({ age16Confirmed: true, age18Confirmed: false, signUpAttestationTextVersionId: VERSION_ID });
+    expect(social?.body?.additionalData).toEqual({
+      age16Confirmed: true,
+      age18Confirmed: false,
+      signUpAttestationTextVersionId: VERSION_ID,
+      verifierHash: expect.any(String) as unknown,
+    });
   });
 });

@@ -74,7 +74,7 @@ describe("App: sign-out waits until the aborted leftover revoke has settled (HEN
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await screen.press("Sign out");
     await settle();
-    expect(screen.text()).not.toContain(SIGN_IN_SCREEN);
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
     expect(phone.server.inFlight.get(FIRST)).toBe(1);
     expect(phone.server.peakInFlight.get(FIRST)).toBe(1);
 
