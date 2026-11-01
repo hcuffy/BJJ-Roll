@@ -44,6 +44,20 @@ const unavailablePool = {
 } as unknown as Pool;
 
 const allowList: readonly string[] = authRoutesAllowList;
+const batchOneAllowList = [
+  "/email-otp/send-verification-otp",
+  "/sign-in/email-otp",
+  "/sign-in/magic-link",
+  "/magic-link/verify",
+  "/magic-link/exchange",
+  "/sign-in/social",
+  "/callback/:id",
+  "/get-session",
+  "/sign-out",
+  "/expo-authorization-proxy",
+  "/ok",
+  "/error",
+];
 const closedRoutes = [
   "/email-otp/reset-password",
   "/request-password-reset",
@@ -101,6 +115,13 @@ describe("B1 auth route allow-list", () => {
       { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: method === "GET" ? undefined : "{}" },
       socketEnvironment("198.51.100.240"),
     );
+
+  it("the allow-list and the served router paths are exactly the 12 Batch 1 paths", () => {
+    const disabledPaths = router.options.disabledPaths ?? [];
+    const servedPaths = routerEndpoints.map((endpoint) => endpoint.path ?? "").filter((routePath) => !disabledPaths.includes(routePath));
+    expect([...allowList].sort()).toEqual([...batchOneAllowList].sort());
+    expect([...new Set(servedPaths)].sort()).toEqual([...batchOneAllowList].sort());
+  });
 
   it("every Better Auth router path is either allow-listed or disabled", () => {
     const routerPaths = routerEndpoints.map((endpoint) => endpoint.path ?? "");
