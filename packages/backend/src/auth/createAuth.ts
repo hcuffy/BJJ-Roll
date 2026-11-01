@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expo } from "@better-auth/expo";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { emailOTP, magicLink } from "better-auth/plugins";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { Pool } from "pg";
@@ -13,6 +13,7 @@ import { createAccountDeletionCodes, type AccountDeletionCodes } from "./account
 import { assertSignUpAgeConfirmation, isAccountCreatingSend, recordPendingAgeAnswers, storeAgeConfirmationInUserTransaction } from "./ageGate.js";
 import { createEncryptedRlsAuthAdapter } from "./authAdapter.js";
 import { createMagicLinkExchangePlugin } from "./authExchangePlugin.js";
+import { isAllowListedAuthPath, withAuthRoutesAllowList } from "./authRoutesAllowList.js";
 import { storeMagicLinkVerifier } from "./signInVerifier.js";
 import {
   DEEP_LINK_SCHEME,
@@ -97,7 +98,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
   const socialProviderConfig = options.socialProviders ?? {};
   const appleSignIn = createAppleSignInCapture(socialProviderConfig.apple, codec, options.logAuthEvent);
 
-  const betterAuthInstance = betterAuth({
+  const betterAuthOptions = withAuthRoutesAllowList({
     baseURL,
     basePath: AUTH_BASE_PATH,
     secret: codec.deriveBetterAuthSecret(),
@@ -130,7 +131,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: false },
     },
     socialProviders: buildSocialProviders(socialProviderConfig, appleSignIn.appleTokenClient?.clientSecretFor),
-    disabledPaths: ["/refresh-token", "/get-access-token", "/account-info"],
     verification: {
       modelName: "verifications",
       additionalFields: {
@@ -162,12 +162,6 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       before: createAuthMiddleware(async (middlewareContext) => {
         assertMagicLinkRedirectParameters(middlewareContext.path, middlewareContext.body, middlewareContext.query);
         await refuseUnsafeAppleIdToken(middlewareContext, options.pool);
-        if (middlewareContext.path === "/email-otp/check-verification-otp" && middlewareContext.request) {
-          const body = middlewareContext.body as Record<string, unknown> | undefined;
-          if (body?.type !== "sign-in") {
-            throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" });
-          }
-        }
         if (middlewareContext.path === "/email-otp/send-verification-otp" || middlewareContext.path === "/sign-in/magic-link") {
           const body = middlewareContext.body as Record<string, unknown> | undefined;
           if (middlewareContext.path === "/email-otp/send-verification-otp" && middlewareContext.request && body?.type !== "sign-in") {
@@ -211,6 +205,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       createMagicLinkExchangePlugin({ pool: options.pool, codec }),
     ],
   });
+  const betterAuthInstance = betterAuth(betterAuthOptions);
 
   return {
     codec,
@@ -223,6 +218,9 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     telemetry: betterAuthTelemetryDisabledConfig,
     revokeAppleRefreshToken: async (sealedRefreshToken) => await revokeSealedAppleRefreshToken(appleSignIn, sealedRefreshToken),
     async handler(rawRequest: Request, connection?: AuthConnectionInfo): Promise<Response> {
+      if (!isAllowListedAuthPath(new URL(rawRequest.url).pathname)) {
+        return new Response("Not Found", { status: 404 });
+      }
       const headers = new Headers(rawRequest.headers);
       const clientIp = resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders);
       for (const headerName of [...trustableProxyIpHeaders, CLIENT_IP_HEADER]) {
@@ -240,8 +238,11 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
       try {
         const session = await betterAuthInstance.api.getSession({ headers: requestHeaders });
         return session?.user.id ?? null;
-      } catch {
-        return null;
+      } catch (error) {
+        if (isAPIError(error) && error.status === "UNAUTHORIZED") {
+          return null;
+        }
+        throw error;
       }
     },
   };

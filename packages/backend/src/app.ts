@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { Kysely } from "kysely";
 import { Pool } from "pg";
 import { mountAccountRoutes } from "./accountRoutes.js";
@@ -6,6 +7,7 @@ import { mountAuthRoutes, readSocketAddress } from "./auth/authRoutes.js";
 import { createAuth, type AuthInstance, type CreateAuthOptions } from "./auth/createAuth.js";
 import { createDatabase } from "./database/connection.js";
 import type { BjjRollDatabase } from "./database/schema.js";
+import { readSchemaVersion } from "./database/schemaVersion.js";
 import { LettermintEmailSender, PgBossEmailQueue } from "./email/index.js";
 import { mountHandleRoutes } from "./handleRoutes.js";
 import { loadServerConfig, type ServerConfig, type ServerEnvironment } from "./serverConfig.js";
@@ -36,7 +38,13 @@ export function createApp(options?: CreateAppOptions): Hono {
     const authInstance = "handler" in options.auth ? options.auth : createAuth(options.auth);
     mountAuthRoutes(honoApp, authInstance);
     if (options.database) {
-      const resolveAuthenticatedUserId = (context: Context) => authInstance.resolveSessionUserId(context.req.raw.headers);
+      const resolveAuthenticatedUserId = async (context: Context) => {
+        try {
+          return await authInstance.resolveSessionUserId(context.req.raw.headers);
+        } catch {
+          throw new HTTPException(503, { res: Response.json({ error: "unavailable" }, { status: 503 }) });
+        }
+      };
       mountHandleRoutes(honoApp, { db: options.database, resolveAuthenticatedUserId });
       mountAccountRoutes(honoApp, {
         db: options.database,
@@ -61,9 +69,27 @@ export interface ServerApp {
   readonly emailQueue: PgBossEmailQueue;
 }
 
-export function createAppFromEnvironment(env: ServerEnvironment = process.env): ServerApp {
+const safeErrorCodePattern = /^[A-Z0-9_]{1,32}$/u;
+
+function safeErrorCode(error: unknown): string {
+  const code: unknown = error instanceof Object && "code" in error ? error.code : undefined;
+  return typeof code === "string" && safeErrorCodePattern.test(code) ? code : "unknown";
+}
+
+export async function createAppFromEnvironment(env: ServerEnvironment = process.env): Promise<ServerApp> {
   const config = loadServerConfig(env);
   const pool = new Pool({ connectionString: config.databaseUrl });
+  const database = createDatabase(pool);
+  const schemaVersion = await readSchemaVersion(database).catch(async (error: unknown) => {
+    console.error(JSON.stringify({ event: "db_unreachable", code: safeErrorCode(error) }));
+    await pool.end();
+    return process.exit(1);
+  });
+  if (schemaVersion.latestApplied !== schemaVersion.newestBundled) {
+    console.error(JSON.stringify({ event: "schema_out_of_date", ...schemaVersion }));
+    await pool.end();
+    process.exit(1);
+  }
   const emailSender = new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress });
   const emailQueue = new PgBossEmailQueue({ connectionString: config.databaseUrl, emailSender, keyring: config.keyring });
   const app = createApp({
@@ -76,7 +102,7 @@ export function createAppFromEnvironment(env: ServerEnvironment = process.env): 
       emailSender,
       emailQueue,
     },
-    database: createDatabase(pool),
+    database,
   });
   return { app, config, pool, emailQueue };
 }

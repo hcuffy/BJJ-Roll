@@ -6,6 +6,8 @@
   "main": "dist/app.js",
   "types": "dist/app.d.ts",
   "scripts": {
+    "build": "tsc -b && rm -rf dist/database/migrations && cp -R src/database/migrations dist/database/",
+    "migrate": "node dist/database/migrator.js",
     "start": "node dist/server.js",
     "test": "vitest run --reporter=verbose"
   },

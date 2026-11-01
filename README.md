@@ -46,6 +46,7 @@ Requires Node 24 and pnpm 11.21.0 installed directly (see `AGENTS.md`).
 ```sh
 pnpm install
 pnpm build
+pnpm --filter @bjj-roll/backend migrate   # before every start or deploy; needs DATABASE_URL
 pnpm --filter @bjj-roll/backend start
 curl http://localhost:3000/health
 # {"status":"ok"}
