@@ -93,6 +93,7 @@ describe("App biometric unlock at launch: read errors and magic links (HEN-288, 
   it("magic link while locked: signs in AND lock screen still shows when biometric on", async () => {
     await firstSignIn("Turn on");
 
+    seedPendingSignIn(secureStore);
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     localAuthenticationFake.answers.push("user_cancel");
     const linkLaunch = await launchApp();

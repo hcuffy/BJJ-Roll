@@ -152,6 +152,7 @@ describe("a magic-link sign-in that lands on the biometric lock still ends the o
     server.state.signOutEndpointErrors = false;
     const signOutsBefore = server.signOutRequests.length;
     localAuthenticationFake.answers.push("user_cancel");
+    seedPendingSignIn(secureStore);
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     const linked = await launchApp();
 

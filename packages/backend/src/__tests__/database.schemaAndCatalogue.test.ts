@@ -34,6 +34,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       { name: "003_age_confirmation_consent_records" },
       { name: "004_apple_nonce_cleanup" },
       { name: "005_signup_attestation_consent_records" },
+      { name: "006_deletion_links_and_prune" },
     ]);
     expect(betterAuthTelemetryDisabledConfig).toEqual({ enabled: false });
   });
@@ -65,6 +66,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       { table_name: "users", column_name: "email_ciphertext" },
       { table_name: "users", column_name: "email_hash" },
       { table_name: "users", column_name: "email_verified" },
+      { table_name: "verifications", column_name: "email_hash" },
     ]);
   });
 

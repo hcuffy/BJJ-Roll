@@ -8,6 +8,7 @@ export interface SessionKeyStore {
 }
 
 export const PENDING_SIGN_OUT_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_out`;
+export const PENDING_SIGN_IN_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_in`;
 export const PENDING_WITHOUT_SESSION_COOKIE = "1";
 
 export const SESSION_MAX_LIFETIME_DAYS = 90;
@@ -122,6 +123,9 @@ export async function signInReplacingSession<Result extends { readonly ok: boole
 ): Promise<Result> {
   const replacedSessionCookie = await readSessionCookie(client);
   const result = await signIn();
+  if (result.ok) {
+    await secureStore.deleteItemAsync(PENDING_SIGN_IN_KEY).catch(() => undefined);
+  }
   if (result.ok && replacedSessionCookie !== null && replacedSessionCookie !== (await readSessionCookie(client))) {
     await addPendingSignOut(secureStore, replacedSessionCookie).catch(() => undefined);
   }

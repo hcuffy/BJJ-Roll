@@ -86,8 +86,8 @@ Run from the repo root with Node 24 and pnpm 11.21.0. Set every variable in your
 1. On the start screen, tap **I am 16 or older**, type your email, and tap **Email me a sign-in link instead**.
 2. Expect the "Check your email" card: "We sent a sign-in link to <your email>. Open it on this phone." with **Resend link** and **Use a different email**.
 3. Open the link on the same device, either from the mail app or with `adb shell am start -a android.intent.action.VIEW -d "<link from the email>"`.
-4. The browser hands over to the app (`bjjroll://auth?code=…`). Expect "You are signed in".
-5. Open the same link again. Expect a red card above the title: "This sign-in link has expired or was already used. Send a new one." and no sign-in.
+4. The browser shows **Continue signing in**. Tap **Continue**; the app opens. Expect 'You are signed in'.
+5. Sign out, then open the same link again and tap Continue. Expect the red card 'This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.' and no sign-in.
 
 ### 6. Sign-out and restart (AC5)
 

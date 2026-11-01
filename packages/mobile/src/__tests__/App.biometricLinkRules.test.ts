@@ -104,6 +104,7 @@ describe("App: magic links and the biometric lock after the #83/#84 merge (HEN-2
     const exchangesBefore = exchanges();
     const promptsBefore = localAuthenticationFake.promptCount;
 
+    seedPendingSignIn(secureStore);
     deepLinkState.url = GOOD_LINK;
     localAuthenticationFake.answers.push("user_cancel");
     const linkLaunch = await launchApp();

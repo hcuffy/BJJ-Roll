@@ -28,6 +28,8 @@ export function openAppleRefreshToken(codec: AuthCryptoCodec, sealed: string): A
   return { refreshToken: parsed.refreshToken, clientId: typeof parsed.clientId === "string" ? parsed.clientId : null };
 }
 
+const APPLE_REQUEST_TIMEOUT_MS = 5000;
+
 export interface AppleTokenClient {
   readonly config: AppleProviderConfig;
   readonly clientSecretFor: (clientId: string) => string;
@@ -44,6 +46,7 @@ export async function exchangeNativeAppleAuthorizationCode(client: AppleTokenCli
       code: authorizationCode,
       grant_type: "authorization_code",
     }),
+    signal: AbortSignal.timeout(APPLE_REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Apple token exchange failed with status ${response.status}`);
@@ -63,6 +66,7 @@ export async function revokeAppleRefreshToken(client: AppleTokenClient, token: A
       token: token.refreshToken,
       token_type_hint: "refresh_token",
     }),
+    signal: AbortSignal.timeout(APPLE_REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Apple revoke failed with status ${response.status}`);

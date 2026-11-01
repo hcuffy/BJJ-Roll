@@ -198,7 +198,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
         expiresIn: MAGIC_LINK_EXPIRY_SECONDS,
         storeToken: { type: "custom-hasher", hash: (token) => Promise.resolve(codec.hashMagicLinkToken(token)) },
         sendMagicLink: async ({ email, url, token, metadata }) => {
-          await storeMagicLinkVerifier(options.pool, codec, { token, metadata });
+          await storeMagicLinkVerifier(options.pool, codec, { email, token, metadata });
           await options.emailQueue.enqueue({ kind: "magic_link", input: { to: email, url, expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES } });
         },
       }),
@@ -211,7 +211,7 @@ export function createAuth(options: CreateAuthOptions): AuthInstance {
     codec,
     keyring,
     accountDeletionCodes: createAccountDeletionCodes(betterAuthInstance.api),
-    accountDeletionAttempts: createAccountDeletionAttempts(options.pool),
+    accountDeletionAttempts: createAccountDeletionAttempts(options.pool, codec),
     resolveClientIp: (headers, connection) => resolveClientIpAddress(headers, connection?.remoteAddress, trustedProxyIpHeaders),
     emailSender: options.emailSender,
     emailQueue: options.emailQueue,

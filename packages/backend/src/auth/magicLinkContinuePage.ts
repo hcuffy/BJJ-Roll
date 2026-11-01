@@ -7,14 +7,34 @@ const magicLinkContinueCopy = {
   ignoreNote: "Didn't ask to sign in? Close this page. Nothing happens unless you tap Continue.",
 } as const;
 
-const continuePageHtml = `<!doctype html>
+const magicLinkInvalidCopy = {
+  pageTitle: "This BJJ Roll sign-in link doesn't work",
+  heading: "This link doesn't work",
+  body: "Open BJJ Roll and send a new sign-in link.",
+} as const;
+
+const magicLinkTroubleCopy = {
+  pageTitle: "Something went wrong with BJJ Roll sign-in",
+  heading: "Something went wrong",
+  body: "Open BJJ Roll and try again in a minute.",
+} as const;
+
+interface BrowserPageContent {
+  readonly pageTitle: string;
+  readonly heading: string;
+  readonly body: string;
+  readonly extraHtml?: string;
+}
+
+function browserPageHtml(content: BrowserPageContent): string {
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex">
-<title>${magicLinkContinueCopy.pageTitle}</title>
+<title>${content.pageTitle}</title>
 <style>
 body {
   font-family: system-ui, sans-serif; margin: 0; padding: 48px 24px; max-width: 480px; margin-inline: auto;
@@ -31,21 +51,32 @@ p.note { color: #A0A3A0; font-size: 0.9rem; }
 </head>
 <body>
 <main>
-<h1>${magicLinkContinueCopy.heading}</h1>
-<p>${magicLinkContinueCopy.body}</p>
-<form method="post">
+<h1>${content.heading}</h1>
+<p>${content.body}</p>
+${content.extraHtml ?? ""}</main>
+</body>
+</html>
+`;
+}
+
+const continuePageHtml = browserPageHtml({
+  pageTitle: magicLinkContinueCopy.pageTitle,
+  heading: magicLinkContinueCopy.heading,
+  body: magicLinkContinueCopy.body,
+  extraHtml: `<form method="post">
 <button type="submit">${magicLinkContinueCopy.button}</button>
 </form>
 <p class="note">${magicLinkContinueCopy.appDidNotOpenNote}</p>
 <p class="note">${magicLinkContinueCopy.ignoreNote}</p>
-</main>
-</body>
-</html>
-`;
+`,
+});
 
-export function magicLinkContinuePage(): Response {
-  return new Response(continuePageHtml, {
-    status: 200,
+const invalidLinkPageHtml = browserPageHtml(magicLinkInvalidCopy);
+const troublePageHtml = browserPageHtml(magicLinkTroubleCopy);
+
+function browserPageResponse(html: string, status: number): Response {
+  return new Response(html, {
+    status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -54,4 +85,16 @@ export function magicLinkContinuePage(): Response {
       "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
     },
   });
+}
+
+export function magicLinkContinuePage(): Response {
+  return browserPageResponse(continuePageHtml, 200);
+}
+
+export function magicLinkInvalidPage(): Response {
+  return browserPageResponse(invalidLinkPageHtml, 400);
+}
+
+export function magicLinkTroublePage(status: number): Response {
+  return browserPageResponse(troublePageHtml, status);
 }

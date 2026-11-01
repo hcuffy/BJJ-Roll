@@ -12,7 +12,8 @@ export const accountDeletionCascadeMap: readonly AccountDeletionCascadeStep[] = 
   {
     table: "verifications",
     mechanism: "before_delete_trigger_and_fk_cascade",
-    description: "Deletes OTP and verification rows linked by user_id or exact email_hash identifier.",
+    description:
+      "Deletes OTP, magic-link, device-verifier, exchange and pending sign-up rows linked by user_id, email_hash or exact email_hash identifier.",
   },
   {
     table: "sessions",
@@ -81,6 +82,7 @@ export function cascadeDeleteUserAccount(db: Kysely<BjjRollDatabase>, userId: st
       .where((expressionBuilder) =>
         expressionBuilder.or([
           expressionBuilder("userId", "=", userId),
+          expressionBuilder("emailHash", "=", existingUser.emailHash),
           expressionBuilder.and([expressionBuilder("userId", "is", null), expressionBuilder("identifier", "in", expectedIdentifiers)]),
         ]),
       )

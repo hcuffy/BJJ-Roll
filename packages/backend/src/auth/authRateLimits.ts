@@ -9,6 +9,7 @@ import {
 } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { currentMs } from "../dates.js";
+import { withPoolTransaction } from "../database/connection.js";
 
 export interface RateLimitRuleConfig {
   readonly window: number;
@@ -58,49 +59,33 @@ export function emailRateLimitKey(emailHmac: string): string {
   return `email:${emailHmac}`;
 }
 
-export async function incrementRateLimitCounter(pool: Pool, key: string, windowSeconds: number): Promise<number> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+export function incrementRateLimitCounter(pool: Pool, key: string, windowSeconds: number): Promise<number> {
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     const result = await client.query<{ count: number }>(
       `INSERT INTO public.rate_limits (id, key, count, last_request)
-       VALUES ($1, $2, 1, $3)
-       ON CONFLICT (key) DO UPDATE SET
-         count = CASE
-           WHEN $3 - public.rate_limits.last_request >= $4 THEN 1
-           ELSE public.rate_limits.count + 1
-         END,
-         last_request = CASE
-           WHEN $3 - public.rate_limits.last_request >= $4 THEN $3
-           ELSE public.rate_limits.last_request
-         END
-       RETURNING count`,
+         VALUES ($1, $2, 1, $3)
+         ON CONFLICT (key) DO UPDATE SET
+           count = CASE
+             WHEN $3 - public.rate_limits.last_request >= $4 THEN 1
+             ELSE public.rate_limits.count + 1
+           END,
+           last_request = CASE
+             WHEN $3 - public.rate_limits.last_request >= $4 THEN $3
+             ELSE public.rate_limits.last_request
+           END
+         RETURNING count`,
       [randomUUID(), key, currentMs(), windowSeconds * 1000],
     );
-    await client.query("COMMIT");
     return result.rows[0]?.count ?? 1;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
-export async function resetRateLimitCounter(pool: Pool, key: string): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+export function resetRateLimitCounter(pool: Pool, key: string): Promise<void> {
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("DELETE FROM public.rate_limits WHERE key = $1", [key]);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function enforcePerEmailSendRateLimit(pool: Pool, codec: AuthCryptoCodec, rawEmail: string): Promise<void> {

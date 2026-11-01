@@ -48,6 +48,7 @@ export interface AuthCryptoCodec {
   hashExchangeCode(code: string): string;
   hashSessionToken(token: string): string;
   hashEmailQueueJobKey(jobKey: string): string;
+  hashClientIp(clientIp: string): string;
 }
 
 const hexKeyPattern = /^[0-9a-fA-F]{64}$/u;
@@ -216,6 +217,9 @@ export function createAuthCryptoCodec(keyringOrConfig: Keyring | AuthSecretConfi
     },
     hashEmailQueueJobKey(jobKey: string): string {
       return computeDomainSeparatedHmac(keyring, "email-queue-job-v1", jobKey);
+    },
+    hashClientIp(clientIp: string): string {
+      return computeDomainSeparatedHmac(keyring, "client-ip-v1", clientIp);
     },
   };
 }

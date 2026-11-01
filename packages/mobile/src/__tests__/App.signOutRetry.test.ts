@@ -189,6 +189,7 @@ describe("App finishes a failed sign-out on the next launch (HEN-286)", () => {
       await screen.press("Sign out");
       expect(screen.text()).toContain(SIGN_IN_SCREEN);
       signOutEndpointDown = false;
+      seedPendingSignIn(secureStore);
       return screen;
     };
 

@@ -24,10 +24,10 @@ type Screen = Awaited<ReturnType<typeof renderScreen>>;
 const SIGN_IN_SCREEN = "Sign in to BJJ Roll";
 const SIGNED_IN_SCREEN = "You are signed in";
 const EXPIRED_MESSAGE = "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.";
-const NOT_STARTED_NOTE = "This sign-in link wasn't started on this phone. Enter your email below to get a new one.";
+const NOT_STARTED_NOTE = "This sign-in link can't be used on this phone. Enter your email below to get a new one.";
 const CODE_SCREEN_EXPIRED =
   "This sign-in link has expired, was already used, or was requested on another phone. Enter the code from your email, or send a new one.";
-const CODE_SCREEN_NOT_STARTED = "This sign-in link wasn't started on this phone. Enter the code from your email, or send a new one.";
+const CODE_SCREEN_NOT_STARTED = "This sign-in link can't be used on this phone. Enter the code from your email, or send a new one.";
 const WRONG_CODE = "That code didn't work. Check the email or send a new code.";
 const REJECTED_LINK = "bjjroll://auth?r=link_invalid";
 const CODE_LINK = "bjjroll://auth?code=exchange-code-1";
@@ -143,6 +143,42 @@ describe("App reads a sign-in link before it asks for a sign-in started on this 
     expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
     expect(redTexts(screen)).toEqual([]);
     expect(exchanges()).toHaveLength(1);
+  });
+
+  it("after sign-out, a link that was already used shows the red card and exchanges nothing more", async () => {
+    const screen = await startApp();
+    await screen.pressRole("checkbox");
+    await screen.press(SIGN_UP_ATTESTATION_LABEL);
+    seedPendingSignIn(secureStore);
+    await openLink(screen, CODE_LINK);
+    expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    await screen.press("Sign out");
+    await settle();
+    const exchangesBeforeOldLink = exchanges().length;
+
+    await openLink(screen, REJECTED_LINK);
+
+    expectRedCard(screen, EXPIRED_MESSAGE);
+    expect(screen.text()).not.toContain(NOT_STARTED_NOTE);
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
+    expect(exchanges()).toHaveLength(exchangesBeforeOldLink);
+  });
+
+  it("after sign-out, an older link that was never used shows the grey note and is never exchanged", async () => {
+    const screen = await startOnCodeScreen();
+    seedPendingSignIn(secureStore);
+    await screen.changeText("6-digit code", "123456");
+    await settle();
+    expect(screen.text()).toContain(SIGNED_IN_SCREEN);
+    await screen.press("Sign out");
+    await settle();
+
+    await openLink(screen, CODE_LINK);
+
+    expectGreyNote(screen, NOT_STARTED_NOTE);
+    expect(screen.text()).not.toContain(EXPIRED_MESSAGE);
+    expect(screen.text()).toContain(SIGN_IN_SCREEN);
+    expect(exchanges()).toEqual([]);
   });
 
   it("an expired or used link on the code screen shows the code screen copy", async () => {

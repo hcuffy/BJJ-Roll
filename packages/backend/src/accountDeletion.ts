@@ -44,18 +44,35 @@ export async function handleSendAccountDeletionCode(context: Context, options: A
   return context.json(response, 200);
 }
 
+async function queueAppleRevokeRetry(options: AccountRoutesOptions, userId: string, sealedRefreshToken: string): Promise<void> {
+  try {
+    if (!options.appleRevokeRetries) {
+      throw new Error("No Apple revoke retry queue");
+    }
+    await options.appleRevokeRetries.enqueue(sealedRefreshToken);
+    options.logAccountEvent("account_apple_revoke_queued", userId);
+  } catch {
+    options.logAccountEvent("account_apple_revoke_not_queued", userId);
+  }
+}
+
 async function revokeAppleSignIn(options: AccountRoutesOptions, userId: string): Promise<void> {
   const rows = await withUserContext(options.db, userId, (transaction) =>
     transaction.selectFrom("accounts").select(["refreshToken"]).where("userId", "=", userId).where("providerId", "=", "apple").execute(),
   );
-  for (const row of rows) {
+  for (const { refreshToken } of rows) {
+    if (!refreshToken) {
+      options.logAccountEvent("account_apple_revoke_skipped", userId, { reason: "no_refresh_token" });
+      continue;
+    }
     try {
-      if (!row.refreshToken || !options.revokeAppleRefreshToken) {
-        throw new Error("No Apple refresh token to revoke");
+      if (!options.revokeAppleRefreshToken) {
+        throw new Error("Apple sign-in is not configured");
       }
-      await options.revokeAppleRefreshToken(row.refreshToken);
+      await options.revokeAppleRefreshToken(refreshToken);
     } catch {
       options.logAccountEvent("account_apple_revoke_failed", userId);
+      await queueAppleRevokeRetry(options, userId, refreshToken);
     }
   }
 }

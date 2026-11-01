@@ -14,6 +14,7 @@ import { MAGIC_LINK_EXPIRY_SECONDS, OTP_EXPIRY_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { applyScopeSettings, emptyScopeSettings, type AuthTransaction } from "./authSessionScope.js";
 import { currentDate, secondsAfter } from "../dates.js";
+import { withPoolTransaction } from "../database/connection.js";
 
 const PENDING_IDENTIFIER_PREFIX = "age-confirmation-";
 const PENDING_EXPIRY_SECONDS = Math.max(OTP_EXPIRY_SECONDS, MAGIC_LINK_EXPIRY_SECONDS);
@@ -70,28 +71,20 @@ function pendingIdentifier(codec: AuthCryptoCodec, email: string): string {
   return `${PENDING_IDENTIFIER_PREFIX}${codec.computeEmailHmac(email)}`;
 }
 
-async function withAppRole<Result>(
+function withAppRole<Result>(
   pool: Pool,
   settings: { verificationIdentifier: string; userId?: string },
   operation: (client: PoolClient) => Promise<Result>,
 ): Promise<Result> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("SELECT set_config('app.verification_identifier', $1, true), set_config('app.user_id', $2, true)", [
       settings.verificationIdentifier,
       settings.userId ?? "",
     ]);
     const result = await operation(client);
-    await client.query("COMMIT");
     return result;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec, body: Record<string, unknown> & { email: string }): Promise<void> {
@@ -101,8 +94,8 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
     await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
     const now = currentDate();
     await client.query(
-      `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
-       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $5, $6, $6)`,
+      `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)
+       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $2, $5, $6, $6)`,
       [
         randomUUID(),
         codec.computeEmailHmac(body.email),

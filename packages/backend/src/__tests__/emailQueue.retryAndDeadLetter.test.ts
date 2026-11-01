@@ -232,7 +232,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-284 email queue retr
         event: "email_dead_lettered",
         jobId: expect.any(String) as unknown,
         template: "unknown",
-        errorClass: "unknown",
+        errorClass: "malformed_job",
         attempts: 1,
       });
       expect(emailSender.tries).toEqual([]);

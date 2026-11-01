@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/signInActions";
+import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/pendingSignIn";
 import { textStyles } from "../theme/tokens";
 import { AuthButton } from "./AuthButton";
 import { AuthScreenLayout } from "./AuthScreenLayout";

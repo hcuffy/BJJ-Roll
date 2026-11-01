@@ -3,43 +3,41 @@ import type { Pool, PoolClient } from "pg";
 import { MAGIC_LINK_EXPIRY_SECONDS } from "./authLimits.js";
 import type { AuthCryptoCodec } from "./authSecrets.js";
 import { currentDate, currentMs, secondsAfter, toMs } from "../dates.js";
+import { withPoolTransaction } from "../database/connection.js";
 
 const VERIFIER_IDENTIFIER_PREFIX = "magic-link-verifier:";
 const verifierHashPattern = /^[0-9a-f]{64}$/u;
 
-export async function withVerificationScope<Result>(
+export function withVerificationScope<Result>(
   pool: Pool,
   scope: { readonly identifier: string; readonly userId?: string },
   operation: (client: PoolClient) => Promise<Result>,
 ): Promise<Result> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  return withPoolTransaction(pool, async (client) => {
     await client.query("SET LOCAL ROLE bjj_app");
     await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.verification_identifier', $2, true)", [
       scope.userId ?? "",
       scope.identifier,
     ]);
     const result = await operation(client);
-    await client.query("COMMIT");
     return result;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
-export async function insertVerification(
-  client: PoolClient,
-  row: { readonly identifier: string; readonly userId: string | null; readonly value: string; readonly lifetimeSeconds: number },
-): Promise<void> {
+export interface VerificationInsert {
+  readonly identifier: string;
+  readonly userId: string | null;
+  readonly value: string;
+  readonly lifetimeSeconds: number;
+  readonly emailHash?: string;
+}
+
+export async function insertVerification(client: PoolClient, row: VerificationInsert): Promise<void> {
   const now = currentDate();
   await client.query(
-    `INSERT INTO public.verifications (id, user_id, identifier, value, expires_at, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [randomUUID(), row.userId, row.identifier, row.value, secondsAfter(now, row.lifetimeSeconds), now, now],
+    `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [randomUUID(), row.userId, row.identifier, row.value, row.emailHash ?? null, secondsAfter(now, row.lifetimeSeconds), now, now],
   );
 }
 
@@ -55,7 +53,7 @@ function magicLinkVerifierIdentifier(codec: AuthCryptoCodec, magicLinkToken: str
 export async function storeMagicLinkVerifier(
   pool: Pool,
   codec: AuthCryptoCodec,
-  magicLink: { readonly token: string; readonly metadata: unknown },
+  magicLink: { readonly email: string; readonly token: string; readonly metadata: unknown },
 ): Promise<void> {
   const verifierHash = readVerifierHash(magicLink.metadata);
   if (verifierHash === null) {
@@ -68,6 +66,7 @@ export async function storeMagicLinkVerifier(
       userId: null,
       value: codec.encryptVerificationPayload(JSON.stringify({ verifierHash })),
       lifetimeSeconds: MAGIC_LINK_EXPIRY_SECONDS,
+      emailHash: codec.computeEmailHmac(magicLink.email),
     });
   });
 }
