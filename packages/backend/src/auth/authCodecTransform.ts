@@ -140,6 +140,8 @@ export function encodeCreateData(
     }
   } else if (modelKey === "account") {
     encodeAccountTokens(encoded, codec);
+  } else if (modelKey === "session") {
+    delete encoded.ipAddress;
   } else if (modelKey === "rateLimit" && typeof encoded.key === "string") {
     encoded.key = encodeRateLimitKey(encoded.key, codec);
   }
@@ -168,6 +170,8 @@ export function encodeUpdateData(model: string, update: Record<string, unknown>,
     }
   } else if (modelKey === "account") {
     encodeAccountTokens(encoded, codec);
+  } else if (modelKey === "session") {
+    delete encoded.ipAddress;
   }
   return encoded;
 }
@@ -216,7 +220,7 @@ export function decodeDatabaseRow(
     delete nextRow.email_ciphertext;
     delete nextRow.emailHash;
     delete nextRow.email_hash;
-  } else if (modelKey === "session" && nextRow.user && typeof nextRow.user === "object") {
+  } else if ((modelKey === "session" || modelKey === "account") && nextRow.user && typeof nextRow.user === "object") {
     nextRow.user = decodeDatabaseRow("user", nextRow.user as Record<string, unknown>, codec);
   } else if (modelKey === "verification" && typeof nextRow.value === "string" && nextRow.value.startsWith("v")) {
     nextRow.value = codec.decryptVerificationPayload(nextRow.value);

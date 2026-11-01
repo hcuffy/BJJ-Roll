@@ -91,11 +91,20 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
   const identifier = pendingIdentifier(codec, body.email);
   const answers = readSignUpAnswers(body);
   await withAppRole(pool, { verificationIdentifier: identifier }, async (client) => {
-    await client.query("DELETE FROM public.verifications WHERE identifier = $1", [identifier]);
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [identifier]);
+    const stored = await selectPendingAgeAnswers(client, codec, identifier);
+    const keepStored = stored !== null && isAccepted(stored) && !sameAnswers(stored, answers);
     const now = currentDate();
     await client.query(
       `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)
-       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $2, $5, $6, $6)`,
+       VALUES ($1, public.app_user_id_by_email_hmac($2), $3, $4, $2, $5, $6, $6)
+       ON CONFLICT (identifier) WHERE starts_with(identifier, 'age-confirmation-') DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         value = EXCLUDED.value,
+         email_hash = EXCLUDED.email_hash,
+         expires_at = EXCLUDED.expires_at,
+         updated_at = EXCLUDED.updated_at
+       WHERE NOT $7::boolean`,
       [
         randomUUID(),
         codec.computeEmailHmac(body.email),
@@ -103,9 +112,22 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
         codec.encryptVerificationPayload(JSON.stringify(answers)),
         secondsAfter(now, PENDING_EXPIRY_SECONDS),
         now,
+        keepStored,
       ],
     );
   });
+}
+
+function isAccepted(answers: PendingSignUpAnswers): boolean {
+  return answers.age16Confirmed && answers.signUpAttestationTextVersionId !== null;
+}
+
+function sameAnswers(left: PendingSignUpAnswers, right: PendingSignUpAnswers): boolean {
+  return (
+    left.age16Confirmed === right.age16Confirmed &&
+    left.age18Confirmed === right.age18Confirmed &&
+    left.signUpAttestationTextVersionId === right.signUpAttestationTextVersionId
+  );
 }
 
 function decodePendingAgeAnswers(codec: AuthCryptoCodec, value: string | undefined): PendingSignUpAnswers | null {

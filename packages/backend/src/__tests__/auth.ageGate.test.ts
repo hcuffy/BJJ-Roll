@@ -116,12 +116,49 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
       expect(await consentRowsFor(user.userId)).toHaveLength(1);
     });
 
-    it("the latest send wins: an unticked resend withdraws an earlier tick for the same email", async () => {
+    it("a still-valid ticked answer is not replaced by a different resend for the same email", async () => {
       const email = "ticked.then.unticked@example.com";
       expect((await sendOtp(email, "198.51.100.184", { age16Confirmed: true })).status).toBe(200);
       expect((await sendOtp(email, "198.51.100.184", {})).status).toBe(200);
-      const refused = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.184" });
-      expect(refused.status).toBe(400);
+      const signedIn = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.184" });
+      expect(signedIn.status).toBe(200);
+    });
+
+    it("concurrent sends for one email leave one pending age answer row", async () => {
+      const email = "concurrent.sends@example.com";
+      const identifier = `age-confirmation-${current().codec.computeEmailHmac(email)}`;
+      const responses = await Promise.all(
+        [1, 2, 3].map((index) => sendOtp(email, `198.51.100.${String(190 + index)}`, { age16Confirmed: true, age18Confirmed: index % 2 === 0 })),
+      );
+      expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+      const rows = await current().pool.query<{ count: number }>("SELECT count(*)::int AS count FROM public.verifications WHERE identifier = $1", [
+        identifier,
+      ]);
+      expect(rows.rows[0]?.count).toBe(1);
+    });
+
+    it("a send waits for the per-email lock before it writes the pending age answer", async () => {
+      const email = "locked.send@example.com";
+      const identifier = `age-confirmation-${current().codec.computeEmailHmac(email)}`;
+      const holder = await current().pool.connect();
+      let settled = false;
+      try {
+        await holder.query("BEGIN");
+        await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [identifier]);
+        const pending = sendOtp(email, "198.51.100.195", { age16Confirmed: true }).finally(() => {
+          settled = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(settled).toBe(false);
+        await holder.query("COMMIT");
+        expect((await pending).status).toBe(200);
+      } finally {
+        holder.release();
+      }
+      const rows = await current().pool.query<{ count: number }>("SELECT count(*)::int AS count FROM public.verifications WHERE identifier = $1", [
+        identifier,
+      ]);
+      expect(rows.rows[0]?.count).toBe(1);
     });
   });
 

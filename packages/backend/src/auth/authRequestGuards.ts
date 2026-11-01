@@ -17,7 +17,7 @@ export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
 export const CLIENT_IP_HEADER = "x-bjj-client-ip";
 const UNKNOWN_CLIENT_IP = "0.0.0.0";
 export const AUTH_BASE_PATH = "/api/auth";
-const MAGIC_LINK_VERIFY_PATH = `${AUTH_BASE_PATH}/magic-link/verify`;
+export const MAGIC_LINK_VERIFY_PATH = `${AUTH_BASE_PATH}/magic-link/verify`;
 const MAGIC_LINK_SIGN_IN_PATH = `${AUTH_BASE_PATH}/sign-in/magic-link`;
 
 function normalizeIpAddress(candidate: string | undefined | null): string | null {
@@ -149,7 +149,7 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
   if (!isAllowedDeepLinkCallbackUrl(location)) {
-    return invalidCallbackResponse(["Location"]);
+    return magicLinkTroublePage(400);
   }
   const redirectUrl = new URL(location);
   redirectUrl.searchParams.delete("cookie");
