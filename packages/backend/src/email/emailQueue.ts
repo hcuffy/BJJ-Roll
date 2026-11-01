@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Keyring } from "@bjj-roll/shared/encryption";
 import { PgBoss, type JobWithMetadata } from "pg-boss";
+import { z } from "zod";
 import { createAuthCryptoCodec, type AuthCryptoCodec } from "../auth/authSecrets.js";
 import {
   EmailSendError,
@@ -30,13 +31,21 @@ export interface EmailQueue {
   enqueue(email: QueuedEmail, options?: EnqueueEmailOptions): Promise<void>;
 }
 
-export interface EmailQueueLogLine {
+interface EmailDeadLetteredLine {
   readonly event: "email_dead_lettered";
   readonly jobId: string;
   readonly template: QueuedEmail["kind"] | "unknown";
-  readonly errorClass: EmailSendError["reason"] | "unknown";
+  readonly errorClass: EmailSendError["reason"] | "malformed_job" | "unknown";
   readonly attempts: number;
 }
+
+interface EmailJobDeleteFailedLine {
+  readonly event: "email_job_delete_failed";
+  readonly jobId: string;
+  readonly template: QueuedEmail["kind"] | "unknown";
+}
+
+export type EmailQueueLogLine = EmailDeadLetteredLine | EmailJobDeleteFailedLine;
 
 export type EmailQueueLogger = (line: EmailQueueLogLine) => void;
 
@@ -58,6 +67,47 @@ export interface StartEmailQueueOptions {
 
 interface SealedEmailJob {
   readonly sealed: string;
+}
+
+const recipientSchema = { to: z.string().min(1), idempotencyKey: z.string().optional() };
+const queuedEmailSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("one_time_code"),
+    input: z.object({
+      ...recipientSchema,
+      code: z.string().min(1),
+      expiresInMinutes: z.number().positive(),
+      purpose: z.enum(["sign_in", "account_deletion"]).optional(),
+    }),
+  }),
+  z.object({
+    kind: z.literal("magic_link"),
+    input: z.object({ ...recipientSchema, url: z.string().min(1), expiresInMinutes: z.number().positive() }),
+  }),
+  z.object({ kind: z.literal("account_deleted_notice"), input: z.object({ ...recipientSchema }) }),
+]);
+
+class MalformedEmailJobError extends Error {}
+
+function parseQueuedEmail(codec: AuthCryptoCodec, data: unknown): QueuedEmail {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(codec.decryptVerificationPayload((data as SealedEmailJob).sealed));
+  } catch {
+    throw new MalformedEmailJobError();
+  }
+  const email = queuedEmailSchema.safeParse(decoded);
+  if (!email.success) {
+    throw new MalformedEmailJobError();
+  }
+  return email.data;
+}
+
+function deadLetterErrorClass(error: unknown): EmailDeadLetteredLine["errorClass"] {
+  if (error instanceof MalformedEmailJobError) {
+    return "malformed_job";
+  }
+  return error instanceof EmailSendError ? error.reason : "unknown";
 }
 
 function isRetryableEmailError(error: unknown): boolean {
@@ -149,7 +199,7 @@ export class PgBossEmailQueue implements EmailQueue {
       await this.#boss.work(
         EMAIL_QUEUE_NAME,
         { batchSize: 1, includeMetadata: true, pollingIntervalSeconds: this.#pollingIntervalSeconds },
-        async (jobs: JobWithMetadata<SealedEmailJob>[]) => {
+        async (jobs: JobWithMetadata<unknown>[]) => {
           for (const job of jobs) {
             await this.#deliver(job);
           }
@@ -173,11 +223,11 @@ export class PgBossEmailQueue implements EmailQueue {
     });
   }
 
-  async #deliver(job: JobWithMetadata<SealedEmailJob>): Promise<void> {
+  async #deliver(job: JobWithMetadata<unknown>): Promise<void> {
     const attempts = job.retryCount + 1;
     let template: EmailQueueLogLine["template"] = "unknown";
     try {
-      const email = JSON.parse(this.#codec.decryptVerificationPayload(job.data.sealed)) as QueuedEmail;
+      const email = parseQueuedEmail(this.#codec, job.data);
       template = email.kind;
       await sendQueuedEmail(this.#emailSender, email, job.id);
     } catch (error) {
@@ -185,9 +235,12 @@ export class PgBossEmailQueue implements EmailQueue {
       if (retryable && job.retryCount < job.retryLimit) {
         throw error instanceof EmailSendError ? new EmailSendError(error.reason, error.statusCode) : new Error("Email send failed (unknown)");
       }
-      const errorClass = error instanceof EmailSendError ? error.reason : "unknown";
-      this.#logEvent({ event: "email_dead_lettered", jobId: job.id, template, errorClass, attempts });
+      this.#logEvent({ event: "email_dead_lettered", jobId: job.id, template, errorClass: deadLetterErrorClass(error), attempts });
     }
-    await this.#boss.deleteJob(EMAIL_QUEUE_NAME, job.id);
+    try {
+      await this.#boss.deleteJob(EMAIL_QUEUE_NAME, job.id);
+    } catch {
+      this.#logEvent({ event: "email_job_delete_failed", jobId: job.id, template });
+    }
   }
 }
