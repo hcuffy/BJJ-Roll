@@ -1,11 +1,10 @@
 import * as Crypto from "expo-crypto";
-import { SESSION_STORAGE_PREFIX, type MobileAuthClient } from "./authClient";
-import { signInReplacingSession, type SessionKeyStore } from "./pendingSignOuts";
+import type { MobileAuthClient } from "./authClient";
+import { PENDING_SIGN_IN_KEY, signInReplacingSession, type SessionKeyStore } from "./pendingSignOuts";
 import type { ActionResult } from "./signInActions";
 import { currentMs } from "../dates";
 
 export const MAGIC_LINK_EXPIRY_MINUTES = 15;
-const PENDING_SIGN_IN_KEY = `${SESSION_STORAGE_PREFIX}_pending_sign_in`;
 const PENDING_SIGN_IN_LIFETIME_MS = MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000;
 const VERIFIER_BYTES = 32;
 const verifierPattern = /^[\da-f]{64}$/u;
@@ -53,9 +52,5 @@ export async function exchangeForPendingSignIn(
   if (verifier === null) {
     return { ok: false, reason: "ignored", message: null };
   }
-  const result = await signInReplacingSession(client, secureStore, () => exchange(verifier));
-  if (result.ok) {
-    await secureStore.deleteItemAsync(PENDING_SIGN_IN_KEY).catch(() => undefined);
-  }
-  return result;
+  return await signInReplacingSession(client, secureStore, () => exchange(verifier));
 }

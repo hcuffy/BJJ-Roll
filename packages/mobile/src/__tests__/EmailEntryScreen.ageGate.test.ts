@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { AccessibilityInfo, Platform } from "react-native";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/signInActions";
+import { MAGIC_LINK_EXPIRY_MINUTES } from "../auth/pendingSignIn";
 import { createMobileAuthClient } from "../auth/authClient";
 import { EmailEntryScreen } from "../screens/EmailEntryScreen";
 import { createFakeBackend, createMemorySecureStore, TEST_BACKEND_URL } from "./authTestDoubles";

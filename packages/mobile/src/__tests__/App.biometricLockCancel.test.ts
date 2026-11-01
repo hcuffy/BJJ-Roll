@@ -136,6 +136,7 @@ describe("lock-path cancel of a pending sign-out (HEN-324)", () => {
   };
   const openLinkToLock = async () => {
     localAuthenticationFake.answers.push("user_cancel");
+    seedPendingSignIn(secureStore);
     deepLinkState.url = SIGN_IN_LINK;
     const screen = await launchApp();
     expect(screen.text()).toContain(LOCKED_TITLE);

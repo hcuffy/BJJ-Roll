@@ -6,6 +6,7 @@ import {
   addPendingSignOut,
   dropPendingSignOut,
   oldSessionCookieOf,
+  PENDING_SIGN_IN_KEY,
   PENDING_WITHOUT_SESSION_COOKIE,
   readPendingSignOuts,
   readSessionCookie,
@@ -31,8 +32,6 @@ export type FailureReason =
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly reason: FailureReason; readonly message: string | null };
 
 export const OTP_EXPIRY_MINUTES = 10;
-
-export { MAGIC_LINK_EXPIRY_MINUTES } from "./pendingSignIn";
 
 export const failureMessages = {
   invalidEmail: "Enter a valid email address.",
@@ -185,8 +184,8 @@ async function signOutOnServer(client: MobileAuthClient, { oldSessionCookie, sig
   }
 }
 
-async function deleteSessionKeys(secureStore: SessionKeyStore): Promise<boolean> {
-  const deletes = await Promise.allSettled(sessionStorageKeys.map((key) => secureStore.deleteItemAsync(key)));
+async function deleteSessionKeys(secureStore: SessionKeyStore, keys: readonly string[] = sessionStorageKeys): Promise<boolean> {
+  const deletes = await Promise.allSettled(keys.map((key) => secureStore.deleteItemAsync(key)));
   return deletes.every((result) => result.status === "fulfilled");
 }
 
@@ -229,7 +228,7 @@ export async function signOutOnPhone(client: MobileAuthClient, secureStore: Sess
   const oldSessionCookie = await readSessionCookie(client);
   const marker = oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE;
   await addPendingSignOut(secureStore, marker).catch(() => undefined);
-  return { oldSessionCookie, marker, keysDeleted: await deleteSessionKeys(secureStore) };
+  return { oldSessionCookie, marker, keysDeleted: await deleteSessionKeys(secureStore, [...sessionStorageKeys, PENDING_SIGN_IN_KEY]) };
 }
 
 export async function signOutOnServerAfterPhone(client: MobileAuthClient, secureStore: SessionKeyStore, signedOut: ServerSignOut): Promise<void> {

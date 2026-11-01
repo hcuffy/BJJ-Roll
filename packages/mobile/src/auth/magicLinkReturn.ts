@@ -3,7 +3,7 @@ import { AGE_GATE_REFUSAL_MESSAGE } from "./ageConfirmation";
 import { DEEP_LINK_SCHEME, type MobileAuthClient } from "./authClient";
 import { exchangeForPendingSignIn } from "./pendingSignIn";
 import type { SessionKeyStore } from "./pendingSignOuts";
-import { attestationRequired, failure, postAuth, SOCIAL_SIGN_IN_CALLBACK_PATH, type ActionResult } from "./signInActions";
+import { attestationRequired, failure, postAuth, signOutOnPhone, SOCIAL_SIGN_IN_CALLBACK_PATH, type ActionResult } from "./signInActions";
 
 interface LinkProof {
   readonly verifier: string;
@@ -103,6 +103,9 @@ export async function exchangeMagicLink(client: MobileAuthClient, secureStore: S
   signIns.running += 1;
   try {
     const result = await exchangePendingCode(client, secureStore, { code: opened.code, link });
+    if (result.ok && link.signedOut.aborted) {
+      await signOutOnPhone(client, secureStore);
+    }
     signIns.succeeded ||= result.ok && !link.signedOut.aborted;
     return link.signedOut.aborted ? ignored : result;
   } catch (error) {

@@ -145,6 +145,7 @@ describe("a lock-path revoke that fails keeps the old session queued (HEN-288 x 
 
     const signOutsBefore = server.signOutRequests.length;
     localAuthenticationFake.answers.push("user_cancel");
+    seedPendingSignIn(secureStore);
     deepLinkState.url = "bjjroll://auth?code=one-time-exchange-code";
     const linked = await launchApp();
     expect(linked.text()).toContain(LOCKED_TITLE);
