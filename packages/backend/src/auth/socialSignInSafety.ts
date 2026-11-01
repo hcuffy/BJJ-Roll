@@ -31,8 +31,11 @@ function decodeClaims(token: string): Record<string, unknown> | null {
   try {
     const claims: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     return typeof claims === "object" && claims !== null ? (claims as Record<string, unknown>) : null;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
   }
 }
 

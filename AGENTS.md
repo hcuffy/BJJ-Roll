@@ -21,7 +21,7 @@ Guide for AI agents and contributors working in this repo. Contribution rules: [
 Run from the repo root.
 
 - Shared (`@bjj-roll/shared`): `pnpm --filter @bjj-roll/shared test`
-- Backend (`@bjj-roll/backend`): `pnpm --filter @bjj-roll/backend test`; run with `pnpm build` then `pnpm --filter @bjj-roll/backend start`
+- Backend (`@bjj-roll/backend`): `pnpm --filter @bjj-roll/backend test`; run with `pnpm build`, then `pnpm --filter @bjj-roll/backend migrate` (needs `DATABASE_URL`; before every start or deploy), then `pnpm --filter @bjj-roll/backend start`
 - Mobile (`@bjj-roll/mobile`): `pnpm --filter @bjj-roll/mobile typecheck`, `pnpm --filter @bjj-roll/mobile test`, `pnpm --filter @bjj-roll/mobile start`, `pnpm --filter @bjj-roll/mobile bundle`
 - Frontend (`@bjj-roll/frontend`): `pnpm --filter @bjj-roll/frontend typecheck`, `pnpm --filter @bjj-roll/frontend test`, `pnpm --filter @bjj-roll/frontend build`, `pnpm --filter @bjj-roll/frontend dev`
 - Workers (`packages/workers`, Python): `cd packages/workers && uv sync --locked && uv run ruff check && uv run ruff format --check && uv run pytest`

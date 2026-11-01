@@ -29,6 +29,10 @@ const rawDateBan = [
   { selector: "MemberExpression[object.name='Date'][property.name=/^(now|parse|UTC)$/]", message: rawDateMessage },
   { selector: "MemberExpression[object.name='globalThis'][property.name='Date']", message: rawDateMessage },
 ];
+const authCatchReturnBan = {
+  selector: "CatchClause > BlockStatement[body.length=1] > ReturnStatement > Literal.argument[raw=/^(null|false)$/]",
+  message: "In src/auth, a catch must not only return null or false; rethrow anything that is not an expected auth miss.",
+};
 const dateBoundaryFiles = ["packages/*/src/dates.ts", "**/__tests__/**", "**/*.test.{ts,tsx}"];
 
 const utilityLibraryMessage = "Use per-function named imports from es-toolkit instead.";
@@ -99,6 +103,10 @@ export default tseslint.config(
   {
     files: dateBoundaryFiles,
     rules: { "no-restricted-syntax": ["error", globalAugmentationBan] },
+  },
+  {
+    files: ["packages/backend/src/auth/**/*.ts"],
+    rules: { "no-restricted-syntax": ["error", globalAugmentationBan, ...rawDateBan, authCatchReturnBan] },
   },
   {
     files: ["**/*.tsx"],

@@ -17,8 +17,11 @@ function isAllowedDeepLinkForm(candidate: string): boolean {
   try {
     const parsed = new URL(candidate);
     return parsed.protocol === `${DEEP_LINK_SCHEME}:` && parsed.host === DEEP_LINK_HOST && parsed.username === "" && parsed.password === "";
-  } catch {
-    return false;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -29,8 +32,11 @@ export function isAllowedDeepLinkCallbackUrl(value: unknown): value is string {
   let decoded: string;
   try {
     decoded = decodeURIComponent(value);
-  } catch {
-    return false;
+  } catch (error) {
+    if (error instanceof URIError) {
+      return false;
+    }
+    throw error;
   }
   return isAllowedDeepLinkForm(value) && isAllowedDeepLinkForm(decoded);
 }

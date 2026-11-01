@@ -64,8 +64,11 @@ function extractEmailFromVerificationValue(rawValue: string): string | null {
   try {
     const parsed = JSON.parse(rawValue) as { email?: unknown };
     return typeof parsed.email === "string" && parsed.email.includes("@") ? parsed.email : null;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
   }
 }
 
