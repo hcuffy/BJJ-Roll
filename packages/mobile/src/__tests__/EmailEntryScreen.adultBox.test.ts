@@ -14,8 +14,6 @@ const ADULT = "I am 18 or older";
 const HAVE_ACCOUNT = "Already have an account? Confirm in Account.";
 const NOTE = `Only needed to buy things later. ${HAVE_ACCOUNT}`;
 
-const LINK_NEXT_STEP = "Tick I am 16 or older and send a new link.";
-
 describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; delta items 2, 3 and 6)", () => {
   let backend: ReturnType<typeof createFakeBackend>;
 
@@ -132,28 +130,27 @@ describe("EmailEntryScreen optional 18+ box (HEN-263, Vera items 1, 2 and 8; del
     expect(vi.mocked(AccessibilityInfo.announceForAccessibility).mock.calls).toEqual([[failureMessages.invalidEmail], [TICK_AGE_BOX_MESSAGE]]);
   });
 
-  it("delta 2 / round 4 item 1: a link refused for age stacks the next step under the refusal in one card body, in body text", async () => {
+  it("a link refused for age shows only the refusal in the card body, with no 'Tick' nudge (Sara)", async () => {
     const refused = await render(AGE_GATE_REFUSAL_MESSAGE, "ageRequired");
     const card = refused.findAllByType("View").find((view) => flattenStyle(view.props.style).borderColor === colours.danger);
     const cardChildren = card?.children.filter((child) => typeof child !== "string") ?? [];
     expect(cardChildren).toHaveLength(1);
     const [body] = cardChildren as { props: Record<string, unknown> }[];
     expect(flattenStyle(body?.props.style)).toMatchObject({ flex: 1, gap: 8 });
-    expect(textOf(body as never)).toBe(`${AGE_GATE_REFUSAL_MESSAGE}${LINK_NEXT_STEP}`);
-    expect(flattenStyle(refused.queryByText(LINK_NEXT_STEP)?.props.style).color).toBe(colours.textPrimary);
+    expect(textOf(body as never)).toBe("You must be 16 or older to sign up.");
+    expect(textOf(card as never)).not.toContain("Tick");
 
     const invalid = await render(failureMessages.invalidLink, "invalidLink");
     expect(invalid.text()).toContain(
       "This sign-in link has expired, was already used, or was requested on another phone. Send a new one from this phone.",
     );
-    expect(invalid.queryByText(LINK_NEXT_STEP)).toBeNull();
+    expect(invalid.text()).not.toContain(AGE_GATE_REFUSAL_MESSAGE);
   });
 
-  it("round 4 item 4: the next step follows the age_refused reason, not the refusal text", async () => {
-    const textOnly = await render(AGE_GATE_REFUSAL_MESSAGE);
-    expect(textOnly.queryByText(LINK_NEXT_STEP)).toBeNull();
+  it("a link refused for the attestation shows exactly the attestation next step and nothing else (Sara)", async () => {
+    const refused = await render("Tick the box to accept the duties.", "attestationRequired");
+    const card = refused.findAllByType("View").find((view) => flattenStyle(view.props.style).borderColor === colours.danger);
 
-    const editedCopy = await render("Edited refusal copy.", "ageRequired");
-    expect(editedCopy.queryByText(LINK_NEXT_STEP)).not.toBeNull();
+    expect(textOf(card as never)).toBe("Tick I accept these duties and send a new link.");
   });
 });

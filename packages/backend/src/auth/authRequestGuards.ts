@@ -139,15 +139,11 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
   redirectUrl.searchParams.delete("cookie");
   redirectUrl.searchParams.delete("token");
   redirectUrl.searchParams.delete("session");
-  headers.set("location", redirectUrl.toString());
   const errorCode = redirectUrl.searchParams.get("error");
-  if (errorCode !== null) {
-    headers.set("location", reasonOnlyLocation(redirectUrl, magicLinkReason(errorCode)));
-    headers.delete("content-type");
-    headers.delete("content-length");
-    return new Response(null, { status: requestMethod === "POST" ? 303 : 302, headers });
-  }
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  headers.set("location", errorCode === null ? redirectUrl.toString() : reasonOnlyLocation(redirectUrl, magicLinkReason(errorCode)));
+  headers.delete("content-type");
+  headers.delete("content-length");
+  return new Response(null, { status: requestMethod === "POST" ? 303 : 302, headers });
 }
 
 export function assertMagicLinkRedirectParameters(path: string, body: unknown, query: unknown): void {

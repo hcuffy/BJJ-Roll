@@ -119,7 +119,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("sessions never store a c
         .emailSender.sentMessages.filter((message) => message.kind === "magic_link" && message.to.toLowerCase() === email)
         .at(-1);
       const verify = await continueMagicLink(current().app, sent?.kind === "magic_link" ? sent.url : "", { ipAddress });
-      expect(verify.status).toBe(302);
+      expect(verify.status).toBe(303);
       return exchange(verify.headers.get("location"), ipAddress);
     },
     google: async (ipAddress) => {

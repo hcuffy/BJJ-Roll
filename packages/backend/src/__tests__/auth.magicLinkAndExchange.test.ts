@@ -68,7 +68,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(Math.abs((storedMagicRow.rows[0]?.lifetime ?? 0) - MAGIC_LINK_EXPIRY_SECONDS)).toBeLessThanOrEqual(5);
 
     const verifyResponse = await continueMagicLink(app, magicLinkUrl, { ipAddress });
-    expect(verifyResponse.status).toBe(302);
+    expect(verifyResponse.status).toBe(303);
     expect(verifyResponse.headers.get("set-cookie")).toBeNull();
 
     const location = verifyResponse.headers.get("location") ?? "";
@@ -151,7 +151,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
       const validLink = latestMagicLinkFor("expired.magic.two@example.com");
       vi.setSystemTime(secondStartMs + MAGIC_LINK_EXPIRY_SECONDS * 1000 - 1000);
       const validVerify = await continueMagicLink(app, validLink, { ipAddress });
-      expect(validVerify.status).toBe(302);
+      expect(validVerify.status).toBe(303);
       const lateCode = new URL(validVerify.headers.get("location") ?? "").searchParams.get("code") ?? "";
       expect(lateCode.length).toBeGreaterThan(16);
 
@@ -250,7 +250,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-71 Better Auth magic
     expect(hostileContinue.status).toBe(400);
     expect(hostileContinue.headers.get("location")).toBeNull();
     const cleanVerify = await continueMagicLink(app, magicLink.toString(), { ipAddress: "198.51.102.201" });
-    expect(cleanVerify.status).toBe(302);
+    expect(cleanVerify.status).toBe(303);
     const location = cleanVerify.headers.get("location") ?? "";
     expect(location.startsWith("bjjroll://auth/welcome?code=")).toBe(true);
   });
