@@ -76,6 +76,7 @@ export async function createAppFromEnvironment(env: ServerEnvironment = process.
   const schemaVersion = await readSchemaVersion(database);
   if (schemaVersion.latestApplied !== schemaVersion.newestBundled) {
     console.error(JSON.stringify({ event: "schema_out_of_date", ...schemaVersion }));
+    await pool.end();
     process.exit(1);
   }
   const emailSender = new LettermintEmailSender({ apiKey: config.lettermintApiKey, fromAddress: config.emailFromAddress });
