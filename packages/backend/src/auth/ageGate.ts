@@ -93,7 +93,7 @@ export async function recordPendingAgeAnswers(pool: Pool, codec: AuthCryptoCodec
   await withAppRole(pool, { verificationIdentifier: identifier }, async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [identifier]);
     const stored = await selectPendingAgeAnswers(client, codec, identifier);
-    const keepStored = stored !== null && isAccepted(stored) && !sameAnswers(stored, answers);
+    const keepStored = stored !== null && isAccepted(stored) && answers.age16Confirmed && !sameAnswers(stored, answers);
     const now = currentDate();
     await client.query(
       `INSERT INTO public.verifications (id, user_id, identifier, value, email_hash, expires_at, created_at, updated_at)

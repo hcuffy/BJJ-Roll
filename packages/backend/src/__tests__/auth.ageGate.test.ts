@@ -116,12 +116,22 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-263 age gate 16+ (re
       expect(await consentRowsFor(user.userId)).toHaveLength(1);
     });
 
-    it("a still-valid ticked answer is not replaced by a different resend for the same email", async () => {
+    it("an un-ticked resend replaces a still-valid ticked answer, so sign-in is refused and creates nothing", async () => {
       const email = "ticked.then.unticked@example.com";
       expect((await sendOtp(email, "198.51.100.184", { age16Confirmed: true })).status).toBe(200);
       expect((await sendOtp(email, "198.51.100.184", {})).status).toBe(200);
-      const signedIn = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.184" });
-      expect(signedIn.status).toBe(200);
+      const before = { users: await countRows("users"), consent: await countRows("consent_records") };
+      const refused = await postAuthJson(current().app, otpSignInPath, { body: { email, otp: latestOtpFor(email) }, ipAddress: "198.51.100.184" });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ code: "AGE_CONFIRMATION_REQUIRED", message: AGE_GATE_REFUSAL_MESSAGE });
+      expect({ users: await countRows("users"), consent: await countRows("consent_records") }).toEqual(before);
+    });
+
+    it("a still-valid ticked answer is not replaced by a different ticked resend for the same email", async () => {
+      const email = "ticked.then.changed18@example.com";
+      expect((await sendOtp(email, "198.51.100.185", { age16Confirmed: true, age18Confirmed: false })).status).toBe(200);
+      const user = await signUpWithOtp(email, "198.51.100.185", { age16Confirmed: true, age18Confirmed: true });
+      expect(await consentRowsFor(user.userId)).toMatchObject([{ age16_confirmed: true, age18_confirmed: false }]);
     });
 
     it("concurrent sends for one email leave one pending age answer row", async () => {
