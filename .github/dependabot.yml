@@ -1,23 +1,36 @@
 # Dependabot version updates (HEN-221). `cooldown.default-days: 14` matches pnpm `minimumReleaseAge` and `.ncurc.json`.
 # Cooldown delays version updates only; security updates are not delayed.
+# One weekly PR: every ecosystem below joins the `all-dependencies` multi-ecosystem group, and `patterns: ["*"]`
+# takes every update type (major, minor and patch), so updates no longer conflict with each other.
 version: 2
+
+multi-ecosystem-groups:
+  all-dependencies:
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
 updates:
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    multi-ecosystem-group: "all-dependencies"
+    patterns: ["*"]
     cooldown:
       default-days: 14
-    # React Native/Expo/React follow the Expo SDK; bump with the SDK.
+    # React Native/Expo/React follow the Expo SDK; bump with the SDK (`expo install --fix`), not Dependabot.
+    # `pnpm --filter @bjj-roll/mobile run doctor` (scripts/expoVersionCheck.ts) fails CI on any minor or major
+    # drift from the SDK, and on any change to an exact SDK pin. Patches inside the SDK's `~` range still flow.
     ignore:
-      # react and react-dom are pinned to the Expo SDK: ignore every update, patch included.
+      # Exact SDK pins: ignore every update, patch included.
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "react-native"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # SDK `~` ranges (expo, expo-*, @expo/ui, react-native-safe-area-context): patches only.
       - dependency-name: "expo*"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "react-native-safe-area-context"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "@types/react"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
@@ -27,41 +40,21 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
-      npm-minor-and-patch:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-      npm-security-minor-and-patch:
+      npm-security-updates:
         applies-to: security-updates
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    multi-ecosystem-group: "all-dependencies"
+    patterns: ["*"]
     cooldown:
       default-days: 14
     groups:
-      github-actions-minor-and-patch:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-      github-actions-security-minor-and-patch:
+      github-actions-security-updates:
         applies-to: security-updates
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
 
   # uv (`packages/workers`): re-add when Dependabot supports Python 3.15. OSV-Scanner already scans `uv.lock`.
