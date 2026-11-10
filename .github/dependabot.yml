@@ -26,6 +26,21 @@ updates:
       # The project runs Node 24 (`.nvmrc`); `@types/node` majors track newer Node lines.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+    groups:
+      npm-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-security-minor-and-patch:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -33,5 +48,20 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
+    groups:
+      github-actions-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      github-actions-security-minor-and-patch:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   # uv (`packages/workers`): re-add when Dependabot supports Python 3.15. OSV-Scanner already scans `uv.lock`.
