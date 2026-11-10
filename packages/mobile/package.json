@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/expo": "1.7.7",
+    "@better-auth/expo": "1.7.14",
     "@bjj-roll/shared": "workspace:*",
     "@expo/ui": "~57.0.22",
     "better-auth": "1.7.7",
