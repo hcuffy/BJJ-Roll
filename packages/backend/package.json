@@ -12,24 +12,24 @@
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {
-    "@better-auth/expo": "1.7.7",
-    "@better-auth/kysely-adapter": "1.7.7",
+    "@better-auth/expo": "1.7.14",
+    "@better-auth/kysely-adapter": "1.7.14",
     "@bjj-roll/shared": "workspace:*",
-    "@hono/node-server": "^2.1.4",
-    "better-auth": "1.7.7",
+    "@hono/node-server": "^2.1.5",
+    "better-auth": "1.7.14",
     "dayjs": "1.11.23",
-    "es-toolkit": "1.52.0",
-    "hono": "^4.13.13",
+    "es-toolkit": "1.53.0",
+    "hono": "^4.13.14",
     "kysely": "0.29.7",
-    "modal": "0.11.0",
+    "modal": "0.11.1",
     "pg": "^8.23.1",
-    "pg-boss": "12.37.1",
-    "zod": "^4.6.6"
+    "pg-boss": "12.38.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.0",
+    "@testcontainers/postgresql": "^12.2.1",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   }
 }
