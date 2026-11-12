@@ -9,6 +9,7 @@ minimumReleaseAgeExclude:
   - minimatch
   - node-forge
   - path-scurry
+  - node-forge@1.4.3
 allowBuilds:
   cbor-extract: false
   cpu-features: false
@@ -20,6 +21,6 @@ overrides:
   xcode>uuid: 11.1.1
   # @expo/ui pulls vaul (web drawer); keep its react-dom peer on React 19.2.3 from Expo SDK 57 (HEN-46).
   vaul>react-dom: 19.2.3
-  node-forge@<1.4.1: 1.4.1
+  node-forge@<1.4.3: 1.4.3
   glob@<14.0.2: 14.0.2
   minimatch@<11.0.1: 11.0.1
