@@ -102,6 +102,28 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("HEN-239 Google sign-in (
     expect(rows.rows).toEqual([{ text_version_id: signUpAttestationVersion.id }]);
   });
 
+  it("B7: the same Google sub with a changed email signs in to the same user, with one user and one account", async () => {
+    const ticked = { age16Confirmed: true, ...currentSignUpAttestation, age18Confirmed: false };
+    const first = await signInWithGoogle(
+      { subject: "google-sub-email-changed", email: "before.change.google@example.com", emailVerified: true },
+      { additionalData: ticked },
+    );
+    const { userId } = await exchangeForSession(first.location.searchParams.get("code") ?? "");
+    const before = { users: await countRows("users"), accounts: await countRows("accounts") };
+
+    const again = await signInWithGoogle(
+      { subject: "google-sub-email-changed", email: "after.change.google@example.com", emailVerified: true },
+      { additionalData: ticked },
+    );
+    expect(again.location.searchParams.get("error")).toBeNull();
+    expect((await exchangeForSession(again.location.searchParams.get("code") ?? "")).userId).toBe(userId);
+    expect({ users: await countRows("users"), accounts: await countRows("accounts") }).toEqual(before);
+    const accounts = await current().pool.query("SELECT user_id FROM public.accounts WHERE provider_id = 'google' AND account_id = $1", [
+      "google-sub-email-changed",
+    ]);
+    expect(accounts.rows).toEqual([{ user_id: userId }]);
+  });
+
   it("links Google to an existing email account when Google has verified the same address", async () => {
     const email = "email.first.member@example.com";
     const sendResponse = await postAuthJson(current().app, "/email-otp/send-verification-otp", {

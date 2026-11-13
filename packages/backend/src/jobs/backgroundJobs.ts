@@ -94,6 +94,10 @@ export class BackgroundJobs implements AppleRevokeRetries {
       }
       this.#logEvent({ event: "apple_revoke_dead_lettered", jobId: job.id, reason: "revoke_failed", attempts });
     }
-    await this.#boss.deleteJob(APPLE_REVOKE_QUEUE_NAME, job.id);
+    try {
+      await this.#boss.deleteJob(APPLE_REVOKE_QUEUE_NAME, job.id);
+    } catch {
+      this.#logEvent({ event: "apple_revoke_job_delete_failed", jobId: job.id });
+    }
   }
 }

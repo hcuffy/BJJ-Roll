@@ -1,11 +1,5 @@
 import { isIP } from "node:net";
-import {
-  AGE_GATE_REFUSAL_MESSAGE,
-  MAGIC_LINK_REASON_PARAM,
-  magicLinkReasons,
-  SIGN_UP_ATTESTATION_REFUSAL_MESSAGE,
-  type MagicLinkReason,
-} from "@bjj-roll/shared";
+import { MAGIC_LINK_REASON_PARAM, magicLinkReasons, type MagicLinkReason } from "@bjj-roll/shared";
 import { APIError } from "better-auth/api";
 import { DEEP_LINK_CALLBACK_URL } from "./authLimits.js";
 import { findInvalidRedirectParameters, isAllowedDeepLinkCallbackUrl } from "./deepLinkCallback.js";
@@ -17,7 +11,7 @@ export type TrustableProxyIpHeader = (typeof trustableProxyIpHeaders)[number];
 export const CLIENT_IP_HEADER = "x-bjj-client-ip";
 const UNKNOWN_CLIENT_IP = "0.0.0.0";
 export const AUTH_BASE_PATH = "/api/auth";
-const MAGIC_LINK_VERIFY_PATH = `${AUTH_BASE_PATH}/magic-link/verify`;
+export const MAGIC_LINK_VERIFY_PATH = `${AUTH_BASE_PATH}/magic-link/verify`;
 const MAGIC_LINK_SIGN_IN_PATH = `${AUTH_BASE_PATH}/sign-in/magic-link`;
 
 function normalizeIpAddress(candidate: string | undefined | null): string | null {
@@ -110,16 +104,6 @@ export async function prepareMagicLinkRequest(request: Request): Promise<Request
   return request;
 }
 
-function magicLinkVerifyErrorMessage(errorCode: string): string {
-  if (errorCode === "AGE_CONFIRMATION_REQUIRED") {
-    return AGE_GATE_REFUSAL_MESSAGE;
-  }
-  if (errorCode === "SIGN_UP_ATTESTATION_REQUIRED") {
-    return SIGN_UP_ATTESTATION_REFUSAL_MESSAGE;
-  }
-  return "Magic link token is invalid, expired, or has already been used";
-}
-
 function magicLinkReason(errorCode: string): MagicLinkReason {
   if (errorCode === "AGE_CONFIRMATION_REQUIRED") {
     return magicLinkReasons.ageRefused;
@@ -135,7 +119,7 @@ function reasonOnlyLocation(redirectUrl: URL, reason: MagicLinkReason): string {
   return reasonUrl.toString();
 }
 
-export function normalizeMagicLinkVerifyResponse(request: Request, response: Response): Response {
+export function normalizeMagicLinkVerifyResponse(request: Request, response: Response, requestMethod = request.method): Response {
   if (new URL(request.url).pathname !== MAGIC_LINK_VERIFY_PATH) {
     return response;
   }
@@ -149,23 +133,17 @@ export function normalizeMagicLinkVerifyResponse(request: Request, response: Res
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
   if (!isAllowedDeepLinkCallbackUrl(location)) {
-    return invalidCallbackResponse(["Location"]);
+    return magicLinkInvalidPage();
   }
   const redirectUrl = new URL(location);
   redirectUrl.searchParams.delete("cookie");
   redirectUrl.searchParams.delete("token");
   redirectUrl.searchParams.delete("session");
-  headers.set("location", redirectUrl.toString());
   const errorCode = redirectUrl.searchParams.get("error");
-  if (errorCode !== null) {
-    headers.set("location", reasonOnlyLocation(redirectUrl, magicLinkReason(errorCode)));
-    headers.set("content-type", "application/json");
-    return new Response(JSON.stringify({ code: errorCode, error: errorCode, message: magicLinkVerifyErrorMessage(errorCode) }), {
-      status: 400,
-      headers,
-    });
-  }
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  headers.set("location", errorCode === null ? redirectUrl.toString() : reasonOnlyLocation(redirectUrl, magicLinkReason(errorCode)));
+  headers.delete("content-type");
+  headers.delete("content-length");
+  return new Response(null, { status: requestMethod === "POST" ? 303 : 302, headers });
 }
 
 export function assertMagicLinkRedirectParameters(path: string, body: unknown, query: unknown): void {

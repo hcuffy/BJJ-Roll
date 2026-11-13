@@ -35,6 +35,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
       { name: "004_apple_nonce_cleanup" },
       { name: "005_signup_attestation_consent_records" },
       { name: "006_deletion_links_and_prune" },
+      { name: "007_auth_data_hardening" },
     ]);
     expect(betterAuthTelemetryDisabledConfig).toEqual({ enabled: false });
   });
@@ -76,12 +77,13 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     const roleResult = await pool.query<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>(
       `SELECT rolname, rolsuper, rolbypassrls
        FROM pg_roles
-       WHERE rolname IN ('bjj_owner', 'bjj_app', 'bjj_job_runner', 'bjj_auth_lookup')
+       WHERE rolname IN ('bjj_owner', 'bjj_app', 'bjj_job_runner', 'bjj_auth_lookup', 'bjj_identity_lookup')
        ORDER BY rolname`,
     );
     expect(roleResult.rows).toEqual([
       { rolname: "bjj_app", rolsuper: false, rolbypassrls: false },
       { rolname: "bjj_auth_lookup", rolsuper: false, rolbypassrls: false },
+      { rolname: "bjj_identity_lookup", rolsuper: false, rolbypassrls: false },
       { rolname: "bjj_job_runner", rolsuper: false, rolbypassrls: false },
       { rolname: "bjj_owner", rolsuper: false, rolbypassrls: false },
     ]);
@@ -138,21 +140,25 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     const { pool } = requireHarness();
 
     const lookupRole = await pool.query<{ rolname: string; rolcanlogin: boolean; rolbypassrls: boolean; rolsuper: boolean }>(
-      "SELECT rolname, rolcanlogin, rolbypassrls, rolsuper FROM pg_roles WHERE rolname = 'bjj_auth_lookup'",
+      `SELECT rolname, rolcanlogin, rolbypassrls, rolsuper FROM pg_roles
+       WHERE rolname IN ('bjj_auth_lookup', 'bjj_identity_lookup') ORDER BY rolname`,
     );
-    expect(lookupRole.rows).toEqual([{ rolname: "bjj_auth_lookup", rolcanlogin: false, rolbypassrls: false, rolsuper: false }]);
+    expect(lookupRole.rows).toEqual([
+      { rolname: "bjj_auth_lookup", rolcanlogin: false, rolbypassrls: false, rolsuper: false },
+      { rolname: "bjj_identity_lookup", rolcanlogin: false, rolbypassrls: false, rolsuper: false },
+    ]);
 
     const memberships = await pool.query<{ parent_role: string; parent_bypassrls: boolean }>(
       `SELECT parent.rolname AS parent_role, parent.rolbypassrls AS parent_bypassrls
        FROM pg_auth_members AS m
        JOIN pg_roles AS member ON member.oid = m.member
        JOIN pg_roles AS parent ON parent.oid = m.roleid
-       WHERE member.rolname IN ('bjj_auth_lookup', 'bjj_app')`,
+       WHERE member.rolname IN ('bjj_auth_lookup', 'bjj_identity_lookup', 'bjj_app')`,
     );
     expect(memberships.rows).toEqual([]);
   });
 
-  it("AC 7.2: users has only one FOR SELECT policy for bjj_auth_lookup and SELECT-only grants", async () => {
+  it("AC 7.2: users has only one FOR SELECT policy for bjj_auth_lookup and SELECT on (id, handle) only", async () => {
     const { pool } = requireHarness();
 
     const lookupPolicies = await pool.query<{ tablename: string; policyname: string; cmd: string; roles: string[] }>(
@@ -169,7 +175,18 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
        WHERE table_schema = 'public' AND grantee = 'bjj_auth_lookup'
        ORDER BY table_name, privilege_type`,
     );
-    expect(tableGrants.rows).toEqual([{ table_name: "users", privilege_type: "SELECT" }]);
+    expect(tableGrants.rows).toEqual([]);
+
+    const columnGrants = await pool.query<{ table_name: string; column_name: string; privilege_type: string }>(
+      `SELECT table_name, column_name, privilege_type
+       FROM information_schema.role_column_grants
+       WHERE table_schema = 'public' AND grantee = 'bjj_auth_lookup'
+       ORDER BY table_name, column_name`,
+    );
+    expect(columnGrants.rows).toEqual([
+      { table_name: "users", column_name: "handle", privilege_type: "SELECT" },
+      { table_name: "users", column_name: "id", privilege_type: "SELECT" },
+    ]);
 
     const writePrivileges = await pool.query<{
       table_name: string;
@@ -191,7 +208,7 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
     }
   });
 
-  it("AC 7.3 & 7.5: app_user_id_by_email_hmac is SECURITY DEFINER with pinned search_path and EXECUTE to bjj_app only", async () => {
+  it("AC 7.3 & 7.5: the lookup functions are SECURITY DEFINER with pinned search_path and EXECUTE to bjj_app only", async () => {
     const { pool } = requireHarness();
 
     const functionCatalogue = await pool.query<{
@@ -215,30 +232,34 @@ describe.skipIf(!canRunPostgresTests)("database schema, roles and RLS catalogue 
        FROM pg_proc AS p
        JOIN pg_namespace AS n ON n.oid = p.pronamespace
        JOIN pg_roles AS r ON r.oid = p.proowner
-       WHERE n.nspname = 'public' AND p.proname = 'app_user_id_by_email_hmac'`,
+       WHERE n.nspname = 'public' AND p.proname IN ('app_user_id_by_email_hmac', 'app_user_id_by_provider_account', 'handle_available')
+       ORDER BY p.proname`,
     );
 
+    const lookupFunction = (proname: string, ownerName: string, argumentNames: string[]): Record<string, unknown> => ({
+      proname,
+      owner_name: ownerName,
+      owner_bypassrls: false,
+      security_definer: true,
+      arg_names: argumentNames,
+      proconfig: ["search_path=pg_catalog, public"],
+      public_can_execute: false,
+      app_can_execute: true,
+      runner_can_execute: false,
+      lookup_can_execute: false,
+    });
     expect(functionCatalogue.rows).toEqual([
-      {
-        proname: "app_user_id_by_email_hmac",
-        owner_name: "bjj_auth_lookup",
-        owner_bypassrls: false,
-        security_definer: true,
-        arg_names: ["email_hmac"],
-        proconfig: ["search_path=pg_catalog, public"],
-        public_can_execute: false,
-        app_can_execute: true,
-        runner_can_execute: false,
-        lookup_can_execute: false,
-      },
+      lookupFunction("app_user_id_by_email_hmac", "bjj_identity_lookup", ["email_hmac"]),
+      lookupFunction("app_user_id_by_provider_account", "bjj_identity_lookup", ["provider", "account"]),
+      lookupFunction("handle_available", "bjj_auth_lookup", ["candidate"]),
     ]);
 
     const routineGrants = await pool.query<{ grantee: string; privilege_type: string }>(
       `SELECT grantee, privilege_type
        FROM information_schema.routine_privileges
-       WHERE specific_schema = 'public' AND routine_name = 'app_user_id_by_email_hmac'
-       ORDER BY grantee`,
+       WHERE specific_schema = 'public' AND routine_name IN ('app_user_id_by_email_hmac', 'app_user_id_by_provider_account', 'handle_available')
+       ORDER BY routine_name, grantee`,
     );
-    expect(routineGrants.rows).toEqual([{ grantee: "bjj_app", privilege_type: "EXECUTE" }]);
+    expect(routineGrants.rows).toEqual(Array.from({ length: 3 }, () => ({ grantee: "bjj_app", privilege_type: "EXECUTE" })));
   });
 });

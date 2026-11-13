@@ -22,17 +22,39 @@ export const reservedHandles = [
   "team",
   "null",
   "undefined",
+  "owner",
+  "superuser",
+  "sysadmin",
+  "webmaster",
+  "postmaster",
+  "abuse",
+  "noreply",
+  "privacy",
+  "legal",
+  "billing",
+  "helpdesk",
+  "moderators",
+  "everyone",
+  "anonymous",
+  "deleted",
+  "guest",
 ] as const;
 
 export type ReservedHandle = (typeof reservedHandles)[number];
 
-const reservedHandleSet = new Set<string>(reservedHandles);
+const lookalikeCharacters: Readonly<Record<string, string>> = { "0": "o", "1": "i", l: "i", "3": "e", "4": "a", "5": "s", "7": "t" };
+
+function normalizeForReservedCheck(candidate: string): string {
+  return [...candidate.trim().toLowerCase().replaceAll("_", "")].map((character) => lookalikeCharacters[character] ?? character).join("");
+}
+
+const reservedHandleSet = new Set<string>(reservedHandles.map(normalizeForReservedCheck));
 
 export const handlePattern = /^[a-z0-9_]+$/;
 const asciiHandleCharactersPattern = /^[A-Za-z0-9_]+$/;
 
 export function isReservedHandle(candidate: string): boolean {
-  return reservedHandleSet.has(candidate.trim().toLowerCase());
+  return reservedHandleSet.has(normalizeForReservedCheck(candidate));
 }
 
 export const handleSchema = z
@@ -43,7 +65,7 @@ export const handleSchema = z
   .regex(asciiHandleCharactersPattern, "Handle may only contain ASCII letters, digits, and underscores")
   .toLowerCase()
   .regex(handlePattern, "Handle may only contain lowercase ASCII letters, digits, and underscores")
-  .refine((value) => !reservedHandleSet.has(value), {
+  .refine((value) => !isReservedHandle(value), {
     message: "Handle is reserved",
   });
 

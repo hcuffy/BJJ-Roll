@@ -228,7 +228,8 @@ export async function signOutOnPhone(client: MobileAuthClient, secureStore: Sess
   const oldSessionCookie = await readSessionCookie(client);
   const marker = oldSessionCookie ?? PENDING_WITHOUT_SESSION_COOKIE;
   await addPendingSignOut(secureStore, marker).catch(() => undefined);
-  return { oldSessionCookie, marker, keysDeleted: await deleteSessionKeys(secureStore, [...sessionStorageKeys, PENDING_SIGN_IN_KEY]) };
+  const [keysDeleted] = await Promise.all([deleteSessionKeys(secureStore), secureStore.deleteItemAsync(PENDING_SIGN_IN_KEY).catch(() => undefined)]);
+  return { oldSessionCookie, marker, keysDeleted };
 }
 
 export async function signOutOnServerAfterPhone(client: MobileAuthClient, secureStore: SessionKeyStore, signedOut: ServerSignOut): Promise<void> {

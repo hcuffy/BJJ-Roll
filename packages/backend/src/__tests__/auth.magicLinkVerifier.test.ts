@@ -40,7 +40,7 @@ describe.skipIf(!isPostgresTestEnvironmentAvailable())("magic link Continue page
 
   const exchangeCodeFrom = async (magicLinkUrl: string, ipAddress: string): Promise<string> => {
     const response = await continueMagicLink(current().app, magicLinkUrl, { ipAddress });
-    expect(response.status).toBe(302);
+    expect(response.status).toBe(303);
     return new URL(response.headers.get("location") ?? "").searchParams.get("code") ?? "";
   };
 

@@ -99,6 +99,18 @@ describe.skipIf(!canRunPostgresTests)("database handles and pre-session email HM
     ).rejects.toThrow(/users_handle_lowercase_check|check constraint/iu);
   });
 
+  it("AC 7.2: bjj_auth_lookup cannot read users.email_ciphertext", async () => {
+    const client = await requireHarness().pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE bjj_auth_lookup");
+      await expect(client.query("SELECT email_ciphertext FROM public.users")).rejects.toMatchObject({ code: "42501" });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
+
   it("AC 7.4 & 7.6: app_user_id_by_email_hmac returns user_id only for known HMAC, null for unknown, while bjj_app sees 0 user rows", async () => {
     const { db, pool } = requireHarness();
 

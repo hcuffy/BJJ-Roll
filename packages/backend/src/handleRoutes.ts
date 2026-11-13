@@ -9,6 +9,7 @@ export type AuthenticatedUserIdResolver = (context: Context) => Promise<string |
 
 export interface HandleRouteConfig {
   resolveAuthenticatedUserId?: AuthenticatedUserIdResolver;
+  takeAvailabilityCheck?: (context: Context) => Promise<"allowed" | "rate_limited">;
 }
 
 export interface HandleRoutesOptions extends HandleRouteConfig {
@@ -66,25 +67,21 @@ function defaultResolveAuthenticatedUserId(context: Context): string | null {
 
 async function queryHandleAvailability(db: Kysely<BjjRollDatabase>, normalizedHandle: string): Promise<boolean> {
   const result = await db.transaction().execute(async (transaction) => {
-    await sql`SET LOCAL ROLE bjj_auth_lookup`.execute(transaction);
-    return sql<{ taken: boolean }>`
-      SELECT EXISTS (
-        SELECT 1
-        FROM public.users
-        WHERE handle = ${normalizedHandle}
-      ) AS taken
-    `.execute(transaction);
+    await sql`SET LOCAL ROLE bjj_app`.execute(transaction);
+    return sql<{ available: boolean }>`SELECT public.handle_available(${normalizedHandle}) AS available`.execute(transaction);
   });
-  const row = result.rows[0];
-  return !row?.taken;
+  return result.rows[0]?.available === true;
 }
 
-async function handleAvailabilityRequest(context: Context, db: Kysely<BjjRollDatabase>, rawCandidate: string | undefined): Promise<Response> {
-  const parsed = handleSchema.safeParse(rawCandidate ?? "");
+async function handleAvailabilityRequest(context: Context, options: HandleRoutesOptions): Promise<Response> {
+  if ((await options.takeAvailabilityCheck?.(context)) === "rate_limited") {
+    return context.json({ available: false, error: "Too many requests" }, 429);
+  }
+  const parsed = handleSchema.safeParse(context.req.query("handle") ?? "");
   if (!parsed.success) {
     return context.json({ available: false, error: "Invalid or reserved handle" }, 400);
   }
-  const available = await queryHandleAvailability(db, parsed.data);
+  const available = await queryHandleAvailability(options.db, parsed.data);
   return context.json({ available, handle: parsed.data }, 200);
 }
 
@@ -183,7 +180,7 @@ export function createHandleRoutes(dbOrOptions: Kysely<BjjRollDatabase> | Handle
   const options = resolveOptions(dbOrOptions, config);
   const routes = new Hono();
 
-  routes.get("/handles/availability", (context) => handleAvailabilityRequest(context, options.db, context.req.query("handle")));
+  routes.get("/handles/availability", (context) => handleAvailabilityRequest(context, options));
   routes.get("/handles/me", (context) => handleGetUserHandle(context, options));
   routes.post("/handles", (context) => handleSetUserHandle(context, options));
 
