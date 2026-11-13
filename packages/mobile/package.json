@@ -12,18 +12,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/expo": "1.7.7",
+    "@better-auth/expo": "1.7.14",
     "@bjj-roll/shared": "workspace:*",
-    "@expo/ui": "~57.0.22",
-    "better-auth": "1.7.7",
+    "@expo/ui": "~57.0.26",
+    "better-auth": "1.7.14",
     "dayjs": "1.11.23",
-    "expo": "~57.0.27",
+    "expo": "~57.0.31",
     "expo-apple-authentication": "~57.0.2",
     "expo-constants": "~57.0.22",
     "expo-crypto": "57.0.4",
     "expo-linking": "~57.0.13",
     "expo-local-authentication": "~57.0.3",
-    "expo-network": "~57.0.2",
+    "expo-network": "~57.0.3",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.10",
     "expo-system-ui": "~57.0.4",
@@ -35,8 +35,8 @@
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/react": "~19.2.2",
-    "expo-doctor": "1.21.4",
-    "typescript": "~6.0.3",
-    "vitest": "^5.0.3"
+    "expo-doctor": "1.21.5",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.5"
   }
 }
